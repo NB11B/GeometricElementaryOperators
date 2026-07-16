@@ -17,6 +17,12 @@ option(GEO_ENABLE_STACK_USAGE "Emit compiler stack-usage reports" OFF)
 option(GEO_ENABLE_LINK_MAP "Emit linker map for benchmark executable" OFF)
 option(GEO_ENABLE_SANITIZERS "Enable address and undefined-behavior sanitizers" OFF)
 
+if(GEO_USE_DOUBLE)
+    set(GEO_PRECISION_NAME double)
+else()
+    set(GEO_PRECISION_NAME float)
+endif()
+
 add_library(geo_kernel STATIC
     src/cl20.c
     src/cl30.c
@@ -178,16 +184,27 @@ if(GEO_BUILD_BENCHMARKS)
     geo_link_target(bench_complete)
     set_target_properties(bench_complete PROPERTIES OUTPUT_NAME bench_selected_backends)
 
+    add_executable(bench_workloads benchmarks/bench_workloads.c)
+    geo_link_target(bench_workloads)
+
     if(GEO_BUILD_CUDA)
         add_executable(bench_cuda benchmarks/bench_cuda.cu)
         target_link_libraries(bench_cuda PRIVATE geo_cuda)
         target_compile_features(bench_cuda PRIVATE cuda_std_17)
     endif()
 
+    if(GEO_BUILD_TESTS)
+        add_test(
+            NAME workload_smoke
+            COMMAND bench_workloads --iterations 100 --warmup 10 --seed 608135816
+        )
+    endif()
+
     if(GEO_ENABLE_LINK_MAP AND NOT MSVC)
         target_link_options(bench_host PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_host.map")
         target_link_options(bench_compare PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_compare.map")
         target_link_options(bench_complete PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_selected_backends.map")
+        target_link_options(bench_workloads PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_workloads.map")
         if(GEO_BUILD_CUDA)
             target_link_options(bench_cuda PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_cuda.map")
         endif()
@@ -203,6 +220,29 @@ if(GEO_BUILD_BENCHMARKS)
             DEPENDS bench_complete
             VERBATIM
         )
+
+        if(GEO_BUILD_CUDA)
+            add_custom_target(workload_report
+                COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tools/workload_report.py
+                    --cpu-executable $<TARGET_FILE:bench_workloads>
+                    --cuda-executable $<TARGET_FILE:bench_cuda>
+                    --precision ${GEO_PRECISION_NAME}
+                    --out-dir ${CMAKE_CURRENT_BINARY_DIR}/workload-report
+                DEPENDS bench_workloads bench_cuda
+                VERBATIM
+            )
+        else()
+            add_custom_target(workload_report
+                COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tools/workload_report.py
+                    --cpu-executable $<TARGET_FILE:bench_workloads>
+                    --precision ${GEO_PRECISION_NAME}
+                    --out-dir ${CMAKE_CURRENT_BINARY_DIR}/workload-report
+                DEPENDS bench_workloads
+                VERBATIM
+            )
+        endif()
     endif()
 endif()
 
