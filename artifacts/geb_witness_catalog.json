@@ -1,69 +1,37 @@
 {
-  "version": 1,
+  "version": 2,
   "source": {
     "milestone": "W",
     "preserved_report": "artifacts/milestone_w_unified_operator.json",
-    "note": "The preserved package did not include the complete per-target witness corpus. These entries are explicit reconstructed Omega witnesses validated against the direct GEB-36 reference API."
+    "note": "The preserved package did not include the complete per-target witness corpus. Omega-only entries are reconstructed trees. Addition and Jordan/Lie entries are explicit enlarged-representation programs matching the paper's unipotent and Hadamard constructions."
   },
   "operator": "Omega((s,X),(t,Y))=(exp(s)-log(t),X*Y)",
-  "witnesses": [
-    {
-      "target_id": 6,
-      "name": "pseudoscalar",
-      "terminals": ["e1", "e2"],
-      "tree": "Omega(e1,e2)[geometric]",
-      "output": "forward",
-      "expected": "e12"
-    },
-    {
-      "target_id": 16,
-      "name": "geometric_product",
-      "terminals": ["A", "B"],
-      "tree": "Omega(A,B)[geometric]",
-      "output": "forward",
-      "expected": "AB"
-    },
-    {
-      "target_id": 17,
-      "name": "reverse_product",
-      "terminals": ["A", "B"],
-      "tree": "Omega(A,B)[geometric]",
-      "output": "opposite/reverse",
-      "expected": "reverse(AB)=reverse(B)reverse(A)"
-    },
-    {
-      "target_id": 30,
-      "name": "rotor_action",
-      "terminals": ["R", "x", "reverse(R)"],
-      "tree": "Omega(Omega(R,x)[geometric],reverse(R))[geometric]",
-      "output": "forward",
-      "expected": "R*x*reverse(R)"
-    },
-    {
-      "target_id": 31,
-      "name": "rotor_composition",
-      "terminals": ["R1", "R2"],
-      "tree": "Omega(R1,R2)[geometric]",
-      "output": "forward",
-      "expected": "R1*R2"
-    },
-    {
-      "target_id": 33,
-      "name": "dilation",
-      "terminals": ["T", "x", "reverse(T)"],
-      "tree": "Omega(Omega(T,x)[geometric],reverse(T))[geometric]",
-      "output": "forward",
-      "expected": "T*x*reverse(T)"
-    }
+  "omega_witnesses": [
+    {"target_id": 6, "name": "pseudoscalar", "terminals": ["e1", "e2"], "tree": "Omega(e1,e2)[geometric]", "output": "forward", "expected": "e12"},
+    {"target_id": 16, "name": "geometric_product", "terminals": ["A", "B"], "tree": "Omega(A,B)[geometric]", "output": "forward", "expected": "AB"},
+    {"target_id": 17, "name": "reverse_product", "terminals": ["A", "B"], "tree": "Omega(A,B)[geometric]", "output": "opposite/reverse", "expected": "reverse(AB)=reverse(B)reverse(A)"},
+    {"target_id": 30, "name": "rotor_action", "terminals": ["R", "x", "reverse(R)"], "tree": "Omega(Omega(R,x)[geometric],reverse(R))[geometric]", "output": "forward", "expected": "R*x*reverse(R)"},
+    {"target_id": 31, "name": "rotor_composition", "terminals": ["R1", "R2"], "tree": "Omega(R1,R2)[geometric]", "output": "forward", "expected": "R1*R2"},
+    {"target_id": 33, "name": "dilation", "terminals": ["T", "x", "reverse(T)"], "tree": "Omega(Omega(T,x)[geometric],reverse(T))[geometric]", "output": "forward", "expected": "T*x*reverse(T)"}
+  ],
+  "structured_witnesses": [
+    {"target_id": 14, "name": "addition", "program": ["U(A)", "U(B)", "U(A)U(B)", "extract"], "expected": "A+B"},
+    {"target_id": 15, "name": "subtraction", "program": ["negate(B)", "U(A)", "U(-B)", "U(A)U(-B)", "extract"], "expected": "A-B"},
+    {"target_id": 18, "name": "vector_dot", "program": ["ordered(A,B)=(AB,BA)", "HadamardExact", "select_symmetric"], "expected": "(AB+BA)/2"},
+    {"target_id": 19, "name": "vector_wedge", "program": ["ordered(A,B)=(AB,BA)", "HadamardExact", "select_antisymmetric"], "expected": "(AB-BA)/2"},
+    {"target_id": 20, "name": "commutator", "program": ["ordered(A,B)=(AB,BA)", "HadamardExact", "select_antisymmetric"], "expected": "(AB-BA)/2"},
+    {"target_id": 21, "name": "anticommutator", "program": ["ordered(A,B)=(AB,BA)", "HadamardExact", "select_symmetric"], "expected": "(AB+BA)/2"}
   ],
   "coverage": {
-    "compiled_targets": 6,
+    "omega_compiled_targets": 6,
+    "structured_compiled_targets": 6,
+    "total_reconstructed_targets": 12,
     "total_frozen_targets": 36,
     "next_reconstruction_group": [
-      "constants and involutions through routing terminals",
-      "addition/subtraction through unipotent encoding",
-      "dot/wedge/commutator/anticommutator through ordered lanes and Hadamard mixing",
-      "metric/projective targets through scalar injection and normalization"
+      "constants and involutions through terminal and routing constructions",
+      "norm and distance through shared products and grade extraction",
+      "projective numerators through scale-aware structured programs",
+      "metric targets through scalar injection and normalization"
     ]
   }
 }
