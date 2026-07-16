@@ -43,6 +43,7 @@ add_library(geo_kernel STATIC
     src/report.c
     src/geb_witness.c
     src/perf.c
+    src/cortex_m_dwt.c
     src/fixed.c
     src/fixed_geb36.c
     src/fixed_program.c
@@ -108,7 +109,7 @@ if(GEO_BUILD_CUDA)
 
     add_library(geo_cuda STATIC cuda/geo_cuda.cu)
     target_include_directories(geo_cuda PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-    target_link_libraries(geo_cuda PUBLIC geo_kernel CUDA::cudart)
+    target_link_libraries(geo_cuda PUBLIC geo_kernel CUDA::cudart ${GEO_MATH_LIBS})
     target_compile_features(geo_cuda PUBLIC cuda_std_17)
     set_target_properties(geo_cuda PROPERTIES
         CUDA_STANDARD 17
@@ -146,6 +147,7 @@ if(GEO_BUILD_TESTS)
         safety
         fixed_geb36
         fixed_program
+        cortex_m_dwt
         native_generated
         release_hardening
     )
@@ -263,6 +265,19 @@ if(Python3_Interpreter_FOUND)
             --out-dir ${CMAKE_CURRENT_BINARY_DIR}/rtl
             --schedule-json ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/rotor_action_schedule.json
             --self-test
+        VERBATIM
+    )
+
+    add_custom_target(generate_rtl_schedules
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_rtl_schedule.py
+            --out-dir ${CMAKE_CURRENT_BINARY_DIR}/rtl-schedules
+            --self-test
+            --schedule-json ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/addition_schedule.json
+            --schedule-json ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/geometric_product_schedule.json
+            --schedule-json ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/vector_dot_schedule.json
+            --schedule-json ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/vector_wedge_schedule.json
+            --schedule-json ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/rotor_action_schedule.json
         VERBATIM
     )
 endif()
