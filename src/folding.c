@@ -42,11 +42,11 @@ geo_status_t geo_program_fold_constants(
         return GEO_STATUS_NULL_ARGUMENT;
     }
 
-    if (terminal_count != input->terminal_count) {
+    if (terminal_count > old_register_count ||
+        old_register_count != terminal_count + input->program.instruction_count) {
         return GEO_STATUS_BAD_TREE;
     }
-    if (terminal_count > old_register_count ||
-        workspace->old_to_new_capacity < old_register_count ||
+    if (workspace->old_to_new_capacity < old_register_count ||
         workspace->constant_flag_capacity < old_register_count ||
         workspace->register_kind_capacity < old_register_count ||
         workspace->initial_register_capacity < old_register_count ||
@@ -58,6 +58,16 @@ geo_status_t geo_program_fold_constants(
     }
     if (input->root_register >= old_register_count) {
         return GEO_STATUS_REGISTER_RANGE;
+    }
+
+    for (instruction_index = 0u;
+         instruction_index < input->program.instruction_count;
+         ++instruction_index) {
+        const geo_instruction_t source = input->program.instructions[instruction_index];
+        const size_t expected_destination = terminal_count + instruction_index;
+        if ((size_t)source.destination != expected_destination) {
+            return GEO_STATUS_BAD_TREE;
+        }
     }
 
     memset(workspace->old_to_new, UINT8_MAX, old_register_count * sizeof(uint8_t));
