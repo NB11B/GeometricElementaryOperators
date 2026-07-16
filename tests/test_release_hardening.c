@@ -17,6 +17,20 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct {
+    geo_program_t program;
+    uint8_t root_register;
+    size_t original_instruction_count;
+    size_t optimized_instruction_count;
+    size_t eliminated_dead_nodes;
+    size_t eliminated_duplicate_nodes;
+} geo_optimized_witness_legacy_layout_t;
+
+_Static_assert(
+    sizeof(geo_optimized_witness_t) == sizeof(geo_optimized_witness_legacy_layout_t),
+    "optimized witness ABI size changed"
+);
+
 static int failures = 0;
 
 static void expect(int condition, const char *message) {
@@ -78,95 +92,67 @@ static void test_malformed_programs(void) {
 }
 
 static void test_nonfinite_rejection(void) {
+    const geo_real_t sentinel = (geo_real_t)123.25;
     geo_cl20_t a = geo_cl20_zero();
     geo_cl30_t c = geo_cl30_zero();
     geo_mat2_t m = geo_mat2_zero();
-    geo_real_t eml_output = (geo_real_t)123;
+    geo_real_t output = sentinel;
+
     a.scalar = (geo_real_t)NAN;
     c.c[0] = (geo_real_t)NAN;
     m.m00 = (geo_real_t)NAN;
-
     expect(!geo_cl20_near(a, a, (geo_real_t)1), "Cl20 near rejects NaN");
     expect(!geo_cl30_near(c, c, (geo_real_t)1), "Cl30 near rejects NaN");
     expect(!geo_mat2_near(m, m, (geo_real_t)1), "control near rejects NaN");
     expect(
-        !geo_cl20_near(
-            geo_cl20_zero(),
-            geo_cl20_zero(),
-            (geo_real_t)NAN
-        ),
+        !geo_cl20_near(geo_cl20_zero(), geo_cl20_zero(), (geo_real_t)NAN),
         "near rejects NaN tolerance"
     );
 
     expect(
-        geo_eml_log(
-            (geo_real_t)NAN,
-            GEO_EML_BALANCED,
-            &eml_output
-        ) == GEO_EML_DOMAIN,
+        geo_eml_log((geo_real_t)NAN, GEO_EML_BALANCED, &output) == GEO_EML_DOMAIN,
         "embedded log rejects NaN"
     );
-    expect(
-        eml_output == (geo_real_t)123,
-        "embedded log leaves output unchanged on NaN"
-    );
-    expect(
-        geo_eml_exp(
-            (geo_real_t)NAN,
-            GEO_EML_BALANCED,
-            &eml_output
-        ) == GEO_EML_DOMAIN,
-        "embedded exp rejects NaN"
-    );
-    expect(
-        eml_output == (geo_real_t)123,
-        "embedded exp leaves output unchanged on NaN"
-    );
+    expect(output == sentinel, "embedded log leaves output unchanged on NaN");
 
+    output = sentinel;
     expect(
-        geo_eml_log(
-            (geo_real_t)INFINITY,
-            GEO_EML_BALANCED,
-            &eml_output
-        ) == GEO_EML_OVERFLOW,
+        geo_eml_log((geo_real_t)INFINITY, GEO_EML_BALANCED, &output) == GEO_EML_DOMAIN,
         "embedded log rejects positive infinity"
     );
+    expect(output == sentinel,
+        "embedded log leaves output unchanged on positive infinity");
+
+    output = sentinel;
     expect(
-        eml_output == (geo_real_t)123,
-        "embedded log leaves output unchanged on infinity"
+        geo_eml_log((geo_real_t)-INFINITY, GEO_EML_BALANCED, &output) == GEO_EML_DOMAIN,
+        "embedded log rejects negative infinity"
     );
+    expect(output == sentinel,
+        "embedded log leaves output unchanged on negative infinity");
+
+    output = sentinel;
     expect(
-        geo_eml_log(
-            (geo_real_t)-INFINITY,
-            GEO_EML_BALANCED,
-            &eml_output
-        ) == GEO_EML_DOMAIN,
-        "embedded log rejects negative infinity as outside its domain"
+        geo_eml_exp((geo_real_t)NAN, GEO_EML_BALANCED, &output) == GEO_EML_DOMAIN,
+        "embedded exp rejects NaN"
     );
+    expect(output == sentinel, "embedded exp leaves output unchanged on NaN");
+
+    output = sentinel;
     expect(
-        eml_output == (geo_real_t)123,
-        "embedded log leaves output unchanged on negative infinity"
-    );
-    expect(
-        geo_eml_exp(
-            (geo_real_t)INFINITY,
-            GEO_EML_BALANCED,
-            &eml_output
-        ) == GEO_EML_OVERFLOW,
+        geo_eml_exp((geo_real_t)INFINITY, GEO_EML_BALANCED, &output) == GEO_EML_OVERFLOW,
         "embedded exp rejects positive infinity"
     );
+    expect(output == sentinel,
+        "embedded exp leaves output unchanged on positive infinity");
+
+    output = sentinel;
     expect(
-        geo_eml_exp(
-            (geo_real_t)-INFINITY,
-            GEO_EML_BALANCED,
-            &eml_output
-        ) == GEO_EML_OVERFLOW,
+        geo_eml_exp((geo_real_t)-INFINITY, GEO_EML_BALANCED, &output) == GEO_EML_OVERFLOW,
         "embedded exp rejects negative infinity"
     );
-    expect(
-        eml_output == (geo_real_t)123,
-        "embedded exp leaves output unchanged on infinities"
-    );
+    expect(output == sentinel,
+        "embedded exp leaves output unchanged on negative infinity");
 }
 
 static void test_checked_involutions(void) {
@@ -189,11 +175,15 @@ static void test_checked_involutions(void) {
     );
 }
 
-static void test_abi_prefix(void) {
+static void test_optimizer_abi_layout(void) {
     expect(
-        offsetof(geo_optimized_witness_t, terminal_count) >
-            offsetof(geo_optimized_witness_t, eliminated_duplicate_nodes),
-        "terminal count is appended after the stable v0.15 ABI prefix"
+        sizeof(geo_optimized_witness_t) == sizeof(geo_optimized_witness_legacy_layout_t),
+        "optimized witness retains legacy caller-owned size"
+    );
+    expect(
+        offsetof(geo_optimized_witness_t, eliminated_duplicate_nodes) ==
+            offsetof(geo_optimized_witness_legacy_layout_t, eliminated_duplicate_nodes),
+        "optimized witness final legacy field offset is unchanged"
     );
 }
 
@@ -201,7 +191,7 @@ int main(void) {
     test_malformed_programs();
     test_nonfinite_rejection();
     test_checked_involutions();
-    test_abi_prefix();
+    test_optimizer_abi_layout();
     if (failures != 0) {
         fprintf(stderr, "%d release-hardening assertion(s) failed.\n", failures);
         return EXIT_FAILURE;
