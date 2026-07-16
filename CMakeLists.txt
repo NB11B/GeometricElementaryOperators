@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.17.0
+    VERSION 0.18.0
     LANGUAGES C
 )
 
@@ -37,6 +37,7 @@ add_library(geo_kernel STATIC
     src/perf.c
     src/fixed.c
     src/fixed_geb36.c
+    src/native_generated.c
 )
 
 target_include_directories(geo_kernel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -125,20 +126,23 @@ if(GEO_BUILD_BENCHMARKS)
     add_executable(bench_compare benchmarks/bench_compare.c)
     geo_link_target(bench_compare)
 
+    add_executable(bench_complete benchmarks/bench_complete.c)
+    geo_link_target(bench_complete)
+
     if(GEO_ENABLE_LINK_MAP AND NOT MSVC)
         target_link_options(bench_host PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_host.map")
         target_link_options(bench_compare PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_compare.map")
+        target_link_options(bench_complete PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_complete.map")
     endif()
 
     if(Python3_Interpreter_FOUND)
         add_custom_target(benchmark_report
             COMMAND ${Python3_EXECUTABLE}
                 ${CMAKE_CURRENT_SOURCE_DIR}/tools/benchmark_report.py
-                $<TARGET_FILE:bench_host>
-                $<TARGET_FILE:bench_compare>
+                $<TARGET_FILE:bench_complete>
                 --repetitions 9
                 --out-dir ${CMAKE_CURRENT_BINARY_DIR}/benchmark-report
-            DEPENDS bench_host bench_compare
+            DEPENDS bench_complete
             VERBATIM
         )
     endif()
