@@ -1,44 +1,68 @@
 {
-  "version": 3,
+  "version": 4,
   "source": {
     "milestone": "W",
     "preserved_report": "artifacts/milestone_w_unified_operator.json",
-    "note": "The preserved package did not include the complete per-target witness corpus. Omega-only entries are reconstructed trees. Addition, Jordan/Lie, metric, and projective entries are explicit enlarged-representation programs matching the paper's constructions."
+    "note": "The preserved package did not include the complete per-target witness corpus. This catalog records explicit reconstructed Omega trees and enlarged-representation programs validated against the direct GEB-36 reference API."
   },
   "operator": "Omega((s,X),(t,Y))=(exp(s)-log(t),X*Y)",
   "omega_witnesses": [
-    {"target_id": 6, "name": "pseudoscalar", "terminals": ["e1", "e2"], "tree": "Omega(e1,e2)[geometric]", "output": "forward", "expected": "e12"},
-    {"target_id": 16, "name": "geometric_product", "terminals": ["A", "B"], "tree": "Omega(A,B)[geometric]", "output": "forward", "expected": "AB"},
-    {"target_id": 17, "name": "reverse_product", "terminals": ["A", "B"], "tree": "Omega(A,B)[geometric]", "output": "opposite/reverse", "expected": "reverse(AB)=reverse(B)reverse(A)"},
-    {"target_id": 30, "name": "rotor_action", "terminals": ["R", "x", "reverse(R)"], "tree": "Omega(Omega(R,x)[geometric],reverse(R))[geometric]", "output": "forward", "expected": "R*x*reverse(R)"},
-    {"target_id": 31, "name": "rotor_composition", "terminals": ["R1", "R2"], "tree": "Omega(R1,R2)[geometric]", "output": "forward", "expected": "R1*R2"},
-    {"target_id": 33, "name": "dilation", "terminals": ["T", "x", "reverse(T)"], "tree": "Omega(Omega(T,x)[geometric],reverse(T))[geometric]", "output": "forward", "expected": "T*x*reverse(T)"}
+    {"target_id": 6, "name": "pseudoscalar", "program": "Omega(e1,e2)[geometric]"},
+    {"target_id": 16, "name": "geometric_product", "program": "Omega(A,B)[geometric]"},
+    {"target_id": 17, "name": "reverse_product", "program": "opposite output of Omega(A,B)[geometric]"},
+    {"target_id": 30, "name": "rotor_action", "program": "Omega(Omega(R,x),reverse(R))[geometric]"},
+    {"target_id": 31, "name": "rotor_composition", "program": "Omega(R1,R2)[geometric]"},
+    {"target_id": 33, "name": "dilation", "program": "Omega(Omega(T,x),reverse(T))[geometric]"}
   ],
   "structured_witnesses": [
-    {"target_id": 14, "name": "addition", "program": ["U(A)", "U(B)", "U(A)U(B)", "extract"], "expected": "A+B"},
-    {"target_id": 15, "name": "subtraction", "program": ["negate(B)", "U(A)", "U(-B)", "U(A)U(-B)", "extract"], "expected": "A-B"},
-    {"target_id": 18, "name": "vector_dot", "program": ["ordered(A,B)=(AB,BA)", "HadamardExact", "select_symmetric"], "expected": "(AB+BA)/2"},
-    {"target_id": 19, "name": "vector_wedge", "program": ["ordered(A,B)=(AB,BA)", "HadamardExact", "select_antisymmetric"], "expected": "(AB-BA)/2"},
-    {"target_id": 20, "name": "commutator", "program": ["ordered(A,B)=(AB,BA)", "HadamardExact", "select_antisymmetric"], "expected": "(AB-BA)/2"},
-    {"target_id": 21, "name": "anticommutator", "program": ["ordered(A,B)=(AB,BA)", "HadamardExact", "select_symmetric"], "expected": "(AB+BA)/2"},
-    {"target_id": 22, "name": "vector_norm_squared", "program": ["vector_norm_squared(A)"], "expected": "A dot A"},
-    {"target_id": 23, "name": "distance_squared", "program": ["A-B", "vector_norm_squared"], "expected": "(A-B) dot (A-B)"},
-    {"target_id": 24, "name": "projection_numerator", "program": ["dot(A,B)", "scale(B)"], "expected": "(A dot B)B", "closure": "projective_scaled"},
-    {"target_id": 25, "name": "rejection_numerator", "program": ["norm2(B)A", "projection_numerator", "subtract"], "expected": "(B dot B)A-(A dot B)B", "closure": "projective_scaled"},
-    {"target_id": 26, "name": "reflection_numerator", "program": ["norm2(B)A", "2*projection_numerator", "subtract"], "expected": "(B dot B)A-2(A dot B)B", "closure": "projective_scaled"},
-    {"target_id": 35, "name": "vector_inverse_projective", "program": ["retain vector representative", "defer reciprocal norm"], "expected": "A up to scalar", "closure": "projective_scaled"},
-    {"target_id": 36, "name": "angle_cosine_numerator", "program": ["dot(A,B)"], "expected": "A dot B", "closure": "projective_scaled"}
+    {"target_id": 1, "name": "zero", "program": "terminal zero"},
+    {"target_id": 2, "name": "one", "program": "terminal one"},
+    {"target_id": 3, "name": "minus_one", "program": "terminal minus_one"},
+    {"target_id": 4, "name": "e1", "program": "terminal e1"},
+    {"target_id": 5, "name": "e2", "program": "terminal e2"},
+    {"target_id": 7, "name": "negation", "program": "CL20_NEGATE"},
+    {"target_id": 8, "name": "reversion", "program": "CL20_REVERSE"},
+    {"target_id": 9, "name": "grade_involution", "program": "CL20_GRADE_INVOLUTION"},
+    {"target_id": 10, "name": "clifford_conjugation", "program": "CL20_CLIFFORD_CONJUGATE"},
+    {"target_id": 11, "name": "scalar_projection", "program": "PROJECT_SCALAR"},
+    {"target_id": 12, "name": "vector_projection", "program": "PROJECT_VECTOR"},
+    {"target_id": 13, "name": "bivector_projection", "program": "PROJECT_BIVECTOR"},
+    {"target_id": 14, "name": "addition", "program": "U(A)U(B) then extract"},
+    {"target_id": 15, "name": "subtraction", "program": "U(A)U(-B) then extract"},
+    {"target_id": 18, "name": "vector_dot", "program": "ordered(A,B), HadamardExact, symmetric"},
+    {"target_id": 19, "name": "vector_wedge", "program": "ordered(A,B), HadamardExact, antisymmetric"},
+    {"target_id": 20, "name": "commutator", "program": "ordered(A,B), HadamardExact, antisymmetric"},
+    {"target_id": 21, "name": "anticommutator", "program": "ordered(A,B), HadamardExact, symmetric"},
+    {"target_id": 22, "name": "vector_norm_squared", "program": "VECTOR_NORM_SQUARED"},
+    {"target_id": 23, "name": "distance_squared", "program": "DISTANCE_SQUARED"},
+    {"target_id": 24, "name": "projection_numerator", "program": "PROJECTION_NUMERATOR"},
+    {"target_id": 25, "name": "rejection_numerator", "program": "REJECTION_NUMERATOR"},
+    {"target_id": 26, "name": "reflection_numerator", "program": "REFLECTION_NUMERATOR"},
+    {"target_id": 27, "name": "dual", "program": "DUAL"},
+    {"target_id": 28, "name": "even_projection", "program": "PROJECT_EVEN"},
+    {"target_id": 29, "name": "odd_projection", "program": "PROJECT_ODD"},
+    {"target_id": 32, "name": "rotor_norm_squared", "program": "ROTOR_NORM_SQUARED"},
+    {"target_id": 34, "name": "translation_unipotent", "program": "UNIPOTENT_ENCODE"},
+    {"target_id": 35, "name": "vector_inverse_projective", "program": "VECTOR_INVERSE_PROJECTIVE"},
+    {"target_id": 36, "name": "angle_cosine_numerator", "program": "ANGLE_COSINE_NUMERATOR"}
   ],
   "coverage": {
     "omega_compiled_targets": 6,
-    "structured_compiled_targets": 13,
-    "total_reconstructed_targets": 19,
+    "structured_compiled_targets": 30,
+    "total_reconstructed_targets": 36,
     "total_frozen_targets": 36,
-    "next_reconstruction_group": [
-      "constants and basis terminals",
-      "involutions and grade projections through carried lanes and routing",
-      "dual, even projection, odd projection, rotor norm squared, and translation unipotent",
-      "exact normalized metric operations through scalar EML injection"
+    "classification": {
+      "exact": 29,
+      "projective_scaled": 5,
+      "exact_with_supplied_transform": 2
+    },
+    "status": "complete reference reconstruction",
+    "next_stage": [
+      "host and CI build confirmation",
+      "single-precision benchmark suite",
+      "ESP32-S3 target integration",
+      "cycle, RAM, flash, and energy measurements",
+      "fixed-point backend"
     ]
   }
 }
