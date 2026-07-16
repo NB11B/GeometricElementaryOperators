@@ -49,6 +49,7 @@ add_library(geo_kernel STATIC
     src/fixed_program.c
     src/fixed_omega.c
     src/fixed_banked.c
+    src/fixed_control.c
     src/native_generated.c
 )
 
@@ -124,6 +125,73 @@ endif()
 
 find_package(Python3 COMPONENTS Interpreter)
 
+if(GEO_BUILD_CUDA AND Python3_Interpreter_FOUND)
+    set(GEO_CUDA_SCHEDULE_DIR ${CMAKE_CURRENT_BINARY_DIR}/cuda-schedules)
+    set(GEO_CUDA_SCHEDULE_NAMES
+        addition
+        geometric_product
+        vector_dot
+        vector_wedge
+        rotor_action
+    )
+    set(GEO_CUDA_SCHEDULE_SOURCES "")
+    set(GEO_CUDA_SCHEDULE_HEADERS "")
+    foreach(schedule_name IN LISTS GEO_CUDA_SCHEDULE_NAMES)
+        list(APPEND GEO_CUDA_SCHEDULE_SOURCES
+            ${GEO_CUDA_SCHEDULE_DIR}/geo_cuda_schedule_${schedule_name}.cu
+        )
+        list(APPEND GEO_CUDA_SCHEDULE_HEADERS
+            ${GEO_CUDA_SCHEDULE_DIR}/geo_cuda_schedule_${schedule_name}.h
+        )
+    endforeach()
+
+    add_custom_command(
+        OUTPUT
+            ${GEO_CUDA_SCHEDULE_DIR}/cuda_schedule_manifest.json
+            ${GEO_CUDA_SCHEDULE_SOURCES}
+            ${GEO_CUDA_SCHEDULE_HEADERS}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${GEO_CUDA_SCHEDULE_DIR}
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_cuda_schedule.py
+            --out-dir ${GEO_CUDA_SCHEDULE_DIR}
+            --self-test
+            --schedule-json ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/addition_schedule.json
+            --schedule-json ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/geometric_product_schedule.json
+            --schedule-json ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/vector_dot_schedule.json
+            --schedule-json ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/vector_wedge_schedule.json
+            --schedule-json ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/rotor_action_schedule.json
+        DEPENDS
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_cuda_schedule.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/addition_schedule.json
+            ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/geometric_product_schedule.json
+            ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/vector_dot_schedule.json
+            ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/vector_wedge_schedule.json
+            ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/rotor_action_schedule.json
+        VERBATIM
+    )
+    set_source_files_properties(${GEO_CUDA_SCHEDULE_SOURCES} PROPERTIES GENERATED TRUE)
+    add_library(geo_cuda_schedules STATIC ${GEO_CUDA_SCHEDULE_SOURCES})
+    target_include_directories(geo_cuda_schedules PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${GEO_CUDA_SCHEDULE_DIR}
+    )
+    target_link_libraries(geo_cuda_schedules PUBLIC geo_cuda)
+    target_compile_features(geo_cuda_schedules PUBLIC cuda_std_17)
+    set_target_properties(geo_cuda_schedules PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_EXTENSIONS OFF
+        CUDA_SEPARABLE_COMPILATION OFF
+        POSITION_INDEPENDENT_CODE ON
+    )
+    add_custom_target(generate_cuda_schedules
+        DEPENDS
+            ${GEO_CUDA_SCHEDULE_DIR}/cuda_schedule_manifest.json
+            ${GEO_CUDA_SCHEDULE_SOURCES}
+            ${GEO_CUDA_SCHEDULE_HEADERS}
+    )
+endif()
+
 if(GEO_BUILD_TESTS)
     enable_testing()
 
@@ -151,6 +219,7 @@ if(GEO_BUILD_TESTS)
         fixed_program
         fixed_omega
         fixed_banked
+        fixed_control
         cortex_m_dwt
         native_generated
         release_hardening
@@ -193,6 +262,9 @@ if(GEO_BUILD_BENCHMARKS)
     add_executable(bench_workloads benchmarks/bench_workloads.c)
     geo_link_target(bench_workloads)
 
+    add_executable(bench_numerical benchmarks/bench_numerical.c)
+    geo_link_target(bench_numerical)
+
     if(GEO_BUILD_CUDA)
         add_executable(bench_cuda benchmarks/bench_cuda.cu)
         target_link_libraries(bench_cuda PRIVATE geo_cuda)
@@ -204,6 +276,10 @@ if(GEO_BUILD_BENCHMARKS)
             NAME workload_smoke
             COMMAND bench_workloads --iterations 100 --warmup 10 --seed 608135816
         )
+        add_test(
+            NAME numerical_smoke
+            COMMAND bench_numerical --samples 256 --seed 1779033703
+        )
     endif()
 
     if(GEO_ENABLE_LINK_MAP AND NOT MSVC)
@@ -211,6 +287,7 @@ if(GEO_BUILD_BENCHMARKS)
         target_link_options(bench_compare PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_compare.map")
         target_link_options(bench_complete PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_selected_backends.map")
         target_link_options(bench_workloads PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_workloads.map")
+        target_link_options(bench_numerical PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_numerical.map")
         if(GEO_BUILD_CUDA)
             target_link_options(bench_cuda PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_cuda.map")
         endif()
@@ -249,6 +326,16 @@ if(GEO_BUILD_BENCHMARKS)
                 VERBATIM
             )
         endif()
+
+        add_custom_target(numerical_report
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/numerical_report.py
+                --executable $<TARGET_FILE:bench_numerical>
+                --precision ${GEO_PRECISION_NAME}
+                --out-dir ${CMAKE_CURRENT_BINARY_DIR}/numerical-report
+            DEPENDS bench_numerical
+            VERBATIM
+        )
     endif()
 endif()
 
