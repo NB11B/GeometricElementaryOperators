@@ -102,6 +102,7 @@ if(GEO_BUILD_TESTS)
         fixed_extended
         safety
         fixed_geb36
+        native_generated
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})
