@@ -1,0 +1,32 @@
+{
+  "milestone": "W",
+  "operator": "Omega((s,X),(t,Y))=(exp(s)-log(t), X*Y)",
+  "max_errors": {
+    "scalar_exp": 0.0,
+    "scalar_log": 4.440892098500626e-16,
+    "geometric_product": 0.0,
+    "reversion_propagation": 2.220446049250313e-16,
+    "central_scalar_injection": 0.0,
+    "rotor_application": 8.881784197001252e-16
+  },
+  "all_checks_below_1e-12": true,
+  "multiplication_only_limitation": {
+    "polynomial_closure": "In any finite-dimensional algebra over a coefficient ring R, a finite tree whose only internal operation is bilinear multiplication evaluates to a coordinate polynomial in the variable-terminal coordinates with coefficients in R.",
+    "transcendental_obstruction": "The functions exp(x) and log(x) are not polynomial functions on any nontrivial real interval. Therefore a multiplication-only algebraic fabric with finitely many fixed terminals cannot generate arbitrary exp or log dependence on an external scalar variable.",
+    "consequence": "A literal homogeneous multiplication-only node cannot close normalized elementary geometry for arbitrary scalar parameters unless transcendental values are supplied as terminals, approximated, or produced by a nonlinear companion mechanism."
+  },
+  "single_operator_classification": {
+    "mathematical_single_operator": true,
+    "single_state_type": true,
+    "single_expression_grammar": "S -> terminal | Omega(S,S)",
+    "homogeneous_internal_arithmetic": false,
+    "reason": "Omega is one binary function on a product space, but its scalar coordinate executes EML while its geometric coordinate executes algebra multiplication.",
+    "hardware_interpretation": "One repeatable macro-cell with a scalar nonlinear lane and a geometric multiply/routing lane."
+  },
+  "closure_theorem": {
+    "scalar": "Every scalar elementary expression in the reference calculator basis has a finite EML tree.",
+    "geometric": "Every GEB-36 geometric operation is exact or becomes exact after scalar coefficients from the scalar lane are centrally embedded into the geometric lane.",
+    "combined": "Every finite normalized GEB-36 expression has a finite Omega tree over the product state, provided typed embeddings and routing terminals are included."
+  },
+  "import_note": "The preserved Milestone W package contains the unified validation report but not the complete per-target witness-tree corpus. The repository therefore begins with explicit compiled witnesses for the directly representable multiplicative GEB targets and will expand as earlier discovery artifacts are recovered or reconstructed."
+}
