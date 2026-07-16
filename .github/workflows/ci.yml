@@ -205,3 +205,70 @@ jobs:
             rtl-synthesis.log
             controller-synthesis.log
           if-no-files-found: error
+
+  ci-summary:
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    needs:
+      - build-and-test
+      - sanitizers
+      - q-format-validation
+      - esp32-component-validation
+      - windows-abi-consumer
+      - rtl-validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Publish exact hotfix gate summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- geo-v0182-ci-summary -->';
+            const gates = [
+              ['build-and-test', '${{ needs[\'build-and-test\'].result }}'],
+              ['sanitizers', '${{ needs.sanitizers.result }}'],
+              ['q-format-validation', '${{ needs[\'q-format-validation\'].result }}'],
+              ['esp32-component-validation', '${{ needs[\'esp32-component-validation\'].result }}'],
+              ['windows-abi-consumer', '${{ needs[\'windows-abi-consumer\'].result }}'],
+              ['rtl-validation', '${{ needs[\'rtl-validation\'].result }}'],
+            ];
+            const passed = gates.every(([, result]) => result === 'success');
+            const rows = gates
+              .map(([gate, result]) => `| ${gate} | ${result} |`)
+              .join('\n');
+            const body = [
+              marker,
+              '## v0.18.2 CI gate summary',
+              '',
+              `Candidate: \`${context.payload.pull_request.head.sha}\``,
+              '',
+              '| Required gate | Result |',
+              '|---|---|',
+              rows,
+              '',
+              `**Every required gate passed:** ${passed ? 'yes' : 'no'}`,
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number, per_page: 100 }
+            );
+            const existing = comments.find(
+              comment => comment.user?.type === 'Bot' && comment.body?.includes(marker)
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+            if (!passed) {
+              core.setFailed('One or more required v0.18.2 CI gates did not pass.');
+            }
