@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.15.0
+    VERSION 0.16.1
     LANGUAGES C
 )
 
@@ -14,13 +14,17 @@ option(GEO_BUILD_BENCHMARKS "Build host-side benchmarks" ON)
 option(GEO_USE_DOUBLE "Use double precision instead of float" ON)
 option(GEO_ENABLE_STACK_USAGE "Emit compiler stack-usage reports" OFF)
 option(GEO_ENABLE_LINK_MAP "Emit linker map for benchmark executable" OFF)
+option(GEO_ENABLE_SANITIZERS "Enable address and undefined-behavior sanitizers" OFF)
 
 add_library(geo_kernel STATIC
     src/cl20.c
+    src/cl30.c
     src/opposite.c
     src/omega.c
+    src/eml_embedded.c
     src/structured.c
     src/structured_program.c
+    src/fused.c
     src/control.c
     src/geb36.c
     src/compiler.c
@@ -28,14 +32,19 @@ add_library(geo_kernel STATIC
     src/folding.c
     src/banked.c
     src/lowering.c
+    src/report.c
     src/geb_witness.c
     src/perf.c
     src/fixed.c
 )
 
-target_include_directories(geo_kernel
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+target_include_directories(geo_kernel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+set_source_files_properties(src/structured_program.c PROPERTIES
+    COMPILE_DEFINITIONS GEO_STRUCTURED_PROGRAM_IMPLEMENTATION=1
+)
+set_source_files_properties(src/banked.c PROPERTIES
+    COMPILE_DEFINITIONS GEO_BANKED_IMPLEMENTATION=1
 )
 
 if(GEO_USE_DOUBLE)
@@ -44,81 +53,66 @@ endif()
 
 if(MSVC)
     target_compile_options(geo_kernel PRIVATE /W4)
+    set(GEO_MATH_LIBS "")
 else()
     target_compile_options(geo_kernel PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
+    set(GEO_MATH_LIBS m)
     if(GEO_ENABLE_STACK_USAGE)
         target_compile_options(geo_kernel PRIVATE -fstack-usage)
     endif()
+    if(GEO_ENABLE_SANITIZERS)
+        target_compile_options(geo_kernel PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(geo_kernel PUBLIC -fsanitize=address,undefined)
+    endif()
 endif()
+
+function(geo_link_target target_name)
+    target_link_libraries(${target_name} PRIVATE geo_kernel ${GEO_MATH_LIBS})
+    if(GEO_ENABLE_SANITIZERS AND NOT MSVC)
+        target_compile_options(${target_name} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(${target_name} PRIVATE -fsanitize=address,undefined)
+    endif()
+endfunction()
 
 if(GEO_BUILD_TESTS)
     enable_testing()
 
-    add_executable(test_cl20 tests/test_cl20.c)
-    target_link_libraries(test_cl20 PRIVATE geo_kernel m)
-    add_test(NAME cl20 COMMAND test_cl20)
-
-    add_executable(test_omega tests/test_omega.c)
-    target_link_libraries(test_omega PRIVATE geo_kernel m)
-    add_test(NAME omega COMMAND test_omega)
-
-    add_executable(test_structured tests/test_structured.c)
-    target_link_libraries(test_structured PRIVATE geo_kernel m)
-    add_test(NAME structured COMMAND test_structured)
-
-    add_executable(test_structured_program tests/test_structured_program.c)
-    target_link_libraries(test_structured_program PRIVATE geo_kernel m)
-    add_test(NAME structured_program COMMAND test_structured_program)
-
-    add_executable(test_metric_program tests/test_metric_program.c)
-    target_link_libraries(test_metric_program PRIVATE geo_kernel m)
-    add_test(NAME metric_program COMMAND test_metric_program)
-
-    add_executable(test_closure_program tests/test_closure_program.c)
-    target_link_libraries(test_closure_program PRIVATE geo_kernel m)
-    add_test(NAME closure_program COMMAND test_closure_program)
-
-    add_executable(test_control tests/test_control.c)
-    target_link_libraries(test_control PRIVATE geo_kernel m)
-    add_test(NAME control COMMAND test_control)
-
-    add_executable(test_geb36 tests/test_geb36.c)
-    target_link_libraries(test_geb36 PRIVATE geo_kernel m)
-    add_test(NAME geb36 COMMAND test_geb36)
-
-    add_executable(test_compiler tests/test_compiler.c)
-    target_link_libraries(test_compiler PRIVATE geo_kernel m)
-    add_test(NAME compiler COMMAND test_compiler)
-
-    add_executable(test_optimizer tests/test_optimizer.c)
-    target_link_libraries(test_optimizer PRIVATE geo_kernel m)
-    add_test(NAME optimizer COMMAND test_optimizer)
-
-    add_executable(test_folding tests/test_folding.c)
-    target_link_libraries(test_folding PRIVATE geo_kernel m)
-    add_test(NAME folding COMMAND test_folding)
-
-    add_executable(test_banked tests/test_banked.c)
-    target_link_libraries(test_banked PRIVATE geo_kernel m)
-    add_test(NAME banked COMMAND test_banked)
-
-    add_executable(test_lowering tests/test_lowering.c)
-    target_link_libraries(test_lowering PRIVATE geo_kernel m)
-    add_test(NAME lowering COMMAND test_lowering)
-
-    add_executable(test_geb_witness tests/test_geb_witness.c)
-    target_link_libraries(test_geb_witness PRIVATE geo_kernel m)
-    add_test(NAME geb_witness COMMAND test_geb_witness)
-
-    add_executable(test_fixed tests/test_fixed.c)
-    target_link_libraries(test_fixed PRIVATE geo_kernel m)
-    add_test(NAME fixed COMMAND test_fixed)
+    foreach(test_name
+        cl20
+        omega
+        structured
+        structured_program
+        metric_program
+        closure_program
+        control
+        geb36
+        compiler
+        optimizer
+        folding
+        banked
+        lowering
+        geb_witness
+        fixed
+        randomized
+        advanced
+        fixed_extended
+        safety
+    )
+        add_executable(test_${test_name} tests/test_${test_name}.c)
+        geo_link_target(test_${test_name})
+        add_test(NAME ${test_name} COMMAND test_${test_name})
+    endforeach()
 endif()
 
 if(GEO_BUILD_BENCHMARKS)
     add_executable(bench_host benchmarks/bench_host.c)
-    target_link_libraries(bench_host PRIVATE geo_kernel m)
+    geo_link_target(bench_host)
+
+    add_executable(bench_compare benchmarks/bench_compare.c)
+    geo_link_target(bench_compare)
+
     if(GEO_ENABLE_LINK_MAP AND NOT MSVC)
         target_link_options(bench_host PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_host.map")
+        target_link_options(bench_compare PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_compare.map")
     endif()
 endif()

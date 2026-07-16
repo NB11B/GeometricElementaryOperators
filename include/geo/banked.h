@@ -53,17 +53,12 @@ typedef struct {
     size_t unified_capacity;
 } geo_banked_storage_t;
 
-/*
- * Converts logical folded registers into physically separate scalar,
- * geometric, and unified banks. All buffers are caller-owned.
- */
 geo_status_t geo_banked_plan(
     const geo_folded_program_t *folded,
     geo_banked_plan_workspace_t *workspace,
     geo_banked_program_t *output
 );
 
-/* Copies the folded initial register image into the physical banks. */
 geo_status_t geo_banked_initialize(
     const geo_folded_program_t *folded,
     const geo_banked_program_t *program,
@@ -71,13 +66,26 @@ geo_status_t geo_banked_initialize(
     geo_banked_storage_t *storage
 );
 
-/* Executes only the compact typed banks; no unified shadow bank is required. */
-geo_status_t geo_banked_execute(
+geo_status_t geo_banked_execute_impl(
     const geo_banked_program_t *program,
     geo_banked_storage_t *storage
 );
 
-/* Reconstructs a public geo_state_t from a typed bank reference. */
+#ifndef GEO_BANKED_IMPLEMENTATION
+static inline geo_status_t geo_banked_execute(
+    const geo_banked_program_t *program,
+    geo_banked_storage_t *storage
+) {
+    if (program == NULL || storage == NULL) return GEO_STATUS_NULL_ARGUMENT;
+    if (program->instruction_count != 0u && program->instructions == NULL) {
+        return GEO_STATUS_NULL_ARGUMENT;
+    }
+    return geo_banked_execute_impl(program, storage);
+}
+#else
+#define geo_banked_execute geo_banked_execute_impl
+#endif
+
 geo_status_t geo_banked_read_state(
     const geo_banked_storage_t *storage,
     geo_banked_ref_t reference,

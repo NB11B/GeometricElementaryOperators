@@ -24,6 +24,7 @@ typedef struct {
 typedef struct {
     geo_program_t program;
     uint8_t root_register;
+    size_t terminal_count;
     size_t original_instruction_count;
     size_t optimized_instruction_count;
     size_t eliminated_dead_nodes;
@@ -33,7 +34,7 @@ typedef struct {
 /*
  * Compiles only the subgraph reachable from the selected root, propagates
  * lane liveness backward, merges duplicate Omega nodes, and compacts result
- * registers. The input witness remains immutable.
+ * registers. The authoritative terminal_count is preserved for later passes.
  */
 geo_status_t geo_witness_compile_optimized(
     const geo_witness_tree_t *tree,

@@ -1,0 +1,21 @@
+{
+  "review_commit": "a8193cb9a02df6f8d85ac7850992c77b5dbca163",
+  "resolution_version": "0.16.1",
+  "resolved": [
+    "removed signed-left-shift and signed-right-shift dependency from fixed-point multiply/divide",
+    "validated null instruction storage in Omega, structured, and banked public executors",
+    "preserved authoritative terminal count and rejected incomplete terminal images during folding",
+    "validated lowering opcodes, requested lanes, register ranges, and operand lane compatibility",
+    "made libm linkage conditional for MSVC portability",
+    "switched host benchmarks to monotonic clocks",
+    "added ASan and UBSan CI jobs in float and double precision"
+  ],
+  "validation": {
+    "gcc_float": "passed",
+    "gcc_double": "passed",
+    "clang_float": "passed",
+    "clang_double": "passed",
+    "asan_ubsan_float": "passed",
+    "asan_ubsan_double": "passed"
+  }
+}

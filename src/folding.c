@@ -5,23 +5,13 @@
 
 static uint8_t geo_kind_from_lanes(uint8_t lanes) {
     const uint8_t active = (uint8_t)(lanes & GEO_LANE_ALL);
-
-    if (active == GEO_LANE_SCALAR) {
-        return (uint8_t)GEO_REGISTER_SCALAR;
-    }
-    if (active == GEO_LANE_GEOMETRIC) {
-        return (uint8_t)GEO_REGISTER_GEOMETRIC;
-    }
-    if (active == GEO_LANE_ALL) {
-        return (uint8_t)GEO_REGISTER_UNIFIED;
-    }
+    if (active == GEO_LANE_SCALAR) return (uint8_t)GEO_REGISTER_SCALAR;
+    if (active == GEO_LANE_GEOMETRIC) return (uint8_t)GEO_REGISTER_GEOMETRIC;
+    if (active == GEO_LANE_ALL) return (uint8_t)GEO_REGISTER_UNIFIED;
     return (uint8_t)GEO_REGISTER_UNUSED;
 }
 
-static size_t geo_scalar_register_bytes(void) {
-    return sizeof(geo_real_t);
-}
-
+static size_t geo_scalar_register_bytes(void) { return sizeof(geo_real_t); }
 static size_t geo_geometric_register_bytes(void) {
     return sizeof(geo_opposite_t) + sizeof(geo_scale_t);
 }
@@ -42,8 +32,7 @@ geo_status_t geo_program_fold_constants(
     size_t scalar_count = 0u;
     size_t geometric_count = 0u;
     size_t unified_count = 0u;
-    const size_t old_register_count =
-        input == NULL ? 0u : input->program.register_count;
+    const size_t old_register_count = input == NULL ? 0u : input->program.register_count;
 
     if (input == NULL || terminal_values == NULL ||
         terminal_constant_flags == NULL || workspace == NULL || output == NULL ||
@@ -53,6 +42,9 @@ geo_status_t geo_program_fold_constants(
         return GEO_STATUS_NULL_ARGUMENT;
     }
 
+    if (terminal_count != input->terminal_count) {
+        return GEO_STATUS_BAD_TREE;
+    }
     if (terminal_count > old_register_count ||
         workspace->old_to_new_capacity < old_register_count ||
         workspace->constant_flag_capacity < old_register_count ||
@@ -61,17 +53,25 @@ geo_status_t geo_program_fold_constants(
         workspace->instruction_capacity < input->program.instruction_count) {
         return GEO_STATUS_BUFFER_CAPACITY;
     }
+    if (input->program.instruction_count != 0u && input->program.instructions == NULL) {
+        return GEO_STATUS_NULL_ARGUMENT;
+    }
+    if (input->root_register >= old_register_count) {
+        return GEO_STATUS_REGISTER_RANGE;
+    }
 
+    memset(workspace->old_to_new, UINT8_MAX, old_register_count * sizeof(uint8_t));
     memset(workspace->constant_flags, 0, old_register_count * sizeof(uint8_t));
     memset(workspace->register_kinds, 0, old_register_count * sizeof(uint8_t));
 
     for (old_register = 0u; old_register < terminal_count; ++old_register) {
         workspace->old_to_new[old_register] = (uint8_t)next_register;
         workspace->initial_registers[next_register] = terminal_values[old_register];
-        workspace->constant_flags[next_register] =
-            terminal_constant_flags[old_register] != 0u ? 1u : 0u;
-        workspace->register_kinds[next_register] =
-            geo_kind_from_lanes(terminal_values[old_register].active_lanes);
+        workspace->constant_flags[next_register] = terminal_constant_flags[old_register] != 0u ? 1u : 0u;
+        workspace->register_kinds[next_register] = geo_kind_from_lanes(terminal_values[old_register].active_lanes);
+        if (workspace->register_kinds[next_register] == (uint8_t)GEO_REGISTER_UNUSED) {
+            return GEO_STATUS_BAD_TREE;
+        }
         ++next_register;
     }
 
@@ -85,12 +85,16 @@ geo_status_t geo_program_fold_constants(
         uint8_t new_destination;
 
         if ((geo_opcode_t)source.opcode != GEO_OPCODE_OMEGA ||
-            source.left >= old_register_count ||
-            source.right >= old_register_count ||
-            source.destination >= old_register_count) {
+            source.left >= old_register_count || source.right >= old_register_count ||
+            source.destination >= old_register_count ||
+            source.requested_lanes == GEO_LANE_NONE ||
+            (source.requested_lanes & (uint8_t)(~GEO_LANE_ALL)) != 0u) {
             return GEO_STATUS_BAD_OPCODE;
         }
-
+        if (workspace->old_to_new[source.left] == UINT8_MAX ||
+            workspace->old_to_new[source.right] == UINT8_MAX) {
+            return GEO_STATUS_BAD_TREE;
+        }
         if (next_register >= workspace->initial_register_capacity ||
             next_register > (size_t)UINT8_MAX) {
             return GEO_STATUS_REGISTER_RANGE;
@@ -101,27 +105,21 @@ geo_status_t geo_program_fold_constants(
         new_destination = (uint8_t)next_register;
         workspace->old_to_new[source.destination] = new_destination;
         workspace->initial_registers[next_register] = geo_state_zero();
-        workspace->register_kinds[next_register] =
-            geo_kind_from_lanes(source.requested_lanes);
+        workspace->register_kinds[next_register] = geo_kind_from_lanes(source.requested_lanes);
 
         if (workspace->constant_flags[new_left] != 0u &&
             workspace->constant_flags[new_right] != 0u) {
-            geo_status_t status = geo_omega_apply(
+            const geo_status_t status = geo_omega_apply(
                 &workspace->initial_registers[new_left],
                 &workspace->initial_registers[new_right],
                 source.requested_lanes,
                 &workspace->initial_registers[new_destination]
             );
-            if (status != GEO_STATUS_OK) {
-                return status;
-            }
+            if (status != GEO_STATUS_OK) return status;
             workspace->constant_flags[new_destination] = 1u;
             ++folded_count;
         } else {
-            if (emitted_count >= workspace->instruction_capacity) {
-                return GEO_STATUS_BUFFER_CAPACITY;
-            }
-
+            if (emitted_count >= workspace->instruction_capacity) return GEO_STATUS_BUFFER_CAPACITY;
             destination = &workspace->instructions[emitted_count];
             destination->opcode = source.opcode;
             destination->destination = new_destination;
@@ -131,23 +129,19 @@ geo_status_t geo_program_fold_constants(
             workspace->constant_flags[new_destination] = 0u;
             ++emitted_count;
         }
-
         ++next_register;
+    }
+
+    if (workspace->old_to_new[input->root_register] == UINT8_MAX) {
+        return GEO_STATUS_BAD_TREE;
     }
 
     for (old_register = 0u; old_register < next_register; ++old_register) {
         switch ((geo_register_kind_t)workspace->register_kinds[old_register]) {
-            case GEO_REGISTER_SCALAR:
-                ++scalar_count;
-                break;
-            case GEO_REGISTER_GEOMETRIC:
-                ++geometric_count;
-                break;
-            case GEO_REGISTER_UNIFIED:
-                ++unified_count;
-                break;
-            default:
-                break;
+            case GEO_REGISTER_SCALAR: ++scalar_count; break;
+            case GEO_REGISTER_GEOMETRIC: ++geometric_count; break;
+            case GEO_REGISTER_UNIFIED: ++unified_count; break;
+            default: return GEO_STATUS_BAD_TREE;
         }
     }
 
@@ -167,6 +161,5 @@ geo_status_t geo_program_fold_constants(
         geometric_count * geo_geometric_register_bytes() +
         unified_count * sizeof(geo_state_t);
     output->estimated_unified_bytes = next_register * sizeof(geo_state_t);
-
     return GEO_STATUS_OK;
 }

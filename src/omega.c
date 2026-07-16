@@ -45,13 +45,8 @@ static geo_status_t geo_scale_mul(
     int64_t denominator;
     int64_t divisor;
 
-    if (output == NULL) {
-        return GEO_STATUS_NULL_ARGUMENT;
-    }
-
-    if (a.denominator == 0 || b.denominator == 0) {
-        return GEO_STATUS_SCALE_OVERFLOW;
-    }
+    if (output == NULL) return GEO_STATUS_NULL_ARGUMENT;
+    if (a.denominator == 0 || b.denominator == 0) return GEO_STATUS_SCALE_OVERFLOW;
 
     numerator = (int64_t)a.numerator * (int64_t)b.numerator;
     denominator = (int64_t)a.denominator * (int64_t)b.denominator;
@@ -65,10 +60,8 @@ static geo_status_t geo_scale_mul(
     numerator /= divisor;
     denominator /= divisor;
 
-    if (
-        numerator < INT32_MIN || numerator > INT32_MAX ||
-        denominator < 1 || denominator > INT32_MAX
-    ) {
+    if (numerator < INT32_MIN || numerator > INT32_MAX ||
+        denominator < 1 || denominator > INT32_MAX) {
         return GEO_STATUS_SCALE_OVERFLOW;
     }
 
@@ -78,9 +71,7 @@ static geo_status_t geo_scale_mul(
 }
 
 geo_scale_t geo_scale_one(void) {
-    geo_scale_t result;
-    result.numerator = 1;
-    result.denominator = 1;
+    geo_scale_t result = {1, 1};
     return result;
 }
 
@@ -117,8 +108,9 @@ geo_status_t geo_omega_apply(
     geo_status_t status;
     const uint8_t lanes = (uint8_t)(requested_lanes & GEO_LANE_ALL);
 
-    if (left == NULL || right == NULL || output == NULL) {
-        return GEO_STATUS_NULL_ARGUMENT;
+    if (left == NULL || right == NULL || output == NULL) return GEO_STATUS_NULL_ARGUMENT;
+    if (lanes == GEO_LANE_NONE || (requested_lanes & (uint8_t)(~GEO_LANE_ALL)) != 0u) {
+        return GEO_STATUS_BAD_OPCODE;
     }
 
     result = geo_state_zero();
@@ -129,7 +121,6 @@ geo_status_t geo_omega_apply(
             right->scalar <= (geo_real_t)0) {
             return GEO_STATUS_LOG_DOMAIN;
         }
-
         result.scalar = geo_exp_value(left->scalar) - geo_log_value(right->scalar);
         result.active_lanes = (uint8_t)(result.active_lanes | GEO_LANE_SCALAR);
     }
@@ -137,14 +128,11 @@ geo_status_t geo_omega_apply(
     if ((lanes & GEO_LANE_GEOMETRIC) != 0u) {
         if ((left->active_lanes & GEO_LANE_GEOMETRIC) == 0u ||
             (right->active_lanes & GEO_LANE_GEOMETRIC) == 0u) {
-            return GEO_STATUS_NULL_ARGUMENT;
+            return GEO_STATUS_BAD_TREE;
         }
-
         result.geometric = geo_opposite_mul(left->geometric, right->geometric);
         status = geo_scale_mul(left->scale, right->scale, &result.scale);
-        if (status != GEO_STATUS_OK) {
-            return status;
-        }
+        if (status != GEO_STATUS_OK) return status;
         result.active_lanes = (uint8_t)(result.active_lanes | GEO_LANE_GEOMETRIC);
     }
 
@@ -159,15 +147,13 @@ geo_status_t geo_program_execute(
 ) {
     size_t pc;
 
-    if (program == NULL || registers == NULL) {
+    if (program == NULL || registers == NULL) return GEO_STATUS_NULL_ARGUMENT;
+    if (program->instruction_count != 0u && program->instructions == NULL) {
         return GEO_STATUS_NULL_ARGUMENT;
     }
+    if (program->register_count > register_capacity) return GEO_STATUS_REGISTER_RANGE;
 
-    if (program->register_count > register_capacity) {
-        return GEO_STATUS_REGISTER_RANGE;
-    }
-
-    for (pc = 0; pc < program->instruction_count; ++pc) {
+    for (pc = 0u; pc < program->instruction_count; ++pc) {
         const geo_instruction_t instruction = program->instructions[pc];
 
         if (instruction.destination >= program->register_count ||
@@ -187,15 +173,13 @@ geo_status_t geo_program_execute(
                 {
                     const geo_state_t left_value = registers[instruction.left];
                     const geo_state_t right_value = registers[instruction.right];
-                    geo_status_t status = geo_omega_apply(
+                    const geo_status_t status = geo_omega_apply(
                         &left_value,
                         &right_value,
                         instruction.requested_lanes,
                         &registers[instruction.destination]
                     );
-                    if (status != GEO_STATUS_OK) {
-                        return status;
-                    }
+                    if (status != GEO_STATUS_OK) return status;
                 }
                 break;
 
