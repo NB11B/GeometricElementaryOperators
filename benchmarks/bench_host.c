@@ -2,15 +2,33 @@
 #include <stdio.h>
 #include <time.h>
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
 #include "geo/perf.h"
 
 static uint64_t host_now(void *context) {
-    struct timespec value;
     (void)context;
-    if (timespec_get(&value, TIME_UTC) != TIME_UTC) {
-        return 0u;
-    }
+#if defined(_WIN32)
+    LARGE_INTEGER value;
+    QueryPerformanceCounter(&value);
+    return (uint64_t)value.QuadPart;
+#else
+    struct timespec value;
+    if (clock_gettime(CLOCK_MONOTONIC, &value) != 0) return 0u;
     return (uint64_t)value.tv_sec * UINT64_C(1000000000) + (uint64_t)value.tv_nsec;
+#endif
+}
+
+static uint64_t host_frequency(void) {
+#if defined(_WIN32)
+    LARGE_INTEGER frequency;
+    QueryPerformanceFrequency(&frequency);
+    return (uint64_t)frequency.QuadPart;
+#else
+    return UINT64_C(1000000000);
+#endif
 }
 
 static void print_result(const geo_benchmark_result_t *result) {
@@ -26,7 +44,7 @@ static void print_result(const geo_benchmark_result_t *result) {
 }
 
 int main(void) {
-    const geo_cycle_source_t clock = {host_now, NULL, UINT64_C(1000000000)};
+    const geo_cycle_source_t clock = {host_now, NULL, host_frequency()};
     geo_benchmark_result_t result;
     geo_memory_report_t memory;
     geo_status_t status;
@@ -56,6 +74,5 @@ int main(void) {
         return 1;
     }
     print_result(&result);
-
     return 0;
 }
