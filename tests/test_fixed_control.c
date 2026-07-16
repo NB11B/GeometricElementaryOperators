@@ -65,7 +65,8 @@ static void test_zero_control(void) {
 
 static void test_overflow_is_transactional(void) {
     const geo_fixed_m2_t left = {INT32_MAX, 0, 0, 0};
-    const geo_fixed_m2_t right = {fixed(2.0), 0, 0, 0};
+    /* 1.5 is representable from Q1 through Q30 and still overflows MAX * 1.5. */
+    const geo_fixed_m2_t right = {fixed(1.5), 0, 0, 0};
     geo_fixed_m2_t sentinel;
     geo_fixed_m2_t output;
 
