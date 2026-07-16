@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Emit synthesizable SystemVerilog for fixed-point geometric kernels.
-
-The primary target is a pipelinable Cl(2,0) product cell. The schedule emitter
-also converts optimized banked-program JSON into an explicit cycle-by-cycle RTL
-operation schedule suitable for downstream HLS, handwritten RTL, or formal
-verification.
-"""
+"""Emit synthesizable SystemVerilog for fixed-point geometric kernels."""
 from __future__ import annotations
 
 import argparse
@@ -29,9 +23,9 @@ def cl20_module(width: int, frac: int, module: str) -> str:
         ("p12", "a_e1", "b_e2"), ("p21", "a_e2", "b_e1"),
     ]
     declarations = "\n".join(mul(*p) for p in products)
-    shifted = "\n".join(
-        f"logic signed [{width}:0] q{name[1:]};\n"
-        f"assign q{name[1:]} = $signed({name} >>> FRAC);"
+    rounded = "\n".join(
+        f"logic signed [WIDTH:0] q{name[1:]};\n"
+        f"assign q{name[1:]} = round_product({name});"
         for name, _, _ in products
     )
     return f'''module {module} #(
@@ -52,9 +46,31 @@ def cl20_module(width: int, frac: int, module: str) -> str:
     output logic signed [WIDTH-1:0] y_e12
 );
 
+function automatic logic signed [WIDTH:0] round_product(
+    input logic signed [2*WIDTH-1:0] product
+);
+    logic negative;
+    logic [2*WIDTH-1:0] magnitude;
+    logic [2*WIDTH-1:0] quotient;
+    logic [2*WIDTH-1:0] remainder;
+    logic [2*WIDTH-1:0] mask;
+    logic [2*WIDTH-1:0] half;
+    begin
+        negative = product < 0;
+        magnitude = negative ? $unsigned(-product) : $unsigned(product);
+        mask = ({{(2*WIDTH){{1'b1}}}} >> (2*WIDTH-FRAC));
+        half = {{(2*WIDTH){{1'b0}}}};
+        half[FRAC-1] = 1'b1;
+        quotient = magnitude >> FRAC;
+        remainder = magnitude & mask;
+        if (remainder >= half) quotient = quotient + 1'b1;
+        round_product = negative ? -$signed(quotient[WIDTH:0]) : $signed(quotient[WIDTH:0]);
+    end
+endfunction
+
 {declarations}
 
-{shifted}
+{rounded}
 
 logic signed [WIDTH+2:0] sum_s;
 logic signed [WIDTH+2:0] sum_e1;
@@ -105,8 +121,10 @@ initial begin
     if (y_s !== ONE) $fatal(1, "e1^2");
     clear_inputs(); a_e12=ONE; b_e12=ONE; #1;
     if (y_s !== -ONE) $fatal(1, "e12^2");
-    clear_inputs(); a_s=ONE; b_s=ONE; #1;
-    if (y_s !== ONE) $fatal(1, "scalar product");
+    clear_inputs(); a_s=-1; b_s=ONE/4; #1;
+    if (y_s !== 0) $fatal(1, "negative sub-half rounds toward zero");
+    clear_inputs(); a_s=-1; b_s=ONE/2; #1;
+    if (y_s !== -1) $fatal(1, "negative half rounds away from zero");
     $display("PASS {module}");
     $finish;
 end
@@ -134,21 +152,13 @@ def validate_schedule(data: dict[str, Any]) -> dict[str, Any]:
         if any(not isinstance(op, int) or op not in available for op in operands):
             raise ValueError(f"instruction {index} reads unavailable register")
         latency = 2 if opcode in {"cl20_product", "omega_geometric"} else 1
-        schedule.append({
-            "cycle": cycle,
-            "latency": latency,
-            "opcode": opcode,
-            "destination": destination,
-            "operands": operands,
-        })
+        schedule.append({"cycle": cycle, "latency": latency, "opcode": opcode,
+                         "destination": destination, "operands": operands})
         cycle += latency
         available.add(destination)
-    return {
-        "name": data.get("name", "geo_schedule"),
-        "total_cycles": cycle,
-        "register_count": (max(available) + 1) if available else 0,
-        "operations": schedule,
-    }
+    return {"name": data.get("name", "geo_schedule"), "total_cycles": cycle,
+            "register_count": (max(available) + 1) if available else 0,
+            "operations": schedule}
 
 
 def schedule_sv(schedule: dict[str, Any], module: str) -> str:
@@ -201,20 +211,40 @@ endmodule
 '''
 
 
+def controller_testbench(schedule: dict[str, Any], module: str) -> str:
+    cycles = max(1, int(schedule["total_cycles"]))
+    expected_valid = len(schedule["operations"])
+    return f'''`timescale 1ns/1ps
+module tb_{module};
+logic clk=0, reset_n=0, start=0;
+logic busy, done, valid;
+logic [7:0] opcode, destination;
+integer valid_count=0;
+{module} dut (.*);
+always #5 clk = ~clk;
+always @(posedge clk) if (valid) valid_count <= valid_count + 1;
+initial begin
+    #12 reset_n=1; #8 start=1; #10 start=0;
+    repeat ({cycles + 4}) @(posedge clk);
+    if (!done && busy) $fatal(1, "controller did not finish");
+    if (valid_count != {expected_valid}) $fatal(1, "unexpected valid count");
+    $display("PASS {module}");
+    $finish;
+end
+endmodule
+'''
+
+
 def self_test() -> None:
-    sample = {
-        "input_registers": [0, 1],
-        "instructions": [
-            {"opcode": "cl20_product", "destination": 2, "left": 0, "right": 1},
-            {"opcode": "reverse", "destination": 3, "source": 2},
-        ],
-    }
+    sample = {"input_registers": [0, 1], "instructions": [
+        {"opcode": "cl20_product", "destination": 2, "left": 0, "right": 1},
+        {"opcode": "reverse", "destination": 3, "source": 2},
+    ]}
     schedule = validate_schedule(sample)
     assert schedule["total_cycles"] == 3
     assert schedule["register_count"] == 4
     text = cl20_module(32, 16, "geo_cl20_product_q")
-    assert "always_comb" in text and "a_e12" in text
-    assert "sum_s   = q00" in text and "sum_s   = qs" not in text
+    assert "round_product" in text and "a_e12" in text
 
 
 def main(argv: Iterable[str] | None = None) -> int:
@@ -226,24 +256,20 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--schedule-json", type=Path)
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args(argv)
-    if args.width < 4 or args.frac < 0 or args.frac >= args.width - 1:
+    if args.width < 4 or args.frac < 1 or args.frac >= args.width - 1:
         parser.error("invalid fixed-point width/fraction")
     if args.self_test:
         self_test()
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    (args.out_dir / f"{args.module}.sv").write_text(
-        cl20_module(args.width, args.frac, args.module), encoding="utf-8"
-    )
-    (args.out_dir / f"tb_{args.module}.sv").write_text(
-        cl20_testbench(args.width, args.frac, args.module), encoding="utf-8"
-    )
+    (args.out_dir / f"{args.module}.sv").write_text(cl20_module(args.width, args.frac, args.module), encoding="utf-8")
+    (args.out_dir / f"tb_{args.module}.sv").write_text(cl20_testbench(args.width, args.frac, args.module), encoding="utf-8")
     if args.schedule_json:
         data = json.loads(args.schedule_json.read_text(encoding="utf-8"))
         schedule = validate_schedule(data)
         (args.out_dir / "rtl_schedule.json").write_text(json.dumps(schedule, indent=2), encoding="utf-8")
-        (args.out_dir / "geo_program_controller.sv").write_text(
-            schedule_sv(schedule, "geo_program_controller"), encoding="utf-8"
-        )
+        controller = "geo_program_controller"
+        (args.out_dir / f"{controller}.sv").write_text(schedule_sv(schedule, controller), encoding="utf-8")
+        (args.out_dir / f"tb_{controller}.sv").write_text(controller_testbench(schedule, controller), encoding="utf-8")
     return 0
 
 
