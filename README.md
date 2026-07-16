@@ -24,6 +24,7 @@ The implementation is designed for microcontrollers and eventual hardware realiz
 - flat instruction programs for deterministic execution;
 - explicit GEB-36 reference API and closure manifest;
 - fixed-size witness-tree validation and compilation;
+- backward lane-liveness and duplicate-subtree elimination;
 - desktop verification and embedded backends.
 
 ## Implemented kernel layers
@@ -40,24 +41,27 @@ The implementation is designed for microcontrollers and eventual hardware realiz
 10. Machine-readable GEB-36 closure manifest.
 11. Topologically ordered witness-tree representation.
 12. Iterative witness validation, register allocation, and lowering to Omega bytecode.
+13. Reachability pruning, backward lane-liveness, duplicate-node merging, and compact register allocation.
 
-## Witness compiler
+## Witness compiler and optimizer
 
 A witness tree is stored as a fixed array of topologically ordered nodes. Terminal nodes map to caller-preloaded registers. Each Omega node references only earlier nodes and is lowered to one flat `GEO_OPCODE_OMEGA` instruction.
 
-The compiler requires caller-owned buffers:
+The baseline compiler preserves every Omega node. The optimized compiler additionally:
 
-- instruction storage;
-- node-to-register mapping storage;
-- runtime register storage.
+- removes nodes unreachable from the selected root;
+- propagates scalar/geometric lane requirements backward;
+- merges equivalent Omega nodes with identical operands and live lanes;
+- compacts the emitted instruction and register sequence;
+- reports original and optimized instruction counts.
 
-It performs no heap allocation and no recursive traversal. The JSON interchange definition is available at `artifacts/witness_tree_schema.json`.
+Both paths require caller-owned buffers and perform no heap allocation or recursive traversal. The JSON interchange definition is available at `artifacts/witness_tree_schema.json`.
 
 ## Remaining milestones
 
 1. Import the verified witness-tree artifacts produced during operator discovery.
 2. Attach terminal type, routing, and expected-scale metadata to each imported tree.
-3. Add lane-liveness, scale-propagation, constant-folding, subtree-sharing, and routing-elision passes.
+3. Add constant folding, scale propagation, routing elision, and typed register allocation.
 4. Reproduce each GEB-36 target through compiled Omega programs and compare against the direct reference API.
 5. Benchmark direct GEB operations against compiled Omega programs.
 6. Add ESP32-S3 and ARM Cortex-M targets.
