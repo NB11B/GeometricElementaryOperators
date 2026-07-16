@@ -16,20 +16,36 @@ The implementation is designed for microcontrollers and eventual hardware realiz
 - no recursion in the execution path;
 - fully unrolled `Cl(2,0)` geometric product;
 - explicit opposite-lane propagation for reversion;
+- unipotent addition encoding;
+- shared ordered products and Hadamard dot/wedge mixing;
+- algebraic `M2(R)` routing control;
 - projective scale metadata and deferred normalization;
 - optional scalar EML lane;
 - flat instruction programs for deterministic execution;
+- explicit GEB-36 reference API and closure manifest;
 - desktop verification and embedded backends.
 
-## Initial milestones
+## Implemented kernel layers
 
 1. Exact `Cl(2,0)` microkernel.
 2. Opposite-lane state and reversion propagation.
-3. Projective scale tracking.
-4. GEB-36 reference operations.
-5. Flat Omega-program interpreter.
-6. ESP32-S3 and ARM Cortex-M benchmarks.
-7. Fixed-point and RTL-oriented backends.
+3. Unified scalar/geometric Omega state.
+4. Flat, nonrecursive Omega-program interpreter.
+5. Unipotent addition representation.
+6. Shared `ab`/`ba` products and exact/projective Hadamard mixing.
+7. Deferred projective normalization and vector metric helpers.
+8. Generative control algebra `Gc(X,Y)=XY-X` over `M2(R)`.
+9. Complete 36-target GEB reference API.
+10. Machine-readable GEB-36 closure manifest.
+
+## Remaining milestones
+
+1. Import and execute verified Omega witness trees.
+2. Lower witness trees into typed flat programs.
+3. Add lane-liveness, scale-propagation, constant-folding, and routing-elision passes.
+4. Benchmark direct GEB operations against compiled Omega programs.
+5. Add ESP32-S3 and ARM Cortex-M targets.
+6. Add fixed-point and RTL-oriented backends.
 
 ## Build
 
@@ -39,10 +55,24 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+Use single precision for the microcontroller-oriented host build:
+
+```sh
+cmake -S . -B build-float -DGEO_USE_DOUBLE=OFF
+cmake --build build-float
+ctest --test-dir build-float --output-on-failure
+```
+
+## GEB-36 classification
+
+The reference manifest preserves the paper's frozen classification:
+
+- 29 exact targets;
+- 5 projective/scaled targets;
+- 2 exact targets requiring a supplied transformation element.
+
+The C manifest is available through `geo_geb36_manifest()`. The corresponding machine-readable artifact is `artifacts/geb36_manifest.json`.
+
 ## Design constraints
 
-The kernel intentionally avoids heap allocation, exceptions, RTTI, virtual dispatch, recursive execution, and generic dense matrix arithmetic. The proof-level product-space representation will be preserved in the reference implementation and lowered to sparse, fixed-routing microkernels for embedded targets.
-
-## Repository status
-
-The repository is in the initial kernel-construction phase. The first implementation target is a verified, fully unrolled `Cl(2,0)` product with involutions and grade projection.
+The kernel intentionally avoids heap allocation, exceptions, RTTI, virtual dispatch, recursive execution, and generic dense matrix arithmetic. The proof-level product-space representation is preserved in the reference implementation and will be lowered to sparse, fixed-routing microkernels for embedded targets.
