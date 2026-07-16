@@ -6,6 +6,7 @@ set(GEO_ESP32_CORE_SRCS
     "../../src/eml_embedded.c"
     "../../src/structured.c"
     "../../src/structured_program.c"
+    "../../src/executor_api.c"
     "../../src/fused.c"
     "../../src/control.c"
     "../../src/geb36.c"
