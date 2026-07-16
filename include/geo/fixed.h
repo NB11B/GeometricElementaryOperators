@@ -30,11 +30,31 @@ typedef enum {
 geo_fixed_status_t geo_fixed_from_double(double value, geo_fixed_t *output);
 double geo_fixed_to_double(geo_fixed_t value);
 geo_fixed_status_t geo_fixed_mul(geo_fixed_t a, geo_fixed_t b, geo_fixed_t *output);
+geo_fixed_status_t geo_fixed_mul_rounded(geo_fixed_t a, geo_fixed_t b, geo_fixed_t *output);
 geo_fixed_status_t geo_fixed_div(geo_fixed_t a, geo_fixed_t b, geo_fixed_t *output);
+geo_fixed_t geo_fixed_saturating_add(geo_fixed_t a, geo_fixed_t b);
+geo_fixed_t geo_fixed_saturating_sub(geo_fixed_t a, geo_fixed_t b);
 
 geo_fixed_status_t geo_fixed_cl20_mul(
     geo_fixed_cl20_t a,
     geo_fixed_cl20_t b,
+    geo_fixed_cl20_t *output
+);
+
+geo_fixed_cl20_t geo_fixed_cl20_reverse(geo_fixed_cl20_t value);
+geo_fixed_status_t geo_fixed_vector_dot(
+    geo_fixed_cl20_t a,
+    geo_fixed_cl20_t b,
+    geo_fixed_t *output
+);
+geo_fixed_status_t geo_fixed_vector_wedge(
+    geo_fixed_cl20_t a,
+    geo_fixed_cl20_t b,
+    geo_fixed_t *output
+);
+geo_fixed_status_t geo_fixed_rotor_action(
+    geo_fixed_cl20_t rotor,
+    geo_fixed_cl20_t vector,
     geo_fixed_cl20_t *output
 );
 
