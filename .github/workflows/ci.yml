@@ -1,0 +1,51 @@
+name: C Kernel CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        precision: [double, float]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure compiler
+        shell: bash
+        run: |
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then
+            echo "CC=gcc" >> "$GITHUB_ENV"
+          else
+            echo "CC=clang" >> "$GITHUB_ENV"
+          fi
+
+      - name: Configure
+        shell: bash
+        run: |
+          if [ "${{ matrix.precision }}" = "double" ]; then
+            USE_DOUBLE=ON
+          else
+            USE_DOUBLE=OFF
+          fi
+
+          cmake \
+            -S . \
+            -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGEO_BUILD_TESTS=ON \
+            -DGEO_USE_DOUBLE="$USE_DOUBLE"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
