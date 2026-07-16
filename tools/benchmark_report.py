@@ -11,6 +11,7 @@ import re
 import statistics
 import subprocess
 import time
+from collections import defaultdict
 from pathlib import Path
 from typing import Iterable
 
@@ -33,11 +34,10 @@ def run_one(executable: Path) -> dict[str, float]:
     return values
 
 
-def summarize(samples: list[dict[str, float]]) -> list[dict[str, float | str | int]]:
-    names = sorted(set.intersection(*(set(sample) for sample in samples)))
+def summarize(samples_by_name: dict[str, list[float]]) -> list[dict[str, float | str | int]]:
     rows: list[dict[str, float | str | int]] = []
-    for name in names:
-        values = [sample[name] for sample in samples]
+    for name in sorted(samples_by_name):
+        values = samples_by_name[name]
         median = statistics.median(values)
         mean = statistics.fmean(values)
         stdev = statistics.stdev(values) if len(values) > 1 else 0.0
@@ -66,7 +66,7 @@ def markdown_report(metadata: dict, rows: list[dict]) -> str:
         f"- Machine: `{metadata['machine']}`",
         f"- Processor: `{metadata['processor']}`",
         f"- Python: `{metadata['python']}`",
-        f"- Repetitions: `{metadata['repetitions']}`",
+        f"- Repetitions per executable: `{metadata['repetitions']}`",
         "",
         "## Results",
         "",
@@ -101,12 +101,14 @@ def main(argv: Iterable[str] | None = None) -> int:
         if not executable.exists():
             parser.error(f"missing executable: {executable}")
 
-    all_samples: list[dict[str, float]] = []
+    samples_by_name: dict[str, list[float]] = defaultdict(list)
     for executable in args.executables:
+        prefix = executable.stem
         for _ in range(args.repetitions):
-            all_samples.append(run_one(executable))
+            for name, value in run_one(executable).items():
+                samples_by_name[f"{prefix}: {name}"].append(value)
 
-    rows = summarize(all_samples)
+    rows = summarize(samples_by_name)
     metadata = {
         "generated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "platform": platform.platform(),
@@ -121,7 +123,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     (args.out_dir / "benchmark_report.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     (args.out_dir / "benchmark_report.md").write_text(markdown_report(metadata, rows), encoding="utf-8")
     with (args.out_dir / "benchmark_report.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()) if rows else ["benchmark"])
+        fieldnames = list(rows[0].keys()) if rows else ["benchmark"]
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
     return 0
