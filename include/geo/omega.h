@@ -16,7 +16,8 @@ typedef enum {
     GEO_STATUS_LOG_DOMAIN = 2,
     GEO_STATUS_SCALE_OVERFLOW = 3,
     GEO_STATUS_REGISTER_RANGE = 4,
-    GEO_STATUS_BAD_OPCODE = 5
+    GEO_STATUS_BAD_OPCODE = 5,
+    GEO_STATUS_ZERO_NORM = 6
 } geo_status_t;
 
 typedef enum {
