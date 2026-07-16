@@ -19,6 +19,7 @@ set(GEO_ESP32_CORE_SRCS
     "../../src/perf.c"
     "../../src/fixed.c"
     "../../src/fixed_geb36.c"
+    "../../src/native_generated.c"
 )
 
 if(COMMAND idf_component_register)
@@ -32,6 +33,12 @@ if(COMMAND idf_component_register)
         REQUIRES
             esp_timer
     )
+    set_source_files_properties("../../src/structured_program.c" PROPERTIES
+        COMPILE_DEFINITIONS GEO_STRUCTURED_PROGRAM_IMPLEMENTATION=1
+    )
+    set_source_files_properties("../../src/banked.c" PROPERTIES
+        COMPILE_DEFINITIONS GEO_BANKED_IMPLEMENTATION=1
+    )
     target_compile_definitions(${COMPONENT_LIB} PUBLIC GEO_ESP32=1)
 else()
     cmake_minimum_required(VERSION 3.16)
@@ -39,10 +46,20 @@ else()
     set(CMAKE_C_STANDARD 11)
     set(CMAKE_C_STANDARD_REQUIRED ON)
     set(CMAKE_C_EXTENSIONS OFF)
+
     add_library(geo_esp32_core STATIC ${GEO_ESP32_CORE_SRCS})
     target_include_directories(geo_esp32_core PUBLIC "../../include")
+    set_source_files_properties("../../src/structured_program.c" PROPERTIES
+        COMPILE_DEFINITIONS GEO_STRUCTURED_PROGRAM_IMPLEMENTATION=1
+    )
+    set_source_files_properties("../../src/banked.c" PROPERTIES
+        COMPILE_DEFINITIONS GEO_BANKED_IMPLEMENTATION=1
+    )
     target_compile_definitions(geo_esp32_core PUBLIC GEO_ESP32_COMPONENT_VALIDATION=1)
-    if(NOT MSVC)
+
+    if(MSVC)
+        target_compile_options(geo_esp32_core PRIVATE /W4)
+    else()
         target_compile_options(geo_esp32_core PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
         target_link_libraries(geo_esp32_core PUBLIC m)
     endif()
