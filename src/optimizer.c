@@ -141,7 +141,6 @@ geo_status_t geo_witness_compile_optimized(
     output->program.instruction_count = instruction_index;
     output->program.register_count = next_register;
     output->root_register = workspace->node_registers[tree->root];
-    output->terminal_count = tree->terminal_count;
     output->original_instruction_count = original_instruction_count;
     output->optimized_instruction_count = instruction_index;
     output->eliminated_dead_nodes = dead_nodes;
