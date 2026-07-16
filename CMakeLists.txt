@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.1.0
+    VERSION 0.2.0
     LANGUAGES C
 )
 
@@ -14,6 +14,8 @@ option(GEO_USE_DOUBLE "Use double precision instead of float" ON)
 
 add_library(geo_kernel STATIC
     src/cl20.c
+    src/opposite.c
+    src/omega.c
 )
 
 target_include_directories(geo_kernel
@@ -45,4 +47,16 @@ if(GEO_BUILD_TESTS)
     )
 
     add_test(NAME cl20 COMMAND test_cl20)
+
+    add_executable(test_omega
+        tests/test_omega.c
+    )
+
+    target_link_libraries(test_omega
+        PRIVATE
+            geo_kernel
+            m
+    )
+
+    add_test(NAME omega COMMAND test_omega)
 endif()
