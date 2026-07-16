@@ -36,12 +36,13 @@ jobs:
         run: |
           set -o pipefail
           ctest --test-dir build --output-on-failure 2>&1 | tee test.log
-      - name: Generate benchmark report
+      - name: Generate benchmark reports
         if: matrix.compiler == 'gcc' && matrix.precision == 'float'
         shell: bash
         run: |
           set -o pipefail
           cmake --build build --target benchmark_report 2>&1 | tee benchmark.log
+          cmake --build build --target workload_report 2>&1 | tee workload.log
       - name: Upload diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -52,9 +53,13 @@ jobs:
             build.log
             test.log
             benchmark.log
+            workload.log
             build/benchmark-report/benchmark_report.csv
             build/benchmark-report/benchmark_report.json
             build/benchmark-report/benchmark_report.md
+            build/workload-report/workload_report.csv
+            build/workload-report/workload_report.json
+            build/workload-report/workload_report.md
           if-no-files-found: ignore
 
   sanitizers:
@@ -70,7 +75,7 @@ jobs:
         run: |
           if [ "${{ matrix.precision }}" = "double" ]; then USE_DOUBLE=ON; else USE_DOUBLE=OFF; fi
           CC=clang cmake -S . -B build-sanitize -DCMAKE_BUILD_TYPE=Debug \
-            -DGEO_BUILD_TESTS=ON -DGEO_BUILD_BENCHMARKS=OFF \
+            -DGEO_BUILD_TESTS=ON -DGEO_BUILD_BENCHMARKS=ON \
             -DGEO_ENABLE_SANITIZERS=ON -DGEO_USE_DOUBLE="$USE_DOUBLE" \
             2>&1 | tee sanitizer-configure.log
       - name: Build sanitizer targets
@@ -86,6 +91,7 @@ jobs:
         run: |
           set -o pipefail
           ctest --test-dir build-sanitize --output-on-failure 2>&1 | tee sanitizer-test.log
+          ./build-sanitize/bench_selected_backends 2>&1 | tee sanitizer-benchmark.log
       - name: Upload sanitizer logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -95,6 +101,7 @@ jobs:
             sanitizer-configure.log
             sanitizer-build.log
             sanitizer-test.log
+            sanitizer-benchmark.log
           if-no-files-found: ignore
 
   q-format-validation:
@@ -127,6 +134,44 @@ jobs:
       - name: Build standalone component validation
         run: cmake --build build-esp32-component --parallel
 
+  cuda-13-compile:
+    runs-on: ubuntu-latest
+    container: nvidia/cuda:13.0.2-devel-ubuntu24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        precision: [double, float]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ python3 ca-certificates
+      - name: Report CUDA compiler
+        run: nvcc --version | tee cuda-version.log
+      - name: Configure CUDA 13 build
+        run: |
+          if [ "${{ matrix.precision }}" = "double" ]; then USE_DOUBLE=ON; else USE_DOUBLE=OFF; fi
+          cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DGEO_BUILD_CUDA=ON -DGEO_BUILD_TESTS=ON -DGEO_BUILD_BENCHMARKS=ON \
+            -DGEO_USE_DOUBLE="$USE_DOUBLE" -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
+            2>&1 | tee cuda-configure.log
+      - name: Compile CUDA backend, tests, and harness
+        run: |
+          set -o pipefail
+          cmake --build build-cuda --parallel 2>&1 | tee cuda-build.log
+      - name: Upload CUDA compile logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cuda-13-${{ matrix.precision }}
+          path: |
+            cuda-version.log
+            cuda-configure.log
+            cuda-build.log
+          if-no-files-found: ignore
+
   rtl-validation:
     runs-on: ubuntu-latest
     steps:
@@ -135,24 +180,55 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y iverilog yosys
-      - name: Generate RTL and schedule
+      - name: Generate product, controller, and executable schedules
         run: |
           python3 tools/generate_rtl.py --out-dir build-rtl \
             --schedule-json rtl/examples/rotor_action_schedule.json --self-test
+          python3 tools/generate_rtl_schedule.py --out-dir build-rtl --self-test \
+            --schedule-json rtl/examples/addition_schedule.json \
+            --schedule-json rtl/examples/geometric_product_schedule.json \
+            --schedule-json rtl/examples/vector_dot_schedule.json \
+            --schedule-json rtl/examples/vector_wedge_schedule.json \
+            --schedule-json rtl/examples/rotor_action_schedule.json
+      - name: Validate generated schedule vectors against fixed C
+        run: |
+          : > c-schedule-equivalence.log
+          for source in build-rtl/test_geo_schedule_*.c; do
+            name="$(basename "$source" .c)"
+            clang -std=c11 -Wall -Wextra -Wpedantic -Wconversion \
+              -Iinclude "$source" src/fixed.c -lm -o "build-rtl/$name"
+            "build-rtl/$name" | tee -a c-schedule-equivalence.log
+          done
       - name: Simulate fixed-point Cl(2,0) product
         run: |
           iverilog -g2012 -s tb_geo_cl20_product_q -o build-rtl/cl20_tb.vvp \
             build-rtl/geo_cl20_product_q.sv build-rtl/tb_geo_cl20_product_q.sv
           vvp build-rtl/cl20_tb.vvp | tee rtl-simulation.log
+      - name: Simulate executable schedules
+        run: |
+          : > schedule-simulation.log
+          for module_file in build-rtl/geo_schedule_*.sv; do
+            module="$(basename "$module_file" .sv)"
+            testbench="tb_${module}"
+            iverilog -g2012 -s "$testbench" -o "build-rtl/${module}.vvp" \
+              build-rtl/geo_cl20_product_q.sv "$module_file" "build-rtl/${testbench}.sv"
+            vvp "build-rtl/${module}.vvp" | tee -a schedule-simulation.log
+          done
       - name: Compile and simulate generated controller
         run: |
           iverilog -g2012 -s tb_geo_program_controller -o build-rtl/controller_tb.vvp \
             build-rtl/geo_program_controller.sv build-rtl/tb_geo_program_controller.sv
           vvp build-rtl/controller_tb.vvp | tee controller-simulation.log
-      - name: Synthesize product cell and controller
+      - name: Synthesize product cell, schedules, and controller
         run: |
           yosys -p 'read_verilog -sv build-rtl/geo_cl20_product_q.sv; synth -top geo_cl20_product_q; stat' \
             2>&1 | tee rtl-synthesis.log
+          : > schedule-synthesis.log
+          for module_file in build-rtl/geo_schedule_*.sv; do
+            module="$(basename "$module_file" .sv)"
+            yosys -p "read_verilog -sv build-rtl/geo_cl20_product_q.sv $module_file; synth -top $module; stat" \
+              2>&1 | tee -a schedule-synthesis.log
+          done
           yosys -p 'read_verilog -sv build-rtl/geo_program_controller.sv; synth -top geo_program_controller; stat' \
             2>&1 | tee controller-synthesis.log
       - name: Upload RTL artifacts
@@ -162,9 +238,13 @@ jobs:
           name: rtl-validation
           path: |
             build-rtl/*.sv
+            build-rtl/*.c
             build-rtl/*.json
+            c-schedule-equivalence.log
             rtl-simulation.log
+            schedule-simulation.log
             controller-simulation.log
             rtl-synthesis.log
+            schedule-synthesis.log
             controller-synthesis.log
           if-no-files-found: error
