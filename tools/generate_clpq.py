@@ -87,17 +87,19 @@ def emit_source(p: int, q: int, prefix: str, header_name: str) -> str:
             encoded = out + (blades if sign < 0 else 0)
             row.append(str(encoded))
         table_rows.append("    {" + ", ".join(row) + "}")
+    table_text = ",\n".join(table_rows)
     reverse_signs = ["-1" if (grade(i) * (grade(i) - 1) // 2) & 1 else "1" for i in range(blades)]
+    reverse_text = ", ".join(reverse_signs)
     return f'''#include "{header_name}"
 
 #include <math.h>
 #include <stddef.h>
 
 static const unsigned short GEO_PRODUCT_TABLE[{blades}][{blades}] = {{
-{',\n'.join(table_rows)}
+{table_text}
 }};
 
-static const signed char GEO_REVERSE_SIGNS[{blades}] = {{{', '.join(reverse_signs)}}};
+static const signed char GEO_REVERSE_SIGNS[{blades}] = {{{reverse_text}}};
 
 {prefix}_t {prefix}_zero(void) {{
     {prefix}_t result = {{{{0}}}};
@@ -164,14 +166,12 @@ def manifest(p: int, q: int, prefix: str) -> dict:
 
 
 def self_test() -> None:
-    # Euclidean basis vectors square to +1; negative-signature vectors to -1.
     for p, q in [(2, 0), (3, 0), (1, 3), (0, 2)]:
         n = p + q
         for i in range(n):
             sign, out = product_sign(1 << i, 1 << i, p, q)
             assert out == 0
             assert sign == (1 if i < p else -1)
-        # Reversal anti-homomorphism on all basis blades.
         blades = 1 << n
         for a in range(blades):
             for b in range(blades):
