@@ -80,7 +80,9 @@ geo_eml_status_t geo_eml_log(
     int k;
 
     if (output == NULL) return GEO_EML_NULL_ARGUMENT;
-    if (terms == 0 || x <= (geo_real_t)0) return GEO_EML_DOMAIN;
+    if (terms == 0 || !isfinite((double)x) || x <= (geo_real_t)0) {
+        return GEO_EML_DOMAIN;
+    }
 
 #if defined(GEO_REAL_IS_DOUBLE) && GEO_REAL_IS_DOUBLE
     mantissa = frexp(x, &exponent);
