@@ -1,4 +1,5 @@
 #include "geo/banked.h"
+#include "geo/fixed.h"
 #include "geo/folding.h"
 #include "geo/structured_program.h"
 
@@ -41,21 +42,12 @@ static void test_null_instruction_storage(void) {
     banked.unified_count = 0u;
     banked.required_bytes = 0u;
 
-    expect_status(
-        geo_program_execute(&omega, omega_registers, 1u),
-        GEO_STATUS_NULL_ARGUMENT,
-        "Omega executor rejects missing instruction storage"
-    );
-    expect_status(
-        geo_struct_program_execute(&structured, structured_registers, 1u),
-        GEO_STATUS_NULL_ARGUMENT,
-        "structured executor rejects missing instruction storage"
-    );
-    expect_status(
-        geo_banked_execute(&banked, &storage),
-        GEO_STATUS_NULL_ARGUMENT,
-        "banked executor rejects missing instruction storage"
-    );
+    expect_status(geo_program_execute(&omega, omega_registers, 1u),
+        GEO_STATUS_NULL_ARGUMENT, "Omega executor rejects missing instruction storage");
+    expect_status(geo_struct_program_execute(&structured, structured_registers, 1u),
+        GEO_STATUS_NULL_ARGUMENT, "structured executor rejects missing instruction storage");
+    expect_status(geo_banked_execute(&banked, &storage),
+        GEO_STATUS_NULL_ARGUMENT, "banked executor rejects missing instruction storage");
 }
 
 static void test_missing_terminal_image(void) {
@@ -99,14 +91,7 @@ static void test_missing_terminal_image(void) {
     workspace.register_kind_capacity = 3u;
 
     expect_status(
-        geo_program_fold_constants(
-            &optimized,
-            &terminal,
-            &constant_flag,
-            1u,
-            &workspace,
-            &output
-        ),
+        geo_program_fold_constants(&optimized, &terminal, &constant_flag, 1u, &workspace, &output),
         GEO_STATUS_BAD_TREE,
         "constant folding rejects incomplete terminal image"
     );
@@ -140,7 +125,6 @@ int main(void) {
         fprintf(stderr, "%d safety assertion(s) failed.\n", failures);
         return EXIT_FAILURE;
     }
-
     puts("All malformed-program and fixed-point safety tests passed.");
     return EXIT_SUCCESS;
 }
