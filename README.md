@@ -1,133 +1,82 @@
 # Geometric Elementary Operators
 
-Portable C11 reference and embedded kernel for the unified geometric elementary operator architecture.
-
-The project implements the computational architecture developed in *Elementary Geometry from a Unified Product-Space Operator*:
+Portable C11 reference and embedded kernel for the unified geometric elementary operator architecture:
 
 \[
-\Omega((s,X),(t,Y)) = (\exp(s)-\log(t), XY).
+\Omega((s,X),(t,Y))=(\exp(s)-\log(t),XY).
 \]
 
 The implementation is designed for microcontrollers and eventual hardware realization:
 
-- portable C11 core;
-- fixed-size data structures;
-- no dynamic allocation;
+- fixed-size C11 data structures;
+- no heap allocation in the kernel;
 - no recursion in the execution path;
 - fully unrolled `Cl(2,0)` geometric product;
-- explicit opposite-lane propagation for reversion;
+- opposite-lane propagation for reversion;
 - unipotent addition encoding;
 - shared ordered products and Hadamard dot/wedge mixing;
 - algebraic `M2(R)` routing control;
 - projective scale metadata and deferred normalization;
-- optional scalar EML lane;
-- flat instruction programs for deterministic execution;
-- explicit GEB-36 reference API and closure manifest;
-- fixed-size witness-tree validation and compilation;
-- backward lane-liveness and duplicate-subtree elimination;
-- compile-time Omega evaluation for constant subgraphs;
+- scalar EML lane;
+- flat instruction programs;
 - physically separate scalar, geometric, and unified register banks;
-- compile-time rational scale propagation;
-- fixed control-matrix lowering to data-movement routes;
-- compiled GEB witness validation against the direct reference API.
+- compile-time constant folding, lane pruning, scale propagation, and routing elision.
 
-## Implemented kernel layers
+## Current status
+
+The repository now contains a complete reference reconstruction of the frozen GEB-36 basis:
+
+- 6 targets execute as direct compiled Omega trees;
+- 30 targets execute through compiler-visible enlarged-representation programs;
+- all 36 are compared against the direct GEB-36 C reference API;
+- the original classification remains 29 exact, 5 projective/scaled, and 2 exact with a supplied transformation.
+
+The preserved Milestone W package did not contain the original complete per-target witness corpus. The repository therefore distinguishes imported evidence from reconstructed executable witnesses. The reconstruction catalog is stored in `artifacts/geb_witness_catalog.json`.
+
+## Implemented layers
 
 1. Exact `Cl(2,0)` microkernel.
 2. Opposite-lane state and reversion propagation.
 3. Unified scalar/geometric Omega state.
-4. Flat, nonrecursive Omega-program interpreter.
+4. Flat nonrecursive Omega interpreter.
 5. Unipotent addition representation.
 6. Shared `ab`/`ba` products and exact/projective Hadamard mixing.
 7. Deferred projective normalization and vector metric helpers.
 8. Generative control algebra `Gc(X,Y)=XY-X` over `M2(R)`.
-9. Complete 36-target GEB reference API.
-10. Machine-readable GEB-36 closure manifest.
-11. Topologically ordered witness-tree representation.
-12. Iterative witness validation, register allocation, and lowering to Omega bytecode.
-13. Reachability pruning, backward lane-liveness, duplicate-node merging, and compact register allocation.
-14. Compile-time constant folding for Omega subgraphs.
-15. Typed scalar/geometric/unified register planning and memory accounting.
-16. Physically banked runtime storage and typed operand references.
-17. Rational projective-scale propagation across geometric Omega products.
-18. Routing elision for zero, identity, sign, matrix-unit, and exchange control states.
-19. Imported Milestone W validation report.
-20. First executable compiled witness catalog for GEB targets 6, 16, 17, 30, 31, and 33.
+9. Complete GEB-36 reference API and manifest.
+10. Witness-tree validation and lowering.
+11. Reachability pruning and lane-liveness propagation.
+12. Duplicate-subtree elimination and register compaction.
+13. Constant folding.
+14. Typed and physically banked register allocation.
+15. Rational projective-scale propagation.
+16. Routing-state elision.
+17. Complete 36-target reconstructed execution coverage.
 
-## Witness compiler and optimizer
+## Execution forms
 
-A witness tree is stored as a fixed array of topologically ordered nodes. Terminal nodes map to caller-preloaded registers. Each Omega node references only earlier nodes and is lowered to one flat `GEO_OPCODE_OMEGA` instruction.
+### Omega trees
 
-The baseline compiler preserves every Omega node. The optimized compiler additionally:
+Examples include:
 
-- removes nodes unreachable from the selected root;
-- propagates scalar/geometric lane requirements backward;
-- merges equivalent Omega nodes with identical operands and live lanes;
-- compacts the emitted instruction and register sequence;
-- reports original and optimized instruction counts.
+- `Omega(e1,e2)` for the pseudoscalar;
+- `Omega(A,B)` for the geometric product;
+- the opposite output of `Omega(A,B)` for the reverse product;
+- `Omega(Omega(R,x),reverse(R))` for rotor action;
+- `Omega(R1,R2)` for rotor composition;
+- `Omega(Omega(T,x),reverse(T))` for supplied sandwich transforms.
 
-A second pass accepts terminal values and compile-time-constant flags. It evaluates any Omega instruction whose two inputs are constant, removes that instruction from the runtime program, and writes the result into the caller-owned initial register image.
+### Enlarged-representation programs
 
-## Physically banked runtime
+The structured bytecode exposes the proof representation explicitly:
 
-The banked planner converts logical registers into compact typed references:
-
-- scalar registers store only `geo_real_t`;
-- geometric registers store an opposite-lane value and projective scale;
-- unified registers retain the full `geo_state_t` only when both lanes are live.
-
-The banked executor reads and writes these physical arrays directly. It does not require an all-registers-as-`geo_state_t` shadow bank. The caller supplies every bank and all planning buffers, preserving deterministic memory use.
-
-The planner reports the exact byte requirement:
-
-\[
-B = N_s\,\mathrm{sizeof}(\texttt{geo\_real\_t})
-  + N_g\,\mathrm{sizeof}(\texttt{geo\_geometric\_register\_t})
-  + N_u\,\mathrm{sizeof}(\texttt{geo\_state\_t}).
-\]
-
-## Lowering passes
-
-The scale pass propagates exact rational projective factors through geometric products. For operands with scales
-
-\[
-\lambda_A = \frac{p_A}{q_A},\qquad
-\lambda_B = \frac{p_B}{q_B},
-\]
-
-the product receives
-
-\[
-\lambda_{AB}=\lambda_A\lambda_B.
-\]
-
-The routing pass recognizes the fixed control matrices `0`, `I`, `-I`, `E11`, `E12`, `E21`, `E22`, and the exchange matrix. These lower to zeroing, copying, sign inversion, projection, transfer, or exchange operations without runtime matrix multiplication.
-
-## Compiled GEB witnesses
-
-The repository now executes genuine Omega trees through the full pipeline and compares them against the direct GEB reference functions. The first catalog covers:
-
-- pseudoscalar: `Omega(e1,e2)`;
-- geometric product: `Omega(A,B)`;
-- reverse product through the opposite output lane;
-- rotor action: `Omega(Omega(R,x),reverse(R))`;
-- rotor composition: `Omega(R1,R2)`;
-- dilation/sandwich action: `Omega(Omega(T,x),reverse(T))`.
-
-The imported Milestone W archive contains the unified numerical validation report but not the full per-target witness-tree corpus. That limitation is recorded explicitly in `artifacts/milestone_w_unified_operator.json`. Reconstructed executable witnesses are recorded in `artifacts/geb_witness_catalog.json`.
-
-All compiler and runtime paths remain heap-free and nonrecursive. The JSON witness interchange definition is available at `artifacts/witness_tree_schema.json`.
-
-## Remaining milestones
-
-1. Reconstruct constants, involutions, and projection witnesses through typed routing terminals.
-2. Reconstruct addition and subtraction through the unipotent representation.
-3. Reconstruct dot, wedge, commutator, and anticommutator through ordered lanes and Hadamard mixing.
-4. Reconstruct metric and projective targets through central scalar injection and normalization.
-5. Complete compiled coverage for all 36 GEB targets.
-6. Benchmark direct GEB operations against compiled Omega programs.
-7. Add ESP32-S3 and ARM Cortex-M targets.
-8. Add fixed-point and RTL-oriented backends.
+- terminals for constants and basis values;
+- unary involutions and grade projections;
+- unipotent composition for addition and subtraction;
+- ordered-product and Hadamard paths for dot, wedge, commutator, and anticommutator;
+- scalar extraction and projective numerators;
+- deferred normalization;
+- dual, rotor norm, and translation-unipotent operations.
 
 ## Build
 
@@ -137,7 +86,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Use single precision for the microcontroller-oriented host build:
+Single-precision host build:
 
 ```sh
 cmake -S . -B build-float -DGEO_USE_DOUBLE=OFF
@@ -145,16 +94,17 @@ cmake --build build-float
 ctest --test-dir build-float --output-on-failure
 ```
 
-## GEB-36 classification
+## Next stage
 
-The reference manifest preserves the paper's frozen classification:
+The project now moves from closure reconstruction to embedded measurement:
 
-- 29 exact targets;
-- 5 projective/scaled targets;
-- 2 exact targets requiring a supplied transformation element.
-
-The C manifest is available through `geo_geb36_manifest()`. The corresponding machine-readable artifact is `artifacts/geb36_manifest.json`.
+1. Confirm all GCC and Clang CI builds.
+2. Add deterministic benchmark programs for every operation family.
+3. Measure instruction count, runtime, flash, stack, and static RAM.
+4. Add ESP32-S3 and ARM Cortex-M build targets.
+5. Compare direct GEB functions, unified-state execution, and banked execution.
+6. Add fixed-point and RTL-oriented backends.
 
 ## Design constraints
 
-The kernel intentionally avoids heap allocation, exceptions, RTTI, virtual dispatch, recursive execution, and generic dense matrix arithmetic. The proof-level product-space representation is preserved in the reference implementation and lowered to sparse, typed, fixed-routing microkernels for embedded targets.
+The kernel intentionally avoids exceptions, RTTI, virtual dispatch, recursive execution, and generic dense matrix arithmetic. The proof-level product-space representation is preserved where needed and lowered to sparse, typed, fixed-routing microkernels for embedded targets.
