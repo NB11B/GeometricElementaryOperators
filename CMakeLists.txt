@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.3.0
+    VERSION 0.4.0
     LANGUAGES C
 )
 
@@ -17,6 +17,7 @@ add_library(geo_kernel STATIC
     src/opposite.c
     src/omega.c
     src/structured.c
+    src/control.c
 )
 
 target_include_directories(geo_kernel
@@ -72,4 +73,16 @@ if(GEO_BUILD_TESTS)
     )
 
     add_test(NAME structured COMMAND test_structured)
+
+    add_executable(test_control
+        tests/test_control.c
+    )
+
+    target_link_libraries(test_control
+        PRIVATE
+            geo_kernel
+            m
+    )
+
+    add_test(NAME control COMMAND test_control)
 endif()
