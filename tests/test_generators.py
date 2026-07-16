@@ -22,6 +22,16 @@ def compiler_command() -> list[str]:
     return shlex.split(os.environ.get("CC", "cc"))
 
 
+def schedule_paths() -> list[Path]:
+    return [
+        ROOT / "rtl" / "examples" / "addition_schedule.json",
+        ROOT / "rtl" / "examples" / "geometric_product_schedule.json",
+        ROOT / "rtl" / "examples" / "vector_dot_schedule.json",
+        ROOT / "rtl" / "examples" / "vector_wedge_schedule.json",
+        ROOT / "rtl" / "examples" / "rotor_action_schedule.json",
+    ]
+
+
 def test_clpq(temp: Path) -> None:
     out = temp / "clpq"
     run(
@@ -101,19 +111,13 @@ def test_rtl(temp: Path) -> None:
 
 def test_rtl_schedules(temp: Path) -> None:
     out = temp / "rtl-schedules"
-    schedule_paths = [
-        ROOT / "rtl" / "examples" / "addition_schedule.json",
-        ROOT / "rtl" / "examples" / "geometric_product_schedule.json",
-        ROOT / "rtl" / "examples" / "vector_dot_schedule.json",
-        ROOT / "rtl" / "examples" / "vector_wedge_schedule.json",
-        ROOT / "rtl" / "examples" / "rotor_action_schedule.json",
-    ]
+    paths = schedule_paths()
 
     run(
         PYTHON,
         str(ROOT / "tools" / "generate_rtl.py"),
         "--out-dir", str(out),
-        "--schedule-json", str(schedule_paths[-1]),
+        "--schedule-json", str(paths[-1]),
         "--self-test",
     )
     command = [
@@ -122,14 +126,14 @@ def test_rtl_schedules(temp: Path) -> None:
         "--out-dir", str(out),
         "--self-test",
     ]
-    for schedule_path in schedule_paths:
+    for schedule_path in paths:
         command.extend(["--schedule-json", str(schedule_path)])
     run(*command)
 
     manifest = json.loads(
         (out / "schedule_equivalence_manifest.json").read_text(encoding="utf-8")
     )
-    assert len(manifest) == len(schedule_paths)
+    assert len(manifest) == len(paths)
     assert {entry["name"] for entry in manifest} == {
         "addition",
         "geometric_product",
@@ -182,13 +186,49 @@ def test_rtl_schedules(temp: Path) -> None:
             run(vvp, str(simulation))
 
 
+def test_cuda_schedules(temp: Path) -> None:
+    out = temp / "cuda-schedules"
+    paths = schedule_paths()
+    command = [
+        PYTHON,
+        str(ROOT / "tools" / "generate_cuda_schedule.py"),
+        "--out-dir", str(out),
+        "--self-test",
+    ]
+    for schedule_path in paths:
+        command.extend(["--schedule-json", str(schedule_path)])
+    run(*command)
+
+    manifest = json.loads(
+        (out / "cuda_schedule_manifest.json").read_text(encoding="utf-8")
+    )
+    assert len(manifest) == len(paths)
+    assert {entry["name"] for entry in manifest} == {
+        "addition",
+        "geometric_product",
+        "vector_dot",
+        "vector_wedge",
+        "rotor_action",
+    }
+    for entry in manifest:
+        header = (out / entry["header"]).read_text(encoding="utf-8")
+        source = (out / entry["source"]).read_text(encoding="utf-8")
+        assert f"geo_cuda_schedule_{entry['name']}_launch" in header
+        assert f"geo_cuda_schedule_{entry['name']}_kernel" in source
+        assert "cudaGetLastError" in source
+        assert "SIZE_MAX" in source
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="geo-generators-") as directory:
         temp = Path(directory)
         test_clpq(temp)
         test_rtl(temp)
         test_rtl_schedules(temp)
-    print("Cl(p,q), RTL product/controller, and executable schedule generator tests passed.")
+        test_cuda_schedules(temp)
+    print(
+        "Cl(p,q), RTL product/controller, executable RTL schedules, and CUDA schedule generator tests passed."
+    )
     return 0
 
 
