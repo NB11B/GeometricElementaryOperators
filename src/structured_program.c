@@ -10,6 +10,15 @@ static geo_status_t geo_struct_require_kind(
     return value->kind == (uint8_t)expected ? GEO_STATUS_OK : GEO_STATUS_BAD_OPCODE;
 }
 
+static geo_struct_value_t geo_struct_value_from_hadamard_component(
+    geo_scaled_cl20_t component
+) {
+    if (component.scale.numerator == 1 && component.scale.denominator == 1) {
+        return geo_struct_value_from_cl20(component.represented);
+    }
+    return geo_struct_value_from_scaled_cl20(component);
+}
+
 geo_struct_value_t geo_struct_value_from_cl20(geo_cl20_t value) {
     geo_struct_value_t result;
     result.kind = (uint8_t)GEO_STRUCT_VALUE_CL20;
@@ -121,13 +130,13 @@ geo_status_t geo_struct_program_execute(
             case GEO_STRUCT_OP_SELECT_SYMMETRIC:
                 status = geo_struct_require_kind(&left, GEO_STRUCT_VALUE_HADAMARD_PAIR);
                 if (status != GEO_STATUS_OK) return status;
-                result = geo_struct_value_from_scaled_cl20(left.as.hadamard.symmetric);
+                result = geo_struct_value_from_hadamard_component(left.as.hadamard.symmetric);
                 break;
 
             case GEO_STRUCT_OP_SELECT_ANTISYMMETRIC:
                 status = geo_struct_require_kind(&left, GEO_STRUCT_VALUE_HADAMARD_PAIR);
                 if (status != GEO_STATUS_OK) return status;
-                result = geo_struct_value_from_scaled_cl20(left.as.hadamard.antisymmetric);
+                result = geo_struct_value_from_hadamard_component(left.as.hadamard.antisymmetric);
                 break;
 
             case GEO_STRUCT_OP_CL20_SUBTRACT:
