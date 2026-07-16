@@ -27,6 +27,8 @@ The implementation is designed for microcontrollers and eventual hardware realiz
 - backward lane-liveness and duplicate-subtree elimination;
 - compile-time Omega evaluation for constant subgraphs;
 - physically separate scalar, geometric, and unified register banks;
+- compile-time rational scale propagation;
+- fixed control-matrix lowering to data-movement routes;
 - desktop verification and embedded backends.
 
 ## Implemented kernel layers
@@ -47,6 +49,8 @@ The implementation is designed for microcontrollers and eventual hardware realiz
 14. Compile-time constant folding for Omega subgraphs.
 15. Typed scalar/geometric/unified register planning and memory accounting.
 16. Physically banked runtime storage and typed operand references.
+17. Rational projective-scale propagation across geometric Omega products.
+18. Routing elision for zero, identity, sign, matrix-unit, and exchange control states.
 
 ## Witness compiler and optimizer
 
@@ -80,17 +84,33 @@ B = N_s\,\mathrm{sizeof}(\texttt{geo\_real\_t})
   + N_u\,\mathrm{sizeof}(\texttt{geo\_state\_t}).
 \]
 
+## Lowering passes
+
+The scale pass propagates exact rational projective factors through geometric products. For operands with scales
+
+\[
+\lambda_A = \frac{p_A}{q_A},\qquad
+\lambda_B = \frac{p_B}{q_B},
+\]
+
+the product receives
+
+\[
+\lambda_{AB}=\lambda_A\lambda_B.
+\]
+
+The routing pass recognizes the fixed control matrices `0`, `I`, `-I`, `E11`, `E12`, `E21`, `E22`, and the exchange matrix. These lower to zeroing, copying, sign inversion, projection, transfer, or exchange operations without runtime matrix multiplication.
+
 All compiler and runtime paths remain heap-free and nonrecursive. The JSON witness interchange definition is available at `artifacts/witness_tree_schema.json`.
 
 ## Remaining milestones
 
 1. Import the verified witness-tree artifacts produced during operator discovery.
 2. Attach terminal type, routing, and expected-scale metadata to each imported tree.
-3. Add projective-scale propagation and routing-state elision.
-4. Reproduce each GEB-36 target through compiled Omega programs and compare against the direct reference API.
-5. Benchmark direct GEB operations against compiled Omega programs.
-6. Add ESP32-S3 and ARM Cortex-M targets.
-7. Add fixed-point and RTL-oriented backends.
+3. Reproduce each GEB-36 target through compiled Omega programs and compare against the direct reference API.
+4. Benchmark direct GEB operations against compiled Omega programs.
+5. Add ESP32-S3 and ARM Cortex-M targets.
+6. Add fixed-point and RTL-oriented backends.
 
 ## Build
 
