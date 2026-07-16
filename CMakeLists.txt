@@ -223,6 +223,7 @@ if(GEO_BUILD_TESTS)
         cortex_m_dwt
         native_generated
         release_hardening
+        abi_consumer
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})
@@ -266,7 +267,7 @@ if(GEO_BUILD_BENCHMARKS)
 
     add_executable(bench_complete benchmarks/bench_complete.c)
     geo_link_target(bench_complete)
-    set_target_properties(bench_complete PROPERTIES OUTPUT_NAME bench_selected_backends)
+    set_target_properties(bench_complete PROPERTIES OUTPUT_NAME bench_selected_paths)
 
     add_executable(bench_workloads benchmarks/bench_workloads.c)
     geo_link_target(bench_workloads)
@@ -282,6 +283,10 @@ if(GEO_BUILD_BENCHMARKS)
 
     if(GEO_BUILD_TESTS)
         add_test(
+            NAME selected_path_benchmark
+            COMMAND bench_complete --iterations 1000
+        )
+        add_test(
             NAME workload_smoke
             COMMAND bench_workloads --iterations 100 --warmup 10 --seed 608135816
         )
@@ -294,7 +299,7 @@ if(GEO_BUILD_BENCHMARKS)
     if(GEO_ENABLE_LINK_MAP AND NOT MSVC)
         target_link_options(bench_host PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_host.map")
         target_link_options(bench_compare PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_compare.map")
-        target_link_options(bench_complete PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_selected_backends.map")
+        target_link_options(bench_complete PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_selected_paths.map")
         target_link_options(bench_workloads PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_workloads.map")
         target_link_options(bench_numerical PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_numerical.map")
         if(GEO_BUILD_CUDA)
