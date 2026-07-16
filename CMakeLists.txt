@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.7.0
+    VERSION 0.8.0
     LANGUAGES C
 )
 
@@ -21,6 +21,7 @@ add_library(geo_kernel STATIC
     src/geb36.c
     src/compiler.c
     src/optimizer.c
+    src/folding.c
 )
 
 target_include_directories(geo_kernel
@@ -68,4 +69,8 @@ if(GEO_BUILD_TESTS)
     add_executable(test_optimizer tests/test_optimizer.c)
     target_link_libraries(test_optimizer PRIVATE geo_kernel m)
     add_test(NAME optimizer COMMAND test_optimizer)
+
+    add_executable(test_folding tests/test_folding.c)
+    target_link_libraries(test_folding PRIVATE geo_kernel m)
+    add_test(NAME folding COMMAND test_folding)
 endif()
