@@ -19,7 +19,12 @@
 #define ITERATIONS UINT64_C(1000000)
 
 static volatile geo_real_t sink_real = (geo_real_t)0;
-static volatile geo_fixed_t sink_fixed = 0;
+static volatile uint32_t sink_fixed = UINT32_C(0);
+
+static void consume_fixed(geo_fixed_t value) {
+    /* Unsigned mixing keeps the anti-optimization sink fully defined. */
+    sink_fixed ^= (uint32_t)value;
+}
 
 static uint64_t now_ticks(void) {
 #if defined(_WIN32)
@@ -82,7 +87,7 @@ static void benchmark_addition(void) {
 
     begin = now_ticks();
     for (i = 0; i < ITERATIONS; ++i) sink_real += geo_native_add(a, b).e1;
-    end = now_ticks(); report("addition generated native C", begin, end);
+    end = now_ticks(); report("addition specialized native C", begin, end);
 
     begin = now_ticks();
     for (i = 0; i < ITERATIONS; ++i) {
@@ -101,7 +106,7 @@ static void benchmark_addition(void) {
     begin = now_ticks();
     for (i = 0; i < ITERATIONS; ++i) {
         (void)geo_fixed_geb36_execute(GEO_GEB_ADDITION, fa, fb, fa, &fixed_result);
-        sink_fixed += fixed_result.as.cl20.e1;
+        consume_fixed(fixed_result.as.cl20.e1);
     }
     end = now_ticks(); report("addition fixed Q16.16", begin, end);
 }
@@ -127,7 +132,7 @@ static void benchmark_dot(void) {
     begin = now_ticks(); for (i = 0; i < ITERATIONS; ++i) sink_real += geo_geb_vector_dot(a, b);
     end = now_ticks(); report("vector dot direct C", begin, end);
     begin = now_ticks(); for (i = 0; i < ITERATIONS; ++i) sink_real += geo_native_vector_dot(a, b);
-    end = now_ticks(); report("vector dot generated native C", begin, end);
+    end = now_ticks(); report("vector dot specialized native C", begin, end);
     begin = now_ticks();
     for (i = 0; i < ITERATIONS; ++i) { registers[0]=geo_struct_value_from_cl20(a); registers[1]=geo_struct_value_from_cl20(b); (void)geo_fused_execute(&fused, registers, 5u); sink_real += registers[fused.root_register].as.scalar; }
     end = now_ticks(); report("vector dot fused IR", begin, end);
@@ -135,7 +140,7 @@ static void benchmark_dot(void) {
     for (i = 0; i < ITERATIONS; ++i) { registers[0]=geo_struct_value_from_cl20(a); registers[1]=geo_struct_value_from_cl20(b); (void)geo_struct_program_execute(&structured, registers, 5u); sink_real += registers[4].as.cl20.scalar; }
     end = now_ticks(); report("vector dot structured IR", begin, end);
     begin = now_ticks();
-    for (i = 0; i < ITERATIONS; ++i) { (void)geo_fixed_geb36_execute(GEO_GEB_VECTOR_DOT, fa, fb, fa, &fixed_result); sink_fixed += fixed_result.as.scalar; }
+    for (i = 0; i < ITERATIONS; ++i) { (void)geo_fixed_geb36_execute(GEO_GEB_VECTOR_DOT, fa, fb, fa, &fixed_result); consume_fixed(fixed_result.as.scalar); }
     end = now_ticks(); report("vector dot fixed Q16.16", begin, end);
 }
 
@@ -149,8 +154,8 @@ static void benchmark_product(void) {
     begin = now_ticks(); for (i=0;i<ITERATIONS;++i) sink_real += geo_geb_geometric_product(a,b).e12;
     end=now_ticks(); report("geometric product direct C",begin,end);
     begin = now_ticks(); for (i=0;i<ITERATIONS;++i) sink_real += geo_native_cl20_product(a,b).e12;
-    end=now_ticks(); report("geometric product generated native C",begin,end);
-    begin=now_ticks(); for(i=0;i<ITERATIONS;++i){(void)geo_fixed_geb36_execute(GEO_GEB_GEOMETRIC_PRODUCT,fa,fb,fa,&fixed_result);sink_fixed+=fixed_result.as.cl20.e12;}
+    end=now_ticks(); report("geometric product specialized native C",begin,end);
+    begin=now_ticks(); for(i=0;i<ITERATIONS;++i){(void)geo_fixed_geb36_execute(GEO_GEB_GEOMETRIC_PRODUCT,fa,fb,fa,&fixed_result);consume_fixed(fixed_result.as.cl20.e12);}
     end=now_ticks(); report("geometric product fixed Q16.16",begin,end);
 }
 
@@ -164,15 +169,15 @@ static void benchmark_rotor(void) {
     begin=now_ticks(); for(i=0;i<ITERATIONS;++i)sink_real+=geo_geb_rotor_action(rotor,value).e1;
     end=now_ticks(); report("rotor action direct C",begin,end);
     begin=now_ticks(); for(i=0;i<ITERATIONS;++i)sink_real+=geo_native_rotor_action(rotor,value).e1;
-    end=now_ticks(); report("rotor action generated native C",begin,end);
-    begin=now_ticks(); for(i=0;i<ITERATIONS;++i){(void)geo_fixed_geb36_execute(GEO_GEB_ROTOR_ACTION,fv,fv,fr,&fixed_result);sink_fixed+=fixed_result.as.cl20.e1;}
+    end=now_ticks(); report("rotor action specialized native C",begin,end);
+    begin=now_ticks(); for(i=0;i<ITERATIONS;++i){(void)geo_fixed_geb36_execute(GEO_GEB_ROTOR_ACTION,fv,fv,fr,&fixed_result);consume_fixed(fixed_result.as.cl20.e1);}
     end=now_ticks(); report("rotor action fixed Q16.16",begin,end);
 }
 
 int main(void) {
-    puts("Geometric Elementary Operators complete comparison benchmark");
+    puts("Geometric Elementary Operators selected-backend comparison benchmark");
     printf("iterations: %" PRIu64 "\n", ITERATIONS);
     benchmark_addition(); benchmark_dot(); benchmark_product(); benchmark_rotor();
-    printf("sinks: %.6f %d\n", (double)sink_real, (int)sink_fixed);
+    printf("sinks: %.6f %" PRIu32 "\n", (double)sink_real, sink_fixed);
     return 0;
 }
