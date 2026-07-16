@@ -24,9 +24,12 @@ def cl20_module(width: int, frac: int, module: str) -> str:
     ]
     declarations = "\n".join(mul(*p) for p in products)
     rounded = "\n".join(
-        f"logic signed [WIDTH:0] q{name[1:]};\n"
+        f"logic signed [2*WIDTH:0] q{name[1:]};\n"
         f"assign q{name[1:]} = round_product({name});"
         for name, _, _ in products
+    )
+    product_checks = " ||\n        ".join(
+        f"rounded_overflow(q{name[1:]})" for name, _, _ in products
     )
     return f'''module {module} #(
     parameter int WIDTH = {width},
@@ -43,10 +46,11 @@ def cl20_module(width: int, frac: int, module: str) -> str:
     output logic signed [WIDTH-1:0] y_s,
     output logic signed [WIDTH-1:0] y_e1,
     output logic signed [WIDTH-1:0] y_e2,
-    output logic signed [WIDTH-1:0] y_e12
+    output logic signed [WIDTH-1:0] y_e12,
+    output logic overflow
 );
 
-function automatic logic signed [WIDTH:0] round_product(
+function automatic logic signed [2*WIDTH:0] round_product(
     input logic signed [2*WIDTH-1:0] product
 );
     logic negative;
@@ -64,7 +68,23 @@ function automatic logic signed [WIDTH:0] round_product(
         quotient = magnitude >> FRAC;
         remainder = magnitude & mask;
         if (remainder >= half) quotient = quotient + 1'b1;
-        round_product = negative ? -$signed(quotient[WIDTH:0]) : $signed(quotient[WIDTH:0]);
+        round_product = negative ? -$signed({{1'b0, quotient}}) : $signed({{1'b0, quotient}});
+    end
+endfunction
+
+function automatic logic rounded_overflow(
+    input logic signed [2*WIDTH:0] value
+);
+    begin
+        rounded_overflow = value[2*WIDTH:WIDTH] != {{(WIDTH+1){{value[WIDTH-1]}}}};
+    end
+endfunction
+
+function automatic logic accumulated_overflow(
+    input logic signed [2*WIDTH+2:0] value
+);
+    begin
+        accumulated_overflow = value[2*WIDTH+2:WIDTH] != {{(WIDTH+3){{value[WIDTH-1]}}}};
     end
 endfunction
 
@@ -72,20 +92,37 @@ endfunction
 
 {rounded}
 
-logic signed [WIDTH+2:0] sum_s;
-logic signed [WIDTH+2:0] sum_e1;
-logic signed [WIDTH+2:0] sum_e2;
-logic signed [WIDTH+2:0] sum_e12;
+logic product_overflow;
+logic sum_overflow;
+logic signed [2*WIDTH+2:0] sum_s;
+logic signed [2*WIDTH+2:0] sum_e1;
+logic signed [2*WIDTH+2:0] sum_e2;
+logic signed [2*WIDTH+2:0] sum_e12;
+
+assign product_overflow =
+        {product_checks};
 
 always_comb begin
     sum_s   = q00 + q11 + q22 - q33;
     sum_e1  = q01 + q10 - q23 + q32;
     sum_e2  = q02 + q20 + q13 - q31;
     sum_e12 = q03 + q30 + q12 - q21;
-    y_s   = sum_s[WIDTH-1:0];
-    y_e1  = sum_e1[WIDTH-1:0];
-    y_e2  = sum_e2[WIDTH-1:0];
-    y_e12 = sum_e12[WIDTH-1:0];
+    sum_overflow = accumulated_overflow(sum_s) ||
+                   accumulated_overflow(sum_e1) ||
+                   accumulated_overflow(sum_e2) ||
+                   accumulated_overflow(sum_e12);
+    overflow = product_overflow || sum_overflow;
+    if (overflow) begin
+        y_s = '0;
+        y_e1 = '0;
+        y_e2 = '0;
+        y_e12 = '0;
+    end else begin
+        y_s   = sum_s[WIDTH-1:0];
+        y_e1  = sum_e1[WIDTH-1:0];
+        y_e2  = sum_e2[WIDTH-1:0];
+        y_e12 = sum_e12[WIDTH-1:0];
+    end
 end
 
 endmodule
@@ -99,9 +136,11 @@ module tb_{module};
 localparam int WIDTH = {width};
 localparam int FRAC = {frac};
 localparam logic signed [WIDTH-1:0] ONE = {width}'sd{one};
+localparam logic signed [WIDTH-1:0] MAX_FIXED = {{1'b0, {{(WIDTH-1){{1'b1}}}}}};
 logic signed [WIDTH-1:0] a_s, a_e1, a_e2, a_e12;
 logic signed [WIDTH-1:0] b_s, b_e1, b_e2, b_e12;
 logic signed [WIDTH-1:0] y_s, y_e1, y_e2, y_e12;
+logic overflow;
 
 {module} #(.WIDTH(WIDTH), .FRAC(FRAC)) dut (.*);
 
@@ -114,17 +153,25 @@ endtask
 
 initial begin
     clear_inputs(); a_e1=ONE; b_e2=ONE; #1;
-    if (y_e12 !== ONE || y_s !== 0 || y_e1 !== 0 || y_e2 !== 0) $fatal(1, "e1*e2");
+    if (overflow || y_e12 !== ONE || y_s !== 0 || y_e1 !== 0 || y_e2 !== 0) $fatal(1, "e1*e2");
     clear_inputs(); a_e2=ONE; b_e1=ONE; #1;
-    if (y_e12 !== -ONE) $fatal(1, "e2*e1");
+    if (overflow || y_e12 !== -ONE) $fatal(1, "e2*e1");
     clear_inputs(); a_e1=ONE; b_e1=ONE; #1;
-    if (y_s !== ONE) $fatal(1, "e1^2");
+    if (overflow || y_s !== ONE) $fatal(1, "e1^2");
     clear_inputs(); a_e12=ONE; b_e12=ONE; #1;
-    if (y_s !== -ONE) $fatal(1, "e12^2");
+    if (overflow || y_s !== -ONE) $fatal(1, "e12^2");
     clear_inputs(); a_s=-1; b_s=ONE/4; #1;
-    if (y_s !== 0) $fatal(1, "negative sub-half rounds toward zero");
+    if (overflow || y_s !== 0) $fatal(1, "negative sub-half rounds toward zero");
     clear_inputs(); a_s=-1; b_s=ONE/2; #1;
-    if (y_s !== -1) $fatal(1, "negative half rounds away from zero");
+    if (overflow || y_s !== -1) $fatal(1, "negative half rounds away from zero");
+
+    clear_inputs(); a_s=MAX_FIXED; b_s=ONE <<< 1; #1;
+    if (!overflow) $fatal(1, "product overflow must be signaled");
+    if (y_s !== 0 || y_e1 !== 0 || y_e2 !== 0 || y_e12 !== 0) $fatal(1, "overflow output must be invalidated");
+
+    clear_inputs(); a_s=ONE; b_s=MAX_FIXED; a_e1=ONE; b_e1=MAX_FIXED; #1;
+    if (!overflow) $fatal(1, "accumulation overflow must be signaled");
+
     $display("PASS {module}");
     $finish;
 end
@@ -245,6 +292,7 @@ def self_test() -> None:
     assert schedule["register_count"] == 4
     text = cl20_module(32, 16, "geo_cl20_product_q")
     assert "round_product" in text and "a_e12" in text
+    assert "output logic overflow" in text and "rounded_overflow" in text
 
 
 def main(argv: Iterable[str] | None = None) -> int:
