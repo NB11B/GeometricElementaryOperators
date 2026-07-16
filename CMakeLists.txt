@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.18.1
+    VERSION 0.19.0
     LANGUAGES C
 )
 
@@ -11,6 +11,7 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 option(GEO_BUILD_TESTS "Build host-side verification tests" ON)
 option(GEO_BUILD_BENCHMARKS "Build host-side benchmarks" ON)
+option(GEO_BUILD_CUDA "Build the optional CUDA 13.x backend and harness" OFF)
 option(GEO_USE_DOUBLE "Use double precision instead of float" ON)
 option(GEO_ENABLE_STACK_USAGE "Emit compiler stack-usage reports" OFF)
 option(GEO_ENABLE_LINK_MAP "Emit linker map for benchmark executable" OFF)
@@ -24,6 +25,7 @@ add_library(geo_kernel STATIC
     src/eml_embedded.c
     src/structured.c
     src/structured_program.c
+    src/executor_api.c
     src/fused.c
     src/control.c
     src/geb36.c
@@ -76,6 +78,40 @@ function(geo_link_target target_name)
     endif()
 endfunction()
 
+if(GEO_BUILD_CUDA)
+    if(CMAKE_VERSION VERSION_LESS 3.24)
+        message(FATAL_ERROR "GEO_BUILD_CUDA requires CMake 3.24 or newer")
+    endif()
+
+    include(CheckLanguage)
+    check_language(CUDA)
+    if(NOT CMAKE_CUDA_COMPILER)
+        message(FATAL_ERROR "GEO_BUILD_CUDA=ON requires the CUDA 13.x compiler")
+    endif()
+    enable_language(CUDA)
+
+    if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 13.0 OR
+       CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 14.0)
+        message(FATAL_ERROR
+            "CUDA Toolkit 13.x is required; detected ${CMAKE_CUDA_COMPILER_VERSION}"
+        )
+    endif()
+
+    find_package(CUDAToolkit 13.0 REQUIRED)
+
+    add_library(geo_cuda STATIC cuda/geo_cuda.cu)
+    target_include_directories(geo_cuda PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_link_libraries(geo_cuda PUBLIC geo_kernel CUDA::cudart)
+    target_compile_features(geo_cuda PUBLIC cuda_std_17)
+    set_target_properties(geo_cuda PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_EXTENSIONS OFF
+        CUDA_SEPARABLE_COMPILATION OFF
+        POSITION_INDEPENDENT_CODE ON
+    )
+endif()
+
 find_package(Python3 COMPONENTS Interpreter)
 
 if(GEO_BUILD_TESTS)
@@ -110,6 +146,14 @@ if(GEO_BUILD_TESTS)
         add_test(NAME ${test_name} COMMAND test_${test_name})
     endforeach()
 
+    if(GEO_BUILD_CUDA)
+        add_executable(test_cuda tests/test_cuda.cu)
+        target_link_libraries(test_cuda PRIVATE geo_cuda)
+        target_compile_features(test_cuda PRIVATE cuda_std_17)
+        add_test(NAME cuda_equivalence COMMAND test_cuda)
+        set_tests_properties(cuda_equivalence PROPERTIES SKIP_RETURN_CODE 77)
+    endif()
+
     if(Python3_Interpreter_FOUND)
         add_test(
             NAME generators
@@ -130,11 +174,21 @@ if(GEO_BUILD_BENCHMARKS)
 
     add_executable(bench_complete benchmarks/bench_complete.c)
     geo_link_target(bench_complete)
+    set_target_properties(bench_complete PROPERTIES OUTPUT_NAME bench_selected_backends)
+
+    if(GEO_BUILD_CUDA)
+        add_executable(bench_cuda benchmarks/bench_cuda.cu)
+        target_link_libraries(bench_cuda PRIVATE geo_cuda)
+        target_compile_features(bench_cuda PRIVATE cuda_std_17)
+    endif()
 
     if(GEO_ENABLE_LINK_MAP AND NOT MSVC)
         target_link_options(bench_host PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_host.map")
         target_link_options(bench_compare PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_compare.map")
-        target_link_options(bench_complete PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_complete.map")
+        target_link_options(bench_complete PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_selected_backends.map")
+        if(GEO_BUILD_CUDA)
+            target_link_options(bench_cuda PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_cuda.map")
+        endif()
     endif()
 
     if(Python3_Interpreter_FOUND)
