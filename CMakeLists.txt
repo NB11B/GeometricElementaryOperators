@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.5.0
+    VERSION 0.6.0
     LANGUAGES C
 )
 
@@ -19,6 +19,7 @@ add_library(geo_kernel STATIC
     src/structured.c
     src/control.c
     src/geb36.c
+    src/compiler.c
 )
 
 target_include_directories(geo_kernel
@@ -98,4 +99,16 @@ if(GEO_BUILD_TESTS)
     )
 
     add_test(NAME geb36 COMMAND test_geb36)
+
+    add_executable(test_compiler
+        tests/test_compiler.c
+    )
+
+    target_link_libraries(test_compiler
+        PRIVATE
+            geo_kernel
+            m
+    )
+
+    add_test(NAME compiler COMMAND test_compiler)
 endif()
