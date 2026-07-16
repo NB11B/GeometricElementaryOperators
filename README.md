@@ -29,7 +29,7 @@ The implementation is designed for microcontrollers and eventual hardware realiz
 - physically separate scalar, geometric, and unified register banks;
 - compile-time rational scale propagation;
 - fixed control-matrix lowering to data-movement routes;
-- desktop verification and embedded backends.
+- compiled GEB witness validation against the direct reference API.
 
 ## Implemented kernel layers
 
@@ -51,6 +51,8 @@ The implementation is designed for microcontrollers and eventual hardware realiz
 16. Physically banked runtime storage and typed operand references.
 17. Rational projective-scale propagation across geometric Omega products.
 18. Routing elision for zero, identity, sign, matrix-unit, and exchange control states.
+19. Imported Milestone W validation report.
+20. First executable compiled witness catalog for GEB targets 6, 16, 17, 30, 31, and 33.
 
 ## Witness compiler and optimizer
 
@@ -101,16 +103,31 @@ the product receives
 
 The routing pass recognizes the fixed control matrices `0`, `I`, `-I`, `E11`, `E12`, `E21`, `E22`, and the exchange matrix. These lower to zeroing, copying, sign inversion, projection, transfer, or exchange operations without runtime matrix multiplication.
 
+## Compiled GEB witnesses
+
+The repository now executes genuine Omega trees through the full pipeline and compares them against the direct GEB reference functions. The first catalog covers:
+
+- pseudoscalar: `Omega(e1,e2)`;
+- geometric product: `Omega(A,B)`;
+- reverse product through the opposite output lane;
+- rotor action: `Omega(Omega(R,x),reverse(R))`;
+- rotor composition: `Omega(R1,R2)`;
+- dilation/sandwich action: `Omega(Omega(T,x),reverse(T))`.
+
+The imported Milestone W archive contains the unified numerical validation report but not the full per-target witness-tree corpus. That limitation is recorded explicitly in `artifacts/milestone_w_unified_operator.json`. Reconstructed executable witnesses are recorded in `artifacts/geb_witness_catalog.json`.
+
 All compiler and runtime paths remain heap-free and nonrecursive. The JSON witness interchange definition is available at `artifacts/witness_tree_schema.json`.
 
 ## Remaining milestones
 
-1. Import the verified witness-tree artifacts produced during operator discovery.
-2. Attach terminal type, routing, and expected-scale metadata to each imported tree.
-3. Reproduce each GEB-36 target through compiled Omega programs and compare against the direct reference API.
-4. Benchmark direct GEB operations against compiled Omega programs.
-5. Add ESP32-S3 and ARM Cortex-M targets.
-6. Add fixed-point and RTL-oriented backends.
+1. Reconstruct constants, involutions, and projection witnesses through typed routing terminals.
+2. Reconstruct addition and subtraction through the unipotent representation.
+3. Reconstruct dot, wedge, commutator, and anticommutator through ordered lanes and Hadamard mixing.
+4. Reconstruct metric and projective targets through central scalar injection and normalization.
+5. Complete compiled coverage for all 36 GEB targets.
+6. Benchmark direct GEB operations against compiled Omega programs.
+7. Add ESP32-S3 and ARM Cortex-M targets.
+8. Add fixed-point and RTL-oriented backends.
 
 ## Build
 
