@@ -14,57 +14,34 @@ jobs:
       matrix:
         compiler: [gcc, clang]
         precision: [double, float]
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Configure compiler
         shell: bash
         run: |
-          if [ "${{ matrix.compiler }}" = "gcc" ]; then
-            echo "CC=gcc" >> "$GITHUB_ENV"
-          else
-            echo "CC=clang" >> "$GITHUB_ENV"
-          fi
-
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then echo "CC=gcc" >> "$GITHUB_ENV"; else echo "CC=clang" >> "$GITHUB_ENV"; fi
       - name: Configure
         shell: bash
         run: |
-          if [ "${{ matrix.precision }}" = "double" ]; then
-            USE_DOUBLE=ON
-          else
-            USE_DOUBLE=OFF
-          fi
-
-          cmake \
-            -S . \
-            -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DGEO_BUILD_TESTS=ON \
-            -DGEO_BUILD_BENCHMARKS=ON \
-            -DGEO_USE_DOUBLE="$USE_DOUBLE" \
-            2>&1 | tee configure.log
-
+          if [ "${{ matrix.precision }}" = "double" ]; then USE_DOUBLE=ON; else USE_DOUBLE=OFF; fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGEO_BUILD_TESTS=ON \
+            -DGEO_BUILD_BENCHMARKS=ON -DGEO_USE_DOUBLE="$USE_DOUBLE" 2>&1 | tee configure.log
       - name: Build
         shell: bash
         run: |
           set -o pipefail
           cmake --build build --parallel 2>&1 | tee build.log
-
       - name: Test
         shell: bash
         run: |
           set -o pipefail
           ctest --test-dir build --output-on-failure 2>&1 | tee test.log
-
       - name: Generate benchmark report
         if: matrix.compiler == 'gcc' && matrix.precision == 'float'
         shell: bash
         run: |
           set -o pipefail
           cmake --build build --target benchmark_report 2>&1 | tee benchmark.log
-
       - name: Upload diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -86,35 +63,21 @@ jobs:
       fail-fast: false
       matrix:
         precision: [double, float]
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Configure sanitizer build
         shell: bash
         run: |
-          if [ "${{ matrix.precision }}" = "double" ]; then
-            USE_DOUBLE=ON
-          else
-            USE_DOUBLE=OFF
-          fi
-          CC=clang cmake \
-            -S . \
-            -B build-sanitize \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DGEO_BUILD_TESTS=ON \
-            -DGEO_BUILD_BENCHMARKS=OFF \
-            -DGEO_ENABLE_SANITIZERS=ON \
-            -DGEO_USE_DOUBLE="$USE_DOUBLE" \
+          if [ "${{ matrix.precision }}" = "double" ]; then USE_DOUBLE=ON; else USE_DOUBLE=OFF; fi
+          CC=clang cmake -S . -B build-sanitize -DCMAKE_BUILD_TYPE=Debug \
+            -DGEO_BUILD_TESTS=ON -DGEO_BUILD_BENCHMARKS=OFF \
+            -DGEO_ENABLE_SANITIZERS=ON -DGEO_USE_DOUBLE="$USE_DOUBLE" \
             2>&1 | tee sanitizer-configure.log
-
       - name: Build sanitizer targets
         shell: bash
         run: |
           set -o pipefail
           cmake --build build-sanitize --parallel 2>&1 | tee sanitizer-build.log
-
       - name: Run sanitizer tests
         shell: bash
         env:
@@ -123,7 +86,6 @@ jobs:
         run: |
           set -o pipefail
           ctest --test-dir build-sanitize --output-on-failure 2>&1 | tee sanitizer-test.log
-
       - name: Upload sanitizer logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -135,38 +97,64 @@ jobs:
             sanitizer-test.log
           if-no-files-found: ignore
 
+  q-format-validation:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fraction_bits: [1, 8, 16, 24, 30]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile Q-format harness
+        run: |
+          clang -std=c11 -Wall -Wextra -Wpedantic -Wconversion \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -DGEO_FIXED_FRACTION_BITS=${{ matrix.fraction_bits }} \
+            -Iinclude tests/test_qformat.c src/fixed.c src/fixed_geb36.c \
+            -lm -o test-qformat
+      - name: Run Q-format harness
+        env:
+          ASAN_OPTIONS: halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ./test-qformat
+
+  esp32-component-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure standalone component validation
+        run: cmake -S ports/esp32 -B build-esp32-component -DCMAKE_BUILD_TYPE=Release
+      - name: Build standalone component validation
+        run: cmake --build build-esp32-component --parallel
+
   rtl-validation:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Install RTL tools
         run: |
           sudo apt-get update
           sudo apt-get install -y iverilog yosys
-
       - name: Generate RTL and schedule
         run: |
-          python3 tools/generate_rtl.py \
-            --out-dir build-rtl \
-            --schedule-json rtl/examples/rotor_action_schedule.json \
-            --self-test
-
+          python3 tools/generate_rtl.py --out-dir build-rtl \
+            --schedule-json rtl/examples/rotor_action_schedule.json --self-test
       - name: Simulate fixed-point Cl(2,0) product
         run: |
-          iverilog -g2012 \
-            -s tb_geo_cl20_product_q \
-            -o build-rtl/cl20_tb.vvp \
-            build-rtl/geo_cl20_product_q.sv \
-            build-rtl/tb_geo_cl20_product_q.sv
+          iverilog -g2012 -s tb_geo_cl20_product_q -o build-rtl/cl20_tb.vvp \
+            build-rtl/geo_cl20_product_q.sv build-rtl/tb_geo_cl20_product_q.sv
           vvp build-rtl/cl20_tb.vvp | tee rtl-simulation.log
-
-      - name: Synthesize product cell
+      - name: Compile and simulate generated controller
+        run: |
+          iverilog -g2012 -s tb_geo_program_controller -o build-rtl/controller_tb.vvp \
+            build-rtl/geo_program_controller.sv build-rtl/tb_geo_program_controller.sv
+          vvp build-rtl/controller_tb.vvp | tee controller-simulation.log
+      - name: Synthesize product cell and controller
         run: |
           yosys -p 'read_verilog -sv build-rtl/geo_cl20_product_q.sv; synth -top geo_cl20_product_q; stat' \
             2>&1 | tee rtl-synthesis.log
-
+          yosys -p 'read_verilog -sv build-rtl/geo_program_controller.sv; synth -top geo_program_controller; stat' \
+            2>&1 | tee controller-synthesis.log
       - name: Upload RTL artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -176,5 +164,7 @@ jobs:
             build-rtl/*.sv
             build-rtl/*.json
             rtl-simulation.log
+            controller-simulation.log
             rtl-synthesis.log
+            controller-synthesis.log
           if-no-files-found: error

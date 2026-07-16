@@ -78,6 +78,8 @@ int geo_emit_banked_program_c(
     int written;
 
     if (program == NULL || symbol_prefix == NULL || buffer == NULL || capacity == 0u) return -1;
+    if (program->instruction_count != 0u && program->instructions == NULL) return -1;
+    if (program->root.kind > GEO_REGISTER_UNIFIED) return -1;
 
 #define APPEND(...) \
     do { \
@@ -87,18 +89,28 @@ int geo_emit_banked_program_c(
         used += (size_t)written; \
     } while (0)
 
-    APPEND("static const geo_banked_instruction_t %s_instructions[%zu] = {\n", symbol_prefix, program->instruction_count);
-    for (i = 0u; i < program->instruction_count; ++i) {
-        const geo_banked_instruction_t ins = program->instructions[i];
-        APPEND(
-            "  {%u,{%s,%u},{%s,%u},{%s,%u}},\n",
-            (unsigned)ins.requested_lanes,
-            kind_name(ins.destination.kind), (unsigned)ins.destination.index,
-            kind_name(ins.left.kind), (unsigned)ins.left.index,
-            kind_name(ins.right.kind), (unsigned)ins.right.index
-        );
+    if (program->instruction_count == 0u) {
+        APPEND("static const geo_banked_instruction_t *const %s_instructions = NULL;\n", symbol_prefix);
+    } else {
+        APPEND("static const geo_banked_instruction_t %s_instructions[%zu] = {\n", symbol_prefix, program->instruction_count);
+        for (i = 0u; i < program->instruction_count; ++i) {
+            const geo_banked_instruction_t ins = program->instructions[i];
+            if (ins.destination.kind > GEO_REGISTER_UNIFIED ||
+                ins.left.kind > GEO_REGISTER_UNIFIED ||
+                ins.right.kind > GEO_REGISTER_UNIFIED) {
+                return -1;
+            }
+            APPEND(
+                "  {%u,{%s,%u},{%s,%u},{%s,%u}},\n",
+                (unsigned)ins.requested_lanes,
+                kind_name(ins.destination.kind), (unsigned)ins.destination.index,
+                kind_name(ins.left.kind), (unsigned)ins.left.index,
+                kind_name(ins.right.kind), (unsigned)ins.right.index
+            );
+        }
+        APPEND("};\n");
     }
-    APPEND("};\n");
+
     APPEND(
         "static const geo_banked_program_t %s_program = {%s_instructions,%zu,{%s,%u},%zu,%zu,%zu,%zu};\n",
         symbol_prefix,

@@ -8,20 +8,30 @@ static int geo_fixed_in_range(int64_t value) {
     return value >= INT32_MIN && value <= INT32_MAX;
 }
 
+static int64_t geo_fixed_scale_i64(void) {
+    return INT64_C(1) << GEO_FIXED_FRACTION_BITS;
+}
+
 static int64_t geo_fixed_round_divide(int64_t numerator, int64_t denominator) {
     int64_t quotient = numerator / denominator;
     const int64_t remainder = numerator % denominator;
-    const int64_t abs_remainder = remainder < 0 ? -remainder : remainder;
-    const int64_t abs_denominator = denominator < 0 ? -denominator : denominator;
+    const uint64_t abs_remainder = remainder < 0 ? (uint64_t)(-remainder) : (uint64_t)remainder;
+    const uint64_t abs_denominator = denominator < 0 ? (uint64_t)(-denominator) : (uint64_t)denominator;
 
-    if (abs_remainder * 2 >= abs_denominator) {
+    if (abs_remainder >= (abs_denominator + 1u) / 2u) {
         quotient += ((numerator < 0) != (denominator < 0)) ? -1 : 1;
     }
     return quotient;
 }
 
+static geo_fixed_status_t geo_fixed_neg_checked(geo_fixed_t input, geo_fixed_t *output) {
+    if (output == NULL || input == INT32_MIN) return GEO_FIXED_OVERFLOW;
+    *output = (geo_fixed_t)-input;
+    return GEO_FIXED_OK;
+}
+
 geo_fixed_status_t geo_fixed_from_double(double value, geo_fixed_t *output) {
-    const double scale = (double)(UINT64_C(1) << GEO_FIXED_FRACTION_BITS);
+    const double scale = (double)geo_fixed_scale_i64();
     double scaled;
     int64_t rounded;
 
@@ -35,14 +45,12 @@ geo_fixed_status_t geo_fixed_from_double(double value, geo_fixed_t *output) {
 }
 
 double geo_fixed_to_double(geo_fixed_t value) {
-    const double scale = (double)(UINT64_C(1) << GEO_FIXED_FRACTION_BITS);
-    return (double)value / scale;
+    return (double)value / (double)geo_fixed_scale_i64();
 }
 
 geo_fixed_status_t geo_fixed_mul_rounded(geo_fixed_t a, geo_fixed_t b, geo_fixed_t *output) {
-    const int64_t scale = INT64_C(1) << GEO_FIXED_FRACTION_BITS;
     const int64_t product = (int64_t)a * (int64_t)b;
-    const int64_t rounded = geo_fixed_round_divide(product, scale);
+    const int64_t rounded = geo_fixed_round_divide(product, geo_fixed_scale_i64());
     if (output == NULL || !geo_fixed_in_range(rounded)) return GEO_FIXED_OVERFLOW;
     *output = (geo_fixed_t)rounded;
     return GEO_FIXED_OK;
@@ -53,12 +61,17 @@ geo_fixed_status_t geo_fixed_mul(geo_fixed_t a, geo_fixed_t b, geo_fixed_t *outp
 }
 
 geo_fixed_status_t geo_fixed_div(geo_fixed_t a, geo_fixed_t b, geo_fixed_t *output) {
-    const int64_t scale = INT64_C(1) << GEO_FIXED_FRACTION_BITS;
+    const int64_t scale = geo_fixed_scale_i64();
+    int64_t numerator;
     int64_t quotient;
+
     if (output == NULL) return GEO_FIXED_OVERFLOW;
     if (b == 0) return GEO_FIXED_DIVIDE_BY_ZERO;
-    /* Multiplication is defined for negative operands; signed left shift is not. */
-    quotient = geo_fixed_round_divide((int64_t)a * scale, (int64_t)b);
+    if (a != 0 && (a > 0 ? a : -(int64_t)a) > INT64_MAX / scale) {
+        return GEO_FIXED_OVERFLOW;
+    }
+    numerator = (int64_t)a * scale;
+    quotient = geo_fixed_round_divide(numerator, (int64_t)b);
     if (!geo_fixed_in_range(quotient)) return GEO_FIXED_OVERFLOW;
     *output = (geo_fixed_t)quotient;
     return GEO_FIXED_OK;
@@ -131,10 +144,46 @@ geo_fixed_status_t geo_fixed_cl20_mul(
     return GEO_FIXED_OK;
 }
 
+geo_fixed_status_t geo_fixed_cl20_reverse_checked(
+    geo_fixed_cl20_t value,
+    geo_fixed_cl20_t *output
+) {
+    geo_fixed_status_t status;
+    if (output == NULL) return GEO_FIXED_OVERFLOW;
+    *output = value;
+    status = geo_fixed_neg_checked(value.e12, &output->e12);
+    return status;
+}
+
 geo_fixed_cl20_t geo_fixed_cl20_reverse(geo_fixed_cl20_t value) {
-    if (value.e12 == INT32_MIN) value.e12 = INT32_MAX;
-    else value.e12 = -value.e12;
-    return value;
+    geo_fixed_cl20_t output = value;
+    if (geo_fixed_cl20_reverse_checked(value, &output) != GEO_FIXED_OK) {
+        output.e12 = value.e12;
+    }
+    return output;
+}
+
+geo_fixed_status_t geo_fixed_cl20_grade_involution_checked(
+    geo_fixed_cl20_t value,
+    geo_fixed_cl20_t *output
+) {
+    geo_fixed_status_t status;
+    if (output == NULL) return GEO_FIXED_OVERFLOW;
+    *output = value;
+    status = geo_fixed_neg_checked(value.e1, &output->e1);
+    if (status != GEO_FIXED_OK) return status;
+    return geo_fixed_neg_checked(value.e2, &output->e2);
+}
+
+geo_fixed_status_t geo_fixed_cl20_clifford_conjugate_checked(
+    geo_fixed_cl20_t value,
+    geo_fixed_cl20_t *output
+) {
+    geo_fixed_status_t status;
+    geo_fixed_cl20_t temporary;
+    status = geo_fixed_cl20_grade_involution_checked(value, &temporary);
+    if (status != GEO_FIXED_OK) return status;
+    return geo_fixed_cl20_reverse_checked(temporary, output);
 }
 
 geo_fixed_status_t geo_fixed_vector_dot(
@@ -183,9 +232,12 @@ geo_fixed_status_t geo_fixed_rotor_action(
     geo_fixed_cl20_t *output
 ) {
     geo_fixed_cl20_t temporary;
+    geo_fixed_cl20_t reverse;
     geo_fixed_status_t status;
     if (output == NULL) return GEO_FIXED_OVERFLOW;
     status = geo_fixed_cl20_mul(rotor, vector, &temporary);
     if (status != GEO_FIXED_OK) return status;
-    return geo_fixed_cl20_mul(temporary, geo_fixed_cl20_reverse(rotor), output);
+    status = geo_fixed_cl20_reverse_checked(rotor, &reverse);
+    if (status != GEO_FIXED_OK) return status;
+    return geo_fixed_cl20_mul(temporary, reverse, output);
 }

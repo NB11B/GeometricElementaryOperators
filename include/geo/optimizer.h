@@ -24,11 +24,12 @@ typedef struct {
 typedef struct {
     geo_program_t program;
     uint8_t root_register;
-    size_t terminal_count;
     size_t original_instruction_count;
     size_t optimized_instruction_count;
     size_t eliminated_dead_nodes;
     size_t eliminated_duplicate_nodes;
+    /* Appended in v0.16 to preserve the v0.15 prefix ABI. */
+    size_t terminal_count;
 } geo_optimized_witness_t;
 
 /*

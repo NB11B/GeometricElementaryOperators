@@ -13,7 +13,11 @@ geo_status_t geo_fused_execute(
     size_t pc;
 
     if (program == NULL || registers == NULL) return GEO_STATUS_NULL_ARGUMENT;
-    if (program->register_count > register_capacity ||
+    if (program->instruction_count != 0u && program->instructions == NULL) {
+        return GEO_STATUS_NULL_ARGUMENT;
+    }
+    if (program->register_count == 0u ||
+        program->register_count > register_capacity ||
         program->root_register >= program->register_count) {
         return GEO_STATUS_REGISTER_RANGE;
     }
@@ -27,7 +31,10 @@ geo_status_t geo_fused_execute(
 
         if (instruction.destination >= program->register_count ||
             instruction.left >= program->register_count ||
-            instruction.right >= program->register_count ||
+            instruction.right >= program->register_count) {
+            return GEO_STATUS_REGISTER_RANGE;
+        }
+        if ((geo_fused_opcode_t)instruction.opcode == GEO_FUSED_ROTOR_ACTION &&
             instruction.auxiliary >= program->register_count) {
             return GEO_STATUS_REGISTER_RANGE;
         }
