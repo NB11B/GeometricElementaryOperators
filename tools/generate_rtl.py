@@ -62,7 +62,7 @@ logic signed [WIDTH+2:0] sum_e2;
 logic signed [WIDTH+2:0] sum_e12;
 
 always_comb begin
-    sum_s   = qs + q11 + q22 - q33;
+    sum_s   = q00 + q11 + q22 - q33;
     sum_e1  = q01 + q10 - q23 + q32;
     sum_e2  = q02 + q20 + q13 - q31;
     sum_e12 = q03 + q30 + q12 - q21;
@@ -105,6 +105,8 @@ initial begin
     if (y_s !== ONE) $fatal(1, "e1^2");
     clear_inputs(); a_e12=ONE; b_e12=ONE; #1;
     if (y_s !== -ONE) $fatal(1, "e12^2");
+    clear_inputs(); a_s=ONE; b_s=ONE; #1;
+    if (y_s !== ONE) $fatal(1, "scalar product");
     $display("PASS {module}");
     $finish;
 end
@@ -125,6 +127,8 @@ def validate_schedule(data: dict[str, Any]) -> dict[str, Any]:
         opcode = insn.get("opcode")
         destination = insn.get("destination")
         operands = [value for key, value in insn.items() if key in {"left", "right", "source"}]
+        if not isinstance(opcode, str) or not opcode:
+            raise ValueError(f"instruction {index} has invalid opcode")
         if not isinstance(destination, int) or destination < 0:
             raise ValueError(f"instruction {index} has invalid destination")
         if any(not isinstance(op, int) or op not in available for op in operands):
@@ -210,6 +214,7 @@ def self_test() -> None:
     assert schedule["register_count"] == 4
     text = cl20_module(32, 16, "geo_cl20_product_q")
     assert "always_comb" in text and "a_e12" in text
+    assert "sum_s   = q00" in text and "sum_s   = qs" not in text
 
 
 def main(argv: Iterable[str] | None = None) -> int:
