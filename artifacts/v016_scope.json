@@ -1,0 +1,15 @@
+{
+  "version": "0.16.0",
+  "hardware_benchmark_application": "intentionally skipped by user request",
+  "implemented": [
+    "deterministic randomized property validation",
+    "fused optimized kernel IR",
+    "direct-versus-structured-versus-fused host benchmark",
+    "rounded and saturating fixed-point arithmetic",
+    "fixed-point dot wedge and rotor action",
+    "deterministic embedded exp-log EML backend",
+    "static banked-program C emitter",
+    "machine-readable compiler reports",
+    "generated Cl(3,0) backend"
+  ]
+}
