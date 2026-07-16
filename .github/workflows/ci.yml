@@ -43,13 +43,14 @@ jobs:
         run: |
           set -o pipefail
           ctest --test-dir build --output-on-failure 2>&1 | tee test.log
-      - name: Generate benchmark reports
+      - name: Generate benchmark and error reports
         if: matrix.compiler == 'gcc' && matrix.precision == 'float'
         shell: bash
         run: |
           set -o pipefail
           cmake --build build --target benchmark_report 2>&1 | tee benchmark.log
           cmake --build build --target workload_report 2>&1 | tee workload.log
+          cmake --build build --target numerical_report 2>&1 | tee numerical.log
       - name: Upload diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -62,12 +63,17 @@ jobs:
             test.log
             benchmark.log
             workload.log
+            numerical.log
             build/benchmark-report/benchmark_report.csv
             build/benchmark-report/benchmark_report.json
             build/benchmark-report/benchmark_report.md
             build/workload-report/workload_report.csv
             build/workload-report/workload_report.json
             build/workload-report/workload_report.md
+            build/numerical-report/numerical_error.csv
+            build/numerical-report/numerical_error.json
+            build/numerical-report/numerical_error.md
+            build/numerical-report/numerical_error.log
           if-no-files-found: ignore
 
   sanitizers:
@@ -91,7 +97,7 @@ jobs:
         run: |
           set -o pipefail
           cmake --build build-sanitize --parallel 2>&1 | tee sanitizer-build.log
-      - name: Run sanitizer tests
+      - name: Run sanitizer tests and benchmark regressions
         shell: bash
         env:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
@@ -100,6 +106,8 @@ jobs:
           set -o pipefail
           ctest --test-dir build-sanitize --output-on-failure 2>&1 | tee sanitizer-test.log
           ./build-sanitize/bench_selected_backends 2>&1 | tee sanitizer-benchmark.log
+          ./build-sanitize/bench_numerical --samples 1024 --seed 1779033703 \
+            2>&1 | tee sanitizer-numerical.log
       - name: Upload sanitizer logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -110,6 +118,7 @@ jobs:
             sanitizer-build.log
             sanitizer-test.log
             sanitizer-benchmark.log
+            sanitizer-numerical.log
           if-no-files-found: ignore
 
   q-format-validation:
@@ -127,6 +136,8 @@ jobs:
             -lm -o test-qformat
           clang $COMMON_FLAGS tests/test_fixed_omega.c src/fixed.c src/fixed_omega.c \
             -lm -o test-fixed-omega
+          clang $COMMON_FLAGS tests/test_fixed_control.c src/fixed.c src/fixed_control.c \
+            -lm -o test-fixed-control
       - name: Run Q-format harnesses
         env:
           ASAN_OPTIONS: halt_on_error=1
@@ -134,6 +145,7 @@ jobs:
         run: |
           ./test-qformat
           ./test-fixed-omega
+          ./test-fixed-control
 
   esp32-component-validation:
     runs-on: ubuntu-latest
@@ -167,11 +179,14 @@ jobs:
             -DGEO_BUILD_CUDA=ON -DGEO_BUILD_TESTS=ON -DGEO_BUILD_BENCHMARKS=ON \
             -DGEO_USE_DOUBLE="$USE_DOUBLE" -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
             2>&1 | tee cuda-configure.log
-      - name: Compile CUDA backend, tests, and harness
+      - name: Compile CUDA backend, generated schedules, tests, and harness
         run: |
           set -o pipefail
           cmake --build build-cuda --parallel 2>&1 | tee cuda-build.log
-      - name: Upload CUDA compile logs
+          cmake --build build-cuda --target generate_cuda_schedules 2>&1 | tee cuda-schedules.log
+          test -s build-cuda/cuda-schedules/cuda_schedule_manifest.json
+          test "$(find build-cuda/cuda-schedules -name 'geo_cuda_schedule_*.cu' | wc -l)" -eq 5
+      - name: Upload CUDA compile artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -180,6 +195,10 @@ jobs:
             cuda-version.log
             cuda-configure.log
             cuda-build.log
+            cuda-schedules.log
+            build-cuda/cuda-schedules/*.h
+            build-cuda/cuda-schedules/*.cu
+            build-cuda/cuda-schedules/cuda_schedule_manifest.json
           if-no-files-found: ignore
 
   rtl-validation:
