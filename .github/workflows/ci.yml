@@ -31,6 +31,13 @@ jobs:
         run: |
           set -o pipefail
           cmake --build build --parallel 2>&1 | tee build.log
+      - name: Verify stable public executor symbols
+        shell: bash
+        run: |
+          set -o pipefail
+          nm -g --defined-only build/libgeo_kernel.a | tee symbols.log
+          grep -Eq '[[:space:]]T[[:space:]]+geo_struct_program_execute$' symbols.log
+          grep -Eq '[[:space:]]T[[:space:]]+geo_banked_execute$' symbols.log
       - name: Test
         shell: bash
         run: |
@@ -51,6 +58,7 @@ jobs:
           path: |
             configure.log
             build.log
+            symbols.log
             test.log
             benchmark.log
             workload.log
@@ -112,18 +120,20 @@ jobs:
         fraction_bits: [1, 8, 16, 24, 30]
     steps:
       - uses: actions/checkout@v4
-      - name: Compile Q-format harness
+      - name: Compile Q-format harnesses
         run: |
-          clang -std=c11 -Wall -Wextra -Wpedantic -Wconversion \
-            -fsanitize=address,undefined -fno-omit-frame-pointer \
-            -DGEO_FIXED_FRACTION_BITS=${{ matrix.fraction_bits }} \
-            -Iinclude tests/test_qformat.c src/fixed.c src/fixed_geb36.c \
+          COMMON_FLAGS="-std=c11 -Wall -Wextra -Wpedantic -Wconversion -fsanitize=address,undefined -fno-omit-frame-pointer -DGEO_FIXED_FRACTION_BITS=${{ matrix.fraction_bits }} -Iinclude"
+          clang $COMMON_FLAGS tests/test_qformat.c src/fixed.c src/fixed_geb36.c \
             -lm -o test-qformat
-      - name: Run Q-format harness
+          clang $COMMON_FLAGS tests/test_fixed_omega.c src/fixed.c src/fixed_omega.c \
+            -lm -o test-fixed-omega
+      - name: Run Q-format harnesses
         env:
           ASAN_OPTIONS: halt_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: ./test-qformat
+        run: |
+          ./test-qformat
+          ./test-fixed-omega
 
   esp32-component-validation:
     runs-on: ubuntu-latest
