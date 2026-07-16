@@ -14,20 +14,22 @@ static int64_t geo_fixed_omega_scale(void) {
     return INT64_C(1) << GEO_FIXED_FRACTION_BITS;
 }
 
+static uint64_t geo_fixed_omega_abs_i64(int64_t value) {
+    if (value >= 0) return (uint64_t)value;
+    return (uint64_t)(-(value + INT64_C(1))) + UINT64_C(1);
+}
+
 static int64_t geo_fixed_omega_round_divide(
     int64_t numerator,
     int64_t denominator
 ) {
     int64_t quotient = numerator / denominator;
     const int64_t remainder = numerator % denominator;
-    const uint64_t absolute_remainder = remainder < 0
-        ? (uint64_t)(-remainder)
-        : (uint64_t)remainder;
-    const uint64_t absolute_denominator = denominator < 0
-        ? (uint64_t)(-denominator)
-        : (uint64_t)denominator;
+    const uint64_t absolute_remainder = geo_fixed_omega_abs_i64(remainder);
+    const uint64_t absolute_denominator = geo_fixed_omega_abs_i64(denominator);
 
-    if (absolute_remainder >= (absolute_denominator + UINT64_C(1)) / UINT64_C(2)) {
+    if (absolute_remainder >=
+        (absolute_denominator + UINT64_C(1)) / UINT64_C(2)) {
         quotient += ((numerator < 0) != (denominator < 0)) ? -1 : 1;
     }
     return quotient;
@@ -156,13 +158,13 @@ static geo_fixed_omega_status_t geo_fixed_omega_scale_power_two(
     return geo_fixed_omega_checked(result, output);
 }
 
-static uint32_t geo_fixed_omega_gcd(uint32_t left, uint32_t right) {
-    while (right != 0u) {
-        const uint32_t remainder = left % right;
+static uint64_t geo_fixed_omega_gcd_u64(uint64_t left, uint64_t right) {
+    while (right != UINT64_C(0)) {
+        const uint64_t remainder = left % right;
         left = right;
         right = remainder;
     }
-    return left == 0u ? 1u : left;
+    return left == UINT64_C(0) ? UINT64_C(1) : left;
 }
 
 static geo_fixed_omega_status_t geo_fixed_scale_multiply(
@@ -172,9 +174,7 @@ static geo_fixed_omega_status_t geo_fixed_scale_multiply(
 ) {
     int64_t numerator;
     int64_t denominator;
-    uint64_t absolute_numerator;
-    uint64_t absolute_denominator;
-    uint32_t divisor;
+    uint64_t divisor;
 
     if (output == NULL) return GEO_FIXED_OMEGA_NULL_ARGUMENT;
     if (left.denominator == 0 || right.denominator == 0) {
@@ -189,27 +189,13 @@ static geo_fixed_omega_status_t geo_fixed_scale_multiply(
         denominator = -denominator;
     }
 
-    absolute_numerator = numerator < 0
-        ? (uint64_t)(-numerator)
-        : (uint64_t)numerator;
-    absolute_denominator = (uint64_t)denominator;
-    while (absolute_numerator > UINT32_MAX || absolute_denominator > UINT32_MAX) {
-        const uint64_t common = absolute_numerator < absolute_denominator
-            ? absolute_numerator
-            : absolute_denominator;
-        if (common <= 1u) return GEO_FIXED_OMEGA_OVERFLOW;
-        absolute_numerator /= common;
-        absolute_denominator /= common;
-        numerator /= (int64_t)common;
-        denominator /= (int64_t)common;
-    }
-
-    divisor = geo_fixed_omega_gcd(
-        (uint32_t)absolute_numerator,
-        (uint32_t)absolute_denominator
+    divisor = geo_fixed_omega_gcd_u64(
+        geo_fixed_omega_abs_i64(numerator),
+        (uint64_t)denominator
     );
     numerator /= (int64_t)divisor;
     denominator /= (int64_t)divisor;
+
     if (numerator < INT32_MIN || numerator > INT32_MAX ||
         denominator < 1 || denominator > INT32_MAX) {
         return GEO_FIXED_OMEGA_OVERFLOW;
@@ -274,7 +260,6 @@ geo_fixed_omega_status_t geo_fixed_eml_log(
     int32_t order;
     geo_fixed_t mantissa;
     geo_fixed_t numerator;
-    geo_fixed_t denominator;
     geo_fixed_t z;
     geo_fixed_t z_squared;
     geo_fixed_t power;
@@ -282,6 +267,8 @@ geo_fixed_omega_status_t geo_fixed_eml_log(
     geo_fixed_t term;
     geo_fixed_t logarithm;
     geo_fixed_t exponent_term;
+    int64_t denominator_wide;
+    int64_t z_wide;
     geo_fixed_status_t arithmetic_status;
     geo_fixed_omega_status_t status;
 
@@ -309,12 +296,15 @@ geo_fixed_omega_status_t geo_fixed_eml_log(
 
     status = geo_fixed_omega_sub(mantissa, one, &numerator);
     if (status != GEO_FIXED_OMEGA_OK) return status;
-    status = geo_fixed_omega_add(mantissa, one, &denominator);
+    denominator_wide = (int64_t)mantissa + (int64_t)one;
+    if (denominator_wide <= 0) return GEO_FIXED_OMEGA_LOG_DOMAIN;
+    z_wide = geo_fixed_omega_round_divide(
+        (int64_t)numerator * geo_fixed_omega_scale(),
+        denominator_wide
+    );
+    status = geo_fixed_omega_checked(z_wide, &z);
     if (status != GEO_FIXED_OMEGA_OK) return status;
-    arithmetic_status = geo_fixed_div(numerator, denominator, &z);
-    if (arithmetic_status != GEO_FIXED_OK) {
-        return geo_fixed_omega_from_arithmetic(arithmetic_status);
-    }
+
     arithmetic_status = geo_fixed_mul(z, z, &z_squared);
     if (arithmetic_status != GEO_FIXED_OK) {
         return geo_fixed_omega_from_arithmetic(arithmetic_status);
@@ -326,9 +316,11 @@ geo_fixed_omega_status_t geo_fixed_eml_log(
         if (status != GEO_FIXED_OMEGA_OK) return status;
         status = geo_fixed_omega_add(sum, term, &sum);
         if (status != GEO_FIXED_OMEGA_OK) return status;
-        arithmetic_status = geo_fixed_mul(power, z_squared, &power);
-        if (arithmetic_status != GEO_FIXED_OK) {
-            return geo_fixed_omega_from_arithmetic(arithmetic_status);
+        if (order + 1 < GEO_FIXED_EML_TERMS) {
+            arithmetic_status = geo_fixed_mul(power, z_squared, &power);
+            if (arithmetic_status != GEO_FIXED_OK) {
+                return geo_fixed_omega_from_arithmetic(arithmetic_status);
+            }
         }
     }
 
@@ -360,11 +352,15 @@ geo_fixed_omega_status_t geo_fixed_opposite_from_cl20(
     geo_fixed_cl20_t value,
     geo_fixed_opposite_t *output
 ) {
+    geo_fixed_opposite_t result;
     geo_fixed_status_t status;
+
     if (output == NULL) return GEO_FIXED_OMEGA_NULL_ARGUMENT;
-    output->forward = value;
-    status = geo_fixed_cl20_reverse_checked(value, &output->reverse);
-    return geo_fixed_omega_from_arithmetic(status);
+    result.forward = value;
+    status = geo_fixed_cl20_reverse_checked(value, &result.reverse);
+    if (status != GEO_FIXED_OK) return geo_fixed_omega_from_arithmetic(status);
+    *output = result;
+    return GEO_FIXED_OMEGA_OK;
 }
 
 geo_fixed_omega_status_t geo_fixed_opposite_mul(
@@ -409,6 +405,7 @@ geo_fixed_omega_status_t geo_fixed_state_from_cl20(
 ) {
     geo_fixed_state_t state;
     geo_fixed_omega_status_t status;
+
     if (output == NULL) return GEO_FIXED_OMEGA_NULL_ARGUMENT;
     state = geo_fixed_state_zero();
     status = geo_fixed_opposite_from_cl20(value, &state.geometric);
