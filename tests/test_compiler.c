@@ -117,7 +117,7 @@ static void test_geometric_tree(void) {
         "compiled geometric result equals direct result"
     );
     expect_true(
-        geo_opposite_consistent(
+        geo_opposite_is_consistent(
             registers[compiled.root_register].geometric,
             GEO_TEST_TOLERANCE
         ),
