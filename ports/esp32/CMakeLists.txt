@@ -23,6 +23,7 @@ set(GEO_ESP32_CORE_SRCS
     "../../src/fixed_program.c"
     "../../src/fixed_omega.c"
     "../../src/fixed_banked.c"
+    "../../src/fixed_control.c"
     "../../src/native_generated.c"
 )
 
