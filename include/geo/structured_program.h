@@ -53,7 +53,17 @@ typedef enum {
     GEO_STRUCT_OP_REFLECTION_NUMERATOR = 18,
     GEO_STRUCT_OP_VECTOR_INVERSE_PROJECTIVE = 19,
     GEO_STRUCT_OP_ANGLE_COSINE_NUMERATOR = 20,
-    GEO_STRUCT_OP_SCALED_CL20_NORMALIZE = 21
+    GEO_STRUCT_OP_SCALED_CL20_NORMALIZE = 21,
+    GEO_STRUCT_OP_CL20_REVERSE = 22,
+    GEO_STRUCT_OP_CL20_GRADE_INVOLUTION = 23,
+    GEO_STRUCT_OP_CL20_CLIFFORD_CONJUGATE = 24,
+    GEO_STRUCT_OP_PROJECT_SCALAR = 25,
+    GEO_STRUCT_OP_PROJECT_VECTOR = 26,
+    GEO_STRUCT_OP_PROJECT_BIVECTOR = 27,
+    GEO_STRUCT_OP_PROJECT_EVEN = 28,
+    GEO_STRUCT_OP_PROJECT_ODD = 29,
+    GEO_STRUCT_OP_DUAL = 30,
+    GEO_STRUCT_OP_ROTOR_NORM_SQUARED = 31
 } geo_struct_opcode_t;
 
 typedef struct {
@@ -93,6 +103,11 @@ geo_status_t geo_struct_read_scalar(
 geo_status_t geo_struct_read_scaled_cl20(
     const geo_struct_value_t *value,
     geo_scaled_cl20_t *output
+);
+
+geo_status_t geo_struct_read_unipotent(
+    const geo_struct_value_t *value,
+    geo_unipotent_t *output
 );
 
 #ifdef __cplusplus
