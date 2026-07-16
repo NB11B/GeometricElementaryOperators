@@ -42,10 +42,29 @@ jobs:
             -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DGEO_BUILD_TESTS=ON \
-            -DGEO_USE_DOUBLE="$USE_DOUBLE"
+            -DGEO_BUILD_BENCHMARKS=ON \
+            -DGEO_USE_DOUBLE="$USE_DOUBLE" \
+            2>&1 | tee configure.log
 
       - name: Build
-        run: cmake --build build --parallel
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build build --parallel 2>&1 | tee build.log
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        shell: bash
+        run: |
+          set -o pipefail
+          ctest --test-dir build --output-on-failure 2>&1 | tee test.log
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-${{ matrix.compiler }}-${{ matrix.precision }}
+          path: |
+            configure.log
+            build.log
+            test.log
+          if-no-files-found: ignore
