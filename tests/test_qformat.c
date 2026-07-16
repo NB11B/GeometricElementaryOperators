@@ -9,6 +9,7 @@ int main(void) {
     geo_fixed_t one;
     geo_fixed_t half;
     geo_fixed_t quotient;
+    geo_fixed_t expected_product;
     geo_fixed_cl20_t a = {0, 0, 0, 0};
     geo_fixed_cl20_t b = {0, 0, 0, 0};
     geo_fixed_geb_result_t result;
@@ -29,12 +30,16 @@ int main(void) {
 
     a.e1 = half;
     b.e2 = half;
+    if (geo_fixed_mul(half, half, &expected_product) != GEO_FIXED_OK) {
+        return EXIT_FAILURE;
+    }
     if (geo_fixed_geb36_execute(GEO_GEB_GEOMETRIC_PRODUCT, a, b, a, &result) !=
         GEO_FIXED_OK) {
         return EXIT_FAILURE;
     }
     if (result.kind != GEO_FIXED_RESULT_CL20) return EXIT_FAILURE;
-    if (fabs(geo_fixed_to_double(result.as.cl20.e12) - 0.25) > 1e-9) {
+    if (result.as.cl20.scalar != 0 || result.as.cl20.e1 != 0 ||
+        result.as.cl20.e2 != 0 || result.as.cl20.e12 != expected_product) {
         return EXIT_FAILURE;
     }
 
