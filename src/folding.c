@@ -1,5 +1,6 @@
 #include "geo/folding.h"
 
+#include <limits.h>
 #include <string.h>
 
 static uint8_t geo_kind_from_lanes(uint8_t lanes) {
