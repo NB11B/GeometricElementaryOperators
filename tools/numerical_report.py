@@ -58,12 +58,14 @@ def main() -> int:
     typed_rows: list[dict[str, object]] = []
     mismatch_total = 0
     overflow_total = 0
+    completed_total = 0
     for row in rows:
         typed = {
             "operation": row["operation"],
             "backend": row["backend"],
             "precision": args.precision,
-            "samples": int(row["samples"]),
+            "requested": int(row["requested"]),
+            "completed": int(row["completed"]),
             "overflows": int(row["overflows"]),
             "max_absolute": float(row["max_absolute"]),
             "max_relative": float(row["max_relative"]),
@@ -73,6 +75,7 @@ def main() -> int:
         }
         mismatch_total += int(typed["mismatches"])
         overflow_total += int(typed["overflows"])
+        completed_total += int(typed["completed"])
         typed_rows.append(typed)
 
     metadata = {
@@ -83,6 +86,7 @@ def main() -> int:
         "precision": args.precision,
         "samples_per_operation": args.samples,
         "seed": args.seed,
+        "completed_total": completed_total,
         "mismatch_total": mismatch_total,
         "overflow_total": overflow_total,
     }
@@ -98,22 +102,23 @@ def main() -> int:
         f"Generated: `{metadata['generated_utc']}`",
         "",
         f"Precision: `{args.precision}`  ",
-        f"Samples per operation: `{args.samples}`  ",
+        f"Requested samples per operation: `{args.samples}`  ",
         f"Seed: `{args.seed}`",
         "",
-        "| Operation | Backend | Overflows | Max absolute | Max relative | Max angular (rad) | Max projective-scale error | Mismatches |",
-        "|---|---|---:|---:|---:|---:|---:|---:|",
+        "| Operation | Backend | Requested | Completed | Overflows | Max absolute | Max relative | Max angular (rad) | Max projective-scale error | Mismatches |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in typed_rows:
         markdown.append(
-            f"| {row['operation']} | {row['backend']} | {row['overflows']} | "
+            f"| {row['operation']} | {row['backend']} | {row['requested']} | "
+            f"{row['completed']} | {row['overflows']} | "
             f"{row['max_absolute']:.3e} | {row['max_relative']:.3e} | "
             f"{row['max_angular_radians']:.3e} | "
             f"{row['max_projective_scale_error']:.3e} | {row['mismatches']} |"
         )
     markdown.extend([
         "",
-        "Componentwise, angular, and projective-scale errors are computed on the same deterministic fixtures. Overflow counts are reported separately from numerical mismatches.",
+        "Componentwise, angular, and projective-scale errors are computed on deterministic fixtures. Checked fixed-point overflows are excluded from error statistics and reported separately.",
         "",
     ])
     (args.out_dir / "numerical_error.md").write_text(
