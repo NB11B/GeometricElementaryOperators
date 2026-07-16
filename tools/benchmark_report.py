@@ -17,21 +17,36 @@ from typing import Iterable
 
 COMPARE_RE = re.compile(r"^(?P<name>.{1,64}?)\s+(?P<value>[0-9]+(?:\.[0-9]+)?) ns/op$")
 HOST_RE = re.compile(r"^(?P<name>.{1,64}?)\s+iterations=.*?ns/op=(?P<value>[0-9]+(?:\.[0-9]+)?)$")
+MATRIX_RE = re.compile(
+    r"^GEO_BENCH_MATRIX\|operation=(?P<operation>[a-z0-9_]+)\|path=(?P<path>[a-z0-9_]+)$"
+)
 
 
-def run_one(executable: Path) -> dict[str, float]:
+def run_one(executable: Path) -> tuple[dict[str, float], list[dict[str, str]]]:
     completed = subprocess.run(
         [str(executable)], check=True, text=True, capture_output=True,
         env={**os.environ, "LC_ALL": "C"},
     )
     values: dict[str, float] = {}
+    matrix: list[dict[str, str]] = []
     for line in completed.stdout.splitlines():
-        match = COMPARE_RE.match(line) or HOST_RE.match(line)
-        if match:
-            values[match.group("name").strip()] = float(match.group("value"))
+        timing_match = COMPARE_RE.match(line) or HOST_RE.match(line)
+        if timing_match:
+            values[timing_match.group("name").strip()] = float(timing_match.group("value"))
+            continue
+        matrix_match = MATRIX_RE.match(line)
+        if matrix_match:
+            matrix.append({
+                "operation": matrix_match.group("operation"),
+                "path": matrix_match.group("path"),
+            })
     if not values:
         raise RuntimeError(f"no benchmark rows parsed from {executable}\n{completed.stdout}")
-    return values
+    if not matrix:
+        raise RuntimeError(f"no operation/path matrix parsed from {executable}\n{completed.stdout}")
+    if len({(row['operation'], row['path']) for row in matrix}) != len(matrix):
+        raise RuntimeError(f"duplicate operation/path matrix row from {executable}")
+    return values, matrix
 
 
 def summarize(samples_by_name: dict[str, list[float]]) -> list[dict[str, float | str | int]]:
@@ -54,7 +69,7 @@ def summarize(samples_by_name: dict[str, list[float]]) -> list[dict[str, float |
     return rows
 
 
-def markdown_report(metadata: dict, rows: list[dict]) -> str:
+def markdown_report(metadata: dict, matrix: list[dict], rows: list[dict]) -> str:
     lines = [
         "# Geometric Elementary Operators benchmark report",
         "",
@@ -68,11 +83,20 @@ def markdown_report(metadata: dict, rows: list[dict]) -> str:
         f"- Python: `{metadata['python']}`",
         f"- Repetitions per executable: `{metadata['repetitions']}`",
         "",
+        "## Exact operation/path matrix",
+        "",
+        "| Executable | Operation | Path |",
+        "|---|---|---|",
+    ]
+    for row in matrix:
+        lines.append(f"| {row['executable']} | {row['operation']} | {row['path']} |")
+    lines.extend([
+        "",
         "## Results",
         "",
         "| Benchmark | Samples | Min ns | Median ns | Mean ns | Max ns | Stddev ns | Spread % |",
         "|---|---:|---:|---:|---:|---:|---:|---:|",
-    ]
+    ])
     for row in rows:
         lines.append(
             f"| {row['benchmark']} | {row['samples']} | {row['min_ns']:.3f} | "
@@ -102,11 +126,23 @@ def main(argv: Iterable[str] | None = None) -> int:
             parser.error(f"missing executable: {executable}")
 
     samples_by_name: dict[str, list[float]] = defaultdict(list)
+    operation_path_matrix: list[dict[str, str]] = []
     for executable in args.executables:
         prefix = executable.stem
+        expected_matrix: list[dict[str, str]] | None = None
         for _ in range(args.repetitions):
-            for name, value in run_one(executable).items():
+            values, matrix = run_one(executable)
+            if expected_matrix is None:
+                expected_matrix = matrix
+            elif matrix != expected_matrix:
+                raise RuntimeError(f"operation/path matrix changed between runs for {executable}")
+            for name, value in values.items():
                 samples_by_name[f"{prefix}: {name}"].append(value)
+        assert expected_matrix is not None
+        operation_path_matrix.extend(
+            {"executable": prefix, "operation": row["operation"], "path": row["path"]}
+            for row in expected_matrix
+        )
 
     rows = summarize(samples_by_name)
     metadata = {
@@ -119,9 +155,15 @@ def main(argv: Iterable[str] | None = None) -> int:
         "executables": [str(path) for path in args.executables],
     }
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    payload = {"metadata": metadata, "results": rows}
+    payload = {
+        "metadata": metadata,
+        "operation_path_matrix": operation_path_matrix,
+        "results": rows,
+    }
     (args.out_dir / "benchmark_report.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    (args.out_dir / "benchmark_report.md").write_text(markdown_report(metadata, rows), encoding="utf-8")
+    (args.out_dir / "benchmark_report.md").write_text(
+        markdown_report(metadata, operation_path_matrix, rows), encoding="utf-8"
+    )
     with (args.out_dir / "benchmark_report.csv").open("w", newline="", encoding="utf-8") as handle:
         fieldnames = list(rows[0].keys()) if rows else ["benchmark"]
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
