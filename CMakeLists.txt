@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.14.0
+    VERSION 0.15.0
     LANGUAGES C
 )
 
@@ -10,6 +10,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 option(GEO_BUILD_TESTS "Build host-side verification tests" ON)
+option(GEO_BUILD_BENCHMARKS "Build host-side benchmarks" ON)
 option(GEO_USE_DOUBLE "Use double precision instead of float" ON)
 
 add_library(geo_kernel STATIC
@@ -26,6 +27,8 @@ add_library(geo_kernel STATIC
     src/banked.c
     src/lowering.c
     src/geb_witness.c
+    src/perf.c
+    src/fixed.c
 )
 
 target_include_directories(geo_kernel
@@ -101,4 +104,13 @@ if(GEO_BUILD_TESTS)
     add_executable(test_geb_witness tests/test_geb_witness.c)
     target_link_libraries(test_geb_witness PRIVATE geo_kernel m)
     add_test(NAME geb_witness COMMAND test_geb_witness)
+
+    add_executable(test_fixed tests/test_fixed.c)
+    target_link_libraries(test_fixed PRIVATE geo_kernel m)
+    add_test(NAME fixed COMMAND test_fixed)
+endif()
+
+if(GEO_BUILD_BENCHMARKS)
+    add_executable(bench_host benchmarks/bench_host.c)
+    target_link_libraries(bench_host PRIVATE geo_kernel m)
 endif()
