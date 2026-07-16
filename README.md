@@ -56,12 +56,15 @@ The preserved Milestone W package did not contain the original complete per-targ
 19. Static type-size and bank-memory reporting.
 20. ESP-IDF component and ESP32-S3 timing adapter.
 21. Configurable signed 32-bit Q-format arithmetic.
-22. Complete flat fixed-point GEB-36 program executor with checked projective normalization.
-23. Optional CUDA 13.x batched execution backend with a stable C ABI.
-24. Shared workload timing/error reports across direct, specialized, structured, fused, fixed, banked, and optional CUDA paths.
-25. Generated fixed-point RTL product, controller, and executable schedule datapaths with explicit overflow signaling.
-26. Standalone ESP32-S3 correctness, benchmark, and heap-stability soak application.
-27. Vendor-neutral ARM Cortex-M DWT cycle source for the portable benchmark API.
+22. Fixed scalar/geometric Omega, opposite-lane, banked, program, and `M2(R)` control execution.
+23. Complete flat fixed-point GEB-36 execution with checked projective normalization.
+24. Optional CUDA 13.x batched execution backend with a stable C ABI.
+25. Generated CUDA schedule kernels compiled from checked schedule JSON.
+26. Shared workload timing/error reports across direct, specialized, structured, fused, fixed, banked, and optional CUDA paths.
+27. Deterministic fixed-versus-floating numerical envelopes with overflow and projective-scale reporting.
+28. Generated fixed-point RTL product, controller, and executable schedule datapaths with explicit overflow signaling.
+29. Standalone ESP32-S3 correctness, benchmark, and heap-stability soak application.
+30. Vendor-neutral ARM Cortex-M DWT cycle source for the portable benchmark API.
 
 ## Host build and test
 
@@ -83,9 +86,9 @@ ctest --test-dir build-float --output-on-failure
 
 The public executor symbols `geo_struct_program_execute` and `geo_banked_execute` are emitted out of line for ABI compatibility. The `_impl` entry points remain available to existing source consumers.
 
-## Workload benchmarks and error reports
+## Workload benchmarks and numerical reports
 
-The shared CPU harness uses identical deterministic fixtures for every supported backend and reports correctness together with timing:
+The shared CPU harness uses deterministic fixtures for every supported backend and reports correctness together with timing:
 
 ```sh
 cmake -S . -B build-bench \
@@ -100,15 +103,25 @@ cmake --build build-bench --parallel
   --csv workload.csv
 ```
 
-Generate repeated-run CSV, JSON, and Markdown reports with minimum, P50, P95, P99, mean, maximum, standard deviation, absolute error, relative error, and mismatch counts:
+Generate repeated-run workload reports with minimum, P50, P95, P99, mean, maximum, standard deviation, absolute error, relative error, and mismatch counts:
 
 ```sh
 cmake --build build-bench --target workload_report
 ```
 
-Reports are written to `build-bench/workload-report/`. CUDA rows are added automatically when the build includes `GEO_BUILD_CUDA=ON` and a CUDA device is available.
+Generate the fixed-versus-floating numerical envelope:
 
-The older focused host and selected-backend executables remain available:
+```sh
+./build-bench/bench_numerical \
+  --samples 10000 \
+  --seed 1779033703 \
+  --csv numerical.csv
+cmake --build build-bench --target numerical_report
+```
+
+The numerical report records requested and completed samples, checked overflows, componentwise absolute/relative error, angular error, projective-scale error, and mismatches. Reports are written under `build-bench/workload-report/` and `build-bench/numerical-report/`.
+
+Focused benchmark executables remain available:
 
 ```sh
 ./build-bench/bench_host
@@ -132,7 +145,7 @@ cmake --build build-cuda --parallel
 ctest --test-dir build-cuda --output-on-failure
 ```
 
-The initial batched CUDA operations are:
+The handwritten batched CUDA backend supports:
 
 - `Cl(2,0)` addition;
 - geometric product;
@@ -140,6 +153,14 @@ The initial batched CUDA operations are:
 - vector dot;
 - vector wedge;
 - rotor action.
+
+The build also generates and compiles CUDA schedule kernels for addition, product, dot, wedge, and rotor action:
+
+```sh
+cmake --build build-cuda --target generate_cuda_schedules
+```
+
+`cuda_equivalence` tests the public batched C ABI. `cuda_schedule_equivalence` executes the generated launchers on the same operation semantics. Both tests return CTest skip code 77 when no CUDA device/driver is available, while the CUDA 13 compile job still builds every source.
 
 Run the CUDA event harness:
 
@@ -160,6 +181,8 @@ Validate memory access and races on a CUDA-capable host:
 ```sh
 compute-sanitizer --tool memcheck ./build-cuda/test_cuda
 compute-sanitizer --tool racecheck ./build-cuda/test_cuda
+compute-sanitizer --tool memcheck ./build-cuda/test_cuda_schedules
+compute-sanitizer --tool racecheck ./build-cuda/test_cuda_schedules
 ```
 
 Profile with current NVIDIA tools:
@@ -171,7 +194,7 @@ ncu --set full --target-processes all ./build-cuda/bench_cuda
 
 A CUDA compile job is not a GPU execution result. Published GPU claims must record the GPU model, compute capability, driver, exact CUDA 13.x update, and Compute Sanitizer result.
 
-## Fixed-point program backend
+## Fixed-point backends
 
 `include/geo/fixed.h` provides configurable signed 32-bit Q-format arithmetic. The default is Q16.16:
 
@@ -179,16 +202,14 @@ A CUDA compile job is not a GPU execution result. Published GPU claims must reco
 #define GEO_FIXED_FRACTION_BITS 16
 ```
 
-Supported fractional-bit counts are 1 through 30. The fixed layer includes checked conversion, multiplication, division, involutions, vector products, rotor action, all frozen GEB-36 targets, and a flat program executor in `include/geo/fixed_program.h`.
+Supported fractional-bit counts are 1 through 30. The fixed layer includes checked conversion, multiplication, division, involutions, vector products, rotor action, all frozen GEB-36 targets, and these execution surfaces:
 
-The fixed program executor:
+- `include/geo/fixed_program.h`: typed flat GEB-36 programs;
+- `include/geo/fixed_omega.h`: scalar/geometric Omega state and opposite lanes;
+- `include/geo/fixed_banked.h`: physically banked fixed execution;
+- `include/geo/fixed_control.h`: checked `M2(R)` routing control.
 
-- performs no allocation or recursion;
-- leaves a destination register unchanged when an instruction fails;
-- propagates overflow and divide-by-zero status;
-- rejects invalid targets, register references, types, and zero projective scales;
-- normalizes projective values only when a following operation consumes them;
-- promotes scalar results to scalar multivectors when required by a following GEB operation.
+The fixed executors perform no allocation or recursion, propagate overflow and divide-by-zero status, reject invalid register/type/scale inputs, and leave destination values unchanged on failure.
 
 ## ESP32-S3 / ESP-IDF
 
@@ -215,8 +236,6 @@ It runs deterministic float and fixed checks, reports memory and timing records,
 ## ARM Cortex-M DWT timing
 
 `include/geo/cortex_m_dwt.h` adapts the ARM Data Watchpoint and Trace cycle counter to `geo_cycle_source_t` without depending on a vendor SDK. The caller supplies the register addresses and core clock.
-
-CMSIS projects can bind it as follows:
 
 ```c
 geo_cortex_m_dwt_registers_t registers = {
@@ -266,11 +285,9 @@ python3 tools/generate_rtl_schedule.py \
   --schedule-json rtl/examples/rotor_action_schedule.json
 ```
 
-CI compiles and runs the generated C harnesses, simulates each SystemVerilog datapath with the same nominal and overflow vectors, and synthesizes every generated top. Fixed C and RTL share the same round-half-away-from-zero, overflow, and instruction-order contract.
+CI compiles and runs generated checked-C harnesses, simulates each SystemVerilog datapath with the same nominal and overflow vectors, and synthesizes every generated top. Fixed C and RTL share the same round-half-away-from-zero, overflow, and instruction-order contract.
 
 ## Flash, map, and stack reporting
-
-Generate GCC/Clang stack-usage files and benchmark linker maps:
 
 ```sh
 cmake -S . -B build-report \
