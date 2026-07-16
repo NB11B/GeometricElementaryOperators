@@ -84,31 +84,32 @@ geo_struct_value_t geo_struct_value_from_cl20(geo_cl20_t value);
 geo_struct_value_t geo_struct_value_from_scalar(geo_real_t value);
 geo_struct_value_t geo_struct_value_from_scaled_cl20(geo_scaled_cl20_t value);
 
-geo_status_t geo_struct_program_execute(
+geo_status_t geo_struct_program_execute_impl(
     const geo_struct_program_t *program,
     geo_struct_value_t *registers,
     size_t register_capacity
 );
 
-geo_status_t geo_struct_read_cl20(
-    const geo_struct_value_t *value,
-    geo_cl20_t *output
-);
+#ifndef GEO_STRUCTURED_PROGRAM_IMPLEMENTATION
+static inline geo_status_t geo_struct_program_execute(
+    const geo_struct_program_t *program,
+    geo_struct_value_t *registers,
+    size_t register_capacity
+) {
+    if (program == NULL || registers == NULL) return GEO_STATUS_NULL_ARGUMENT;
+    if (program->instruction_count != 0u && program->instructions == NULL) {
+        return GEO_STATUS_NULL_ARGUMENT;
+    }
+    return geo_struct_program_execute_impl(program, registers, register_capacity);
+}
+#else
+#define geo_struct_program_execute geo_struct_program_execute_impl
+#endif
 
-geo_status_t geo_struct_read_scalar(
-    const geo_struct_value_t *value,
-    geo_real_t *output
-);
-
-geo_status_t geo_struct_read_scaled_cl20(
-    const geo_struct_value_t *value,
-    geo_scaled_cl20_t *output
-);
-
-geo_status_t geo_struct_read_unipotent(
-    const geo_struct_value_t *value,
-    geo_unipotent_t *output
-);
+geo_status_t geo_struct_read_cl20(const geo_struct_value_t *value, geo_cl20_t *output);
+geo_status_t geo_struct_read_scalar(const geo_struct_value_t *value, geo_real_t *output);
+geo_status_t geo_struct_read_scaled_cl20(const geo_struct_value_t *value, geo_scaled_cl20_t *output);
+geo_status_t geo_struct_read_unipotent(const geo_struct_value_t *value, geo_unipotent_t *output);
 
 #ifdef __cplusplus
 }
