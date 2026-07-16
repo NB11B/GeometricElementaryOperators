@@ -2,7 +2,6 @@
 
 #include <math.h>
 
-/* Signed, one-based output blade index for each Euclidean Cl(3,0) basis product. */
 static const int8_t GEO_CL30_TABLE[8][8] = {
     { 1,  2,  3,  4,  5,  6,  7,  8},
     { 2,  1,  4,  3,  6,  5,  8,  7},
@@ -48,7 +47,6 @@ geo_cl30_t geo_cl30_mul(geo_cl30_t a, geo_cl30_t b) {
 }
 
 geo_cl30_t geo_cl30_reverse(geo_cl30_t value) {
-    /* Grades 2 and 3 change sign under reversion in three dimensions. */
     value.c[GEO_CL30_E12] = -value.c[GEO_CL30_E12];
     value.c[GEO_CL30_E13] = -value.c[GEO_CL30_E13];
     value.c[GEO_CL30_E23] = -value.c[GEO_CL30_E23];
@@ -58,8 +56,11 @@ geo_cl30_t geo_cl30_reverse(geo_cl30_t value) {
 
 bool geo_cl30_near(geo_cl30_t a, geo_cl30_t b, geo_real_t tolerance) {
     unsigned i;
+    const double t = (double)tolerance;
+    if (!isfinite(t) || t < 0.0) return false;
     for (i = 0u; i < 8u; ++i) {
-        if (fabs((double)(a.c[i] - b.c[i])) > (double)tolerance) return false;
+        const double difference = (double)a.c[i] - (double)b.c[i];
+        if (!isfinite(difference) || fabs(difference) > t) return false;
     }
     return true;
 }
