@@ -77,3 +77,58 @@ jobs:
             test.log
             benchmark.log
           if-no-files-found: ignore
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        precision: [double, float]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure sanitizer build
+        shell: bash
+        run: |
+          if [ "${{ matrix.precision }}" = "double" ]; then
+            USE_DOUBLE=ON
+          else
+            USE_DOUBLE=OFF
+          fi
+          CC=clang cmake \
+            -S . \
+            -B build-sanitize \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DGEO_BUILD_TESTS=ON \
+            -DGEO_BUILD_BENCHMARKS=OFF \
+            -DGEO_ENABLE_SANITIZERS=ON \
+            -DGEO_USE_DOUBLE="$USE_DOUBLE" \
+            2>&1 | tee sanitizer-configure.log
+
+      - name: Build sanitizer targets
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build build-sanitize --parallel 2>&1 | tee sanitizer-build.log
+
+      - name: Run sanitizer tests
+        shell: bash
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          set -o pipefail
+          ctest --test-dir build-sanitize --output-on-failure 2>&1 | tee sanitizer-test.log
+
+      - name: Upload sanitizer logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanitizer-${{ matrix.precision }}
+          path: |
+            sanitizer-configure.log
+            sanitizer-build.log
+            sanitizer-test.log
+          if-no-files-found: ignore
