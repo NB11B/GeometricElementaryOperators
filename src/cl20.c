@@ -38,21 +38,11 @@ geo_cl20_t geo_cl20_make(
 }
 
 geo_cl20_t geo_cl20_add(const geo_cl20_t a, const geo_cl20_t b) {
-    return geo_cl20_make(
-        a.scalar + b.scalar,
-        a.e1 + b.e1,
-        a.e2 + b.e2,
-        a.e12 + b.e12
-    );
+    return geo_cl20_make(a.scalar + b.scalar, a.e1 + b.e1, a.e2 + b.e2, a.e12 + b.e12);
 }
 
 geo_cl20_t geo_cl20_sub(const geo_cl20_t a, const geo_cl20_t b) {
-    return geo_cl20_make(
-        a.scalar - b.scalar,
-        a.e1 - b.e1,
-        a.e2 - b.e2,
-        a.e12 - b.e12
-    );
+    return geo_cl20_make(a.scalar - b.scalar, a.e1 - b.e1, a.e2 - b.e2, a.e12 - b.e12);
 }
 
 geo_cl20_t geo_cl20_neg(const geo_cl20_t value) {
@@ -60,35 +50,15 @@ geo_cl20_t geo_cl20_neg(const geo_cl20_t value) {
 }
 
 geo_cl20_t geo_cl20_scale(const geo_cl20_t value, const geo_real_t scale) {
-    return geo_cl20_make(
-        value.scalar * scale,
-        value.e1 * scale,
-        value.e2 * scale,
-        value.e12 * scale
-    );
+    return geo_cl20_make(value.scalar * scale, value.e1 * scale, value.e2 * scale, value.e12 * scale);
 }
 
 geo_cl20_t geo_cl20_mul(const geo_cl20_t a, const geo_cl20_t b) {
     return geo_cl20_make(
-        (a.scalar * b.scalar) +
-        (a.e1 * b.e1) +
-        (a.e2 * b.e2) -
-        (a.e12 * b.e12),
-
-        (a.scalar * b.e1) +
-        (a.e1 * b.scalar) -
-        (a.e2 * b.e12) +
-        (a.e12 * b.e2),
-
-        (a.scalar * b.e2) +
-        (a.e2 * b.scalar) +
-        (a.e1 * b.e12) -
-        (a.e12 * b.e1),
-
-        (a.scalar * b.e12) +
-        (a.e12 * b.scalar) +
-        (a.e1 * b.e2) -
-        (a.e2 * b.e1)
+        (a.scalar * b.scalar) + (a.e1 * b.e1) + (a.e2 * b.e2) - (a.e12 * b.e12),
+        (a.scalar * b.e1) + (a.e1 * b.scalar) - (a.e2 * b.e12) + (a.e12 * b.e2),
+        (a.scalar * b.e2) + (a.e2 * b.scalar) + (a.e1 * b.e12) - (a.e12 * b.e1),
+        (a.scalar * b.e12) + (a.e12 * b.scalar) + (a.e1 * b.e2) - (a.e2 * b.e1)
     );
 }
 
@@ -130,9 +100,14 @@ bool geo_cl20_near(
     const geo_cl20_t b,
     const geo_real_t tolerance
 ) {
-    return
-        fabs((double)(a.scalar - b.scalar)) <= (double)tolerance &&
-        fabs((double)(a.e1 - b.e1)) <= (double)tolerance &&
-        fabs((double)(a.e2 - b.e2)) <= (double)tolerance &&
-        fabs((double)(a.e12 - b.e12)) <= (double)tolerance;
+    const double t = (double)tolerance;
+    const double ds = (double)a.scalar - (double)b.scalar;
+    const double d1 = (double)a.e1 - (double)b.e1;
+    const double d2 = (double)a.e2 - (double)b.e2;
+    const double d12 = (double)a.e12 - (double)b.e12;
+    if (!isfinite(t) || t < 0.0 ||
+        !isfinite(ds) || !isfinite(d1) || !isfinite(d2) || !isfinite(d12)) {
+        return false;
+    }
+    return fabs(ds) <= t && fabs(d1) <= t && fabs(d2) <= t && fabs(d12) <= t;
 }
