@@ -2,6 +2,7 @@
 
 #include <limits.h>
 #include <math.h>
+#include <stddef.h>
 
 static int geo_fixed_in_range(int64_t value) {
     return value >= INT32_MIN && value <= INT32_MAX;
