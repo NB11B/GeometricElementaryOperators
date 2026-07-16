@@ -157,7 +157,7 @@ jobs:
           -DGEO_BUILD_BENCHMARKS=OFF
           -DGEO_USE_DOUBLE=ON
       - name: Build MSVC consumer
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Release --target test_abi_consumer --parallel
       - name: Run mandatory ABI consumer test
         run: ctest --test-dir build -C Release -R "^abi_consumer$" --output-on-failure
 
