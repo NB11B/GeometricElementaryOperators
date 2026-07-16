@@ -80,11 +80,10 @@ static geo_fixed_t geo_fixed_omega_constant_q30(int32_t value) {
     return (geo_fixed_t)value;
 #else
     const int shift = 30 - GEO_FIXED_FRACTION_BITS;
-    const int64_t rounded = geo_fixed_omega_round_divide(
+    return (geo_fixed_t)geo_fixed_omega_round_divide(
         (int64_t)value,
         INT64_C(1) << shift
     );
-    return (geo_fixed_t)rounded;
 #endif
 }
 
@@ -120,6 +119,7 @@ static geo_fixed_omega_status_t geo_fixed_omega_round_integer(
         (int64_t)value,
         geo_fixed_omega_scale()
     );
+
     if (output == NULL) return GEO_FIXED_OMEGA_NULL_ARGUMENT;
     if (rounded < INT32_MIN || rounded > INT32_MAX) {
         return GEO_FIXED_OMEGA_OVERFLOW;
@@ -143,8 +143,10 @@ static geo_fixed_omega_status_t geo_fixed_omega_scale_power_two(
 
     if (exponent >= 0) {
         if (exponent > 31) return GEO_FIXED_OMEGA_OVERFLOW;
-        result = (int64_t)value * (INT64_C(1) << exponent);
-        return geo_fixed_omega_checked(result, output);
+        return geo_fixed_omega_checked(
+            (int64_t)value * (INT64_C(1) << exponent),
+            output
+        );
     }
 
     if (exponent <= -63) {
@@ -223,6 +225,11 @@ geo_fixed_omega_status_t geo_fixed_eml_exp(
     geo_fixed_omega_status_t status;
 
     if (output == NULL) return GEO_FIXED_OMEGA_NULL_ARGUMENT;
+    if (input == 0) {
+        *output = one;
+        return GEO_FIXED_OMEGA_OK;
+    }
+
     arithmetic_status = geo_fixed_div(input, ln2, &scaled);
     if (arithmetic_status != GEO_FIXED_OK) {
         return geo_fixed_omega_from_arithmetic(arithmetic_status);
@@ -274,6 +281,10 @@ geo_fixed_omega_status_t geo_fixed_eml_log(
 
     if (output == NULL) return GEO_FIXED_OMEGA_NULL_ARGUMENT;
     if (input <= 0) return GEO_FIXED_OMEGA_LOG_DOMAIN;
+    if (input == one) {
+        *output = 0;
+        return GEO_FIXED_OMEGA_OK;
+    }
 
     raw = (uint32_t)input;
     while (raw != 0u) {
@@ -368,21 +379,22 @@ geo_fixed_omega_status_t geo_fixed_opposite_mul(
     geo_fixed_opposite_t right,
     geo_fixed_opposite_t *output
 ) {
-    geo_fixed_opposite_t temporary;
+    geo_fixed_opposite_t result;
     geo_fixed_status_t status;
 
     if (output == NULL) return GEO_FIXED_OMEGA_NULL_ARGUMENT;
-    status = geo_fixed_cl20_mul(left.forward, right.forward, &temporary.forward);
+    status = geo_fixed_cl20_mul(left.forward, right.forward, &result.forward);
     if (status != GEO_FIXED_OK) return geo_fixed_omega_from_arithmetic(status);
-    status = geo_fixed_cl20_mul(right.reverse, left.reverse, &temporary.reverse);
+    status = geo_fixed_cl20_mul(right.reverse, left.reverse, &result.reverse);
     if (status != GEO_FIXED_OK) return geo_fixed_omega_from_arithmetic(status);
-    *output = temporary;
+    *output = result;
     return GEO_FIXED_OMEGA_OK;
 }
 
 geo_fixed_state_t geo_fixed_state_zero(void) {
     const geo_fixed_cl20_t zero = {0, 0, 0, 0};
     geo_fixed_state_t state;
+
     state.scalar = 0;
     state.geometric.forward = zero;
     state.geometric.reverse = zero;
