@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.9.0
+    VERSION 0.10.0
     LANGUAGES C
 )
 
@@ -23,6 +23,7 @@ add_library(geo_kernel STATIC
     src/optimizer.c
     src/folding.c
     src/banked.c
+    src/lowering.c
 )
 
 target_include_directories(geo_kernel
@@ -78,4 +79,8 @@ if(GEO_BUILD_TESTS)
     add_executable(test_banked tests/test_banked.c)
     target_link_libraries(test_banked PRIVATE geo_kernel m)
     add_test(NAME banked COMMAND test_banked)
+
+    add_executable(test_lowering tests/test_lowering.c)
+    target_link_libraries(test_lowering PRIVATE geo_kernel m)
+    add_test(NAME lowering COMMAND test_lowering)
 endif()
