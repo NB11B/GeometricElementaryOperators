@@ -24,7 +24,7 @@ The implementation is designed for microcontrollers and eventual hardware realiz
 
 ## Current status
 
-The repository now contains a complete reference reconstruction of the frozen GEB-36 basis:
+The repository contains a complete reference reconstruction of the frozen GEB-36 basis:
 
 - 6 targets execute as direct compiled Omega trees;
 - 30 targets execute through compiler-visible enlarged-representation programs;
@@ -52,33 +52,12 @@ The preserved Milestone W package did not contain the original complete per-targ
 15. Rational projective-scale propagation.
 16. Routing-state elision.
 17. Complete 36-target reconstructed execution coverage.
+18. Portable cycle/timer abstraction and benchmark API.
+19. Static type-size and bank-memory reporting.
+20. ESP-IDF component and ESP32-S3 timing adapter.
+21. Configurable Q-format fixed-point arithmetic and fixed `Cl(2,0)` product.
 
-## Execution forms
-
-### Omega trees
-
-Examples include:
-
-- `Omega(e1,e2)` for the pseudoscalar;
-- `Omega(A,B)` for the geometric product;
-- the opposite output of `Omega(A,B)` for the reverse product;
-- `Omega(Omega(R,x),reverse(R))` for rotor action;
-- `Omega(R1,R2)` for rotor composition;
-- `Omega(Omega(T,x),reverse(T))` for supplied sandwich transforms.
-
-### Enlarged-representation programs
-
-The structured bytecode exposes the proof representation explicitly:
-
-- terminals for constants and basis values;
-- unary involutions and grade projections;
-- unipotent composition for addition and subtraction;
-- ordered-product and Hadamard paths for dot, wedge, commutator, and anticommutator;
-- scalar extraction and projective numerators;
-- deferred normalization;
-- dual, rotor norm, and translation-unipotent operations.
-
-## Build
+## Build and test
 
 ```sh
 cmake -S . -B build
@@ -94,16 +73,84 @@ cmake --build build-float
 ctest --test-dir build-float --output-on-failure
 ```
 
-## Next stage
+## Host benchmarks
 
-The project now moves from closure reconstruction to embedded measurement:
+```sh
+cmake -S . -B build-bench \
+  -DGEO_BUILD_BENCHMARKS=ON \
+  -DGEO_USE_DOUBLE=OFF
+cmake --build build-bench --config Release
+./build-bench/bench_host
+```
 
-1. Confirm all GCC and Clang CI builds.
-2. Add deterministic benchmark programs for every operation family.
-3. Measure instruction count, runtime, flash, stack, and static RAM.
-4. Add ESP32-S3 and ARM Cortex-M build targets.
-5. Compare direct GEB functions, unified-state execution, and banked execution.
-6. Add fixed-point and RTL-oriented backends.
+The host benchmark currently reports:
+
+- `geo_real_t`, `geo_cl20_t`, opposite-state, unified-state, and banked-register sizes;
+- flat and banked instruction sizes;
+- structured-register size;
+- `Cl(2,0)` product time;
+- direct rotor-action time.
+
+The benchmark API also accepts banked and structured programs, so direct-versus-compiled comparisons can use the same timing source.
+
+## Flash, map, and stack reporting
+
+Generate GCC/Clang stack-usage files and a benchmark linker map:
+
+```sh
+cmake -S . -B build-report \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DGEO_USE_DOUBLE=OFF \
+  -DGEO_ENABLE_STACK_USAGE=ON \
+  -DGEO_ENABLE_LINK_MAP=ON
+cmake --build build-report
+```
+
+This emits:
+
+- compiler `.su` files for per-function static stack estimates;
+- `build-report/bench_host.map` for section and symbol accounting;
+- the normal benchmark memory report for runtime data structures.
+
+Standard platform tools such as `size`, `nm`, and `objdump` can then be applied to `bench_host` and `libgeo_kernel.a`.
+
+## ESP32-S3 / ESP-IDF
+
+The `ports/esp32` directory is an ESP-IDF component. Add it to an ESP-IDF project's component search path, include `geo_esp32.h`, and call:
+
+```c
+geo_esp32_print_memory_report();
+geo_esp32_run_smoke_benchmarks(100000);
+```
+
+The ESP32 adapter uses `esp_timer_get_time()` as a 1 MHz monotonic timing source and reports microseconds per operation through `ESP_LOGI`.
+
+## Fixed-point backend
+
+`include/geo/fixed.h` provides a configurable signed 32-bit Q-format backend. The default is Q16.16:
+
+```c
+#define GEO_FIXED_FRACTION_BITS 16
+```
+
+The current fixed-point layer includes:
+
+- conversion to and from `double`;
+- checked multiply and divide;
+- overflow and divide-by-zero status;
+- a complete fixed-point `Cl(2,0)` geometric product;
+- basis-product tests for `e1*e2=e12` and `e2*e1=-e12`.
+
+## Performance phase
+
+The next measurement expansion is workload-level rather than architectural:
+
+1. Add benchmark fixtures for all major GEB operation families.
+2. Compare direct functions, unified Omega bytecode, structured bytecode, and banked execution on identical inputs.
+3. Record flash, static RAM, stack, cycles, and normalization counts on ESP32-S3.
+4. Add ARM Cortex-M DWT cycle-counter support.
+5. Quantify float versus Q-format error and throughput.
+6. Generate RTL-oriented operation schedules from the optimized instruction stream.
 
 ## Design constraints
 
