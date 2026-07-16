@@ -156,6 +156,44 @@ jobs:
       - name: Build standalone component validation
         run: cmake --build build-esp32-component --parallel
 
+  esp32-s3-application:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v6.0.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Report ESP-IDF version
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py --version | tee esp-idf-version.log
+      - name: Configure ESP32-S3 target
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          cd examples/esp32_s3
+          idf.py set-target esp32s3 2>&1 | tee ../../esp32-configure.log
+      - name: Build ESP32-S3 application
+        shell: bash
+        run: |
+          set -o pipefail
+          . "$IDF_PATH/export.sh"
+          cd examples/esp32_s3
+          idf.py build 2>&1 | tee ../../esp32-build.log
+      - name: Upload ESP32-S3 build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-s3-idf-6.0.1
+          path: |
+            esp-idf-version.log
+            esp32-configure.log
+            esp32-build.log
+            examples/esp32_s3/build/*.bin
+            examples/esp32_s3/build/*.elf
+            examples/esp32_s3/build/*.map
+            examples/esp32_s3/build/flasher_args.json
+          if-no-files-found: ignore
+
   cuda-13-compile:
     runs-on: ubuntu-latest
     container: nvidia/cuda:13.0.2-devel-ubuntu24.04
@@ -186,6 +224,10 @@ jobs:
           cmake --build build-cuda --target generate_cuda_schedules 2>&1 | tee cuda-schedules.log
           test -s build-cuda/cuda-schedules/cuda_schedule_manifest.json
           test "$(find build-cuda/cuda-schedules -name 'geo_cuda_schedule_*.cu' | wc -l)" -eq 5
+      - name: Run CUDA build tests without a device
+        run: |
+          set -o pipefail
+          ctest --test-dir build-cuda --output-on-failure 2>&1 | tee cuda-test.log
       - name: Upload CUDA compile artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -196,6 +238,7 @@ jobs:
             cuda-configure.log
             cuda-build.log
             cuda-schedules.log
+            cuda-test.log
             build-cuda/cuda-schedules/*.h
             build-cuda/cuda-schedules/*.cu
             build-cuda/cuda-schedules/cuda_schedule_manifest.json
