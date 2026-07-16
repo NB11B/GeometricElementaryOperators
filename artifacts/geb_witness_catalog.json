@@ -1,9 +1,9 @@
 {
-  "version": 2,
+  "version": 3,
   "source": {
     "milestone": "W",
     "preserved_report": "artifacts/milestone_w_unified_operator.json",
-    "note": "The preserved package did not include the complete per-target witness corpus. Omega-only entries are reconstructed trees. Addition and Jordan/Lie entries are explicit enlarged-representation programs matching the paper's unipotent and Hadamard constructions."
+    "note": "The preserved package did not include the complete per-target witness corpus. Omega-only entries are reconstructed trees. Addition, Jordan/Lie, metric, and projective entries are explicit enlarged-representation programs matching the paper's constructions."
   },
   "operator": "Omega((s,X),(t,Y))=(exp(s)-log(t),X*Y)",
   "omega_witnesses": [
@@ -20,18 +20,25 @@
     {"target_id": 18, "name": "vector_dot", "program": ["ordered(A,B)=(AB,BA)", "HadamardExact", "select_symmetric"], "expected": "(AB+BA)/2"},
     {"target_id": 19, "name": "vector_wedge", "program": ["ordered(A,B)=(AB,BA)", "HadamardExact", "select_antisymmetric"], "expected": "(AB-BA)/2"},
     {"target_id": 20, "name": "commutator", "program": ["ordered(A,B)=(AB,BA)", "HadamardExact", "select_antisymmetric"], "expected": "(AB-BA)/2"},
-    {"target_id": 21, "name": "anticommutator", "program": ["ordered(A,B)=(AB,BA)", "HadamardExact", "select_symmetric"], "expected": "(AB+BA)/2"}
+    {"target_id": 21, "name": "anticommutator", "program": ["ordered(A,B)=(AB,BA)", "HadamardExact", "select_symmetric"], "expected": "(AB+BA)/2"},
+    {"target_id": 22, "name": "vector_norm_squared", "program": ["vector_norm_squared(A)"], "expected": "A dot A"},
+    {"target_id": 23, "name": "distance_squared", "program": ["A-B", "vector_norm_squared"], "expected": "(A-B) dot (A-B)"},
+    {"target_id": 24, "name": "projection_numerator", "program": ["dot(A,B)", "scale(B)"], "expected": "(A dot B)B", "closure": "projective_scaled"},
+    {"target_id": 25, "name": "rejection_numerator", "program": ["norm2(B)A", "projection_numerator", "subtract"], "expected": "(B dot B)A-(A dot B)B", "closure": "projective_scaled"},
+    {"target_id": 26, "name": "reflection_numerator", "program": ["norm2(B)A", "2*projection_numerator", "subtract"], "expected": "(B dot B)A-2(A dot B)B", "closure": "projective_scaled"},
+    {"target_id": 35, "name": "vector_inverse_projective", "program": ["retain vector representative", "defer reciprocal norm"], "expected": "A up to scalar", "closure": "projective_scaled"},
+    {"target_id": 36, "name": "angle_cosine_numerator", "program": ["dot(A,B)"], "expected": "A dot B", "closure": "projective_scaled"}
   ],
   "coverage": {
     "omega_compiled_targets": 6,
-    "structured_compiled_targets": 6,
-    "total_reconstructed_targets": 12,
+    "structured_compiled_targets": 13,
+    "total_reconstructed_targets": 19,
     "total_frozen_targets": 36,
     "next_reconstruction_group": [
-      "constants and involutions through terminal and routing constructions",
-      "norm and distance through shared products and grade extraction",
-      "projective numerators through scale-aware structured programs",
-      "metric targets through scalar injection and normalization"
+      "constants and basis terminals",
+      "involutions and grade projections through carried lanes and routing",
+      "dual, even projection, odd projection, rotor norm squared, and translation unipotent",
+      "exact normalized metric operations through scalar EML injection"
     ]
   }
 }
