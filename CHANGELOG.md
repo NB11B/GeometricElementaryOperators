@@ -9,8 +9,11 @@ All notable changes are recorded here. Release compatibility follows `docs/RELEA
 - optional CUDA Toolkit 13.x backend with a stable C ABI;
 - batched CUDA addition, geometric product, reverse, vector dot, vector wedge, and rotor action;
 - deterministic CPU/GPU equivalence tests and a CUDA-event benchmark harness;
+- generated CUDA schedule kernels compiled from the same checked schedule JSON used by RTL;
 - complete flat fixed-point GEB-36 program execution with checked type, register, overflow, divide, and projective-scale handling;
-- shared cross-backend workload timing and numerical-error reports;
+- fixed-point scalar/geometric Omega state, opposite-lane propagation, banked execution, and `M2(R)` routing control;
+- shared cross-backend workload timing reports with P50/P95/P99 statistics;
+- deterministic fixed-versus-floating numerical envelopes with component, angular, scale, overflow, and mismatch reporting;
 - standalone ESP32-S3 correctness, timing, memory, and heap-stability application;
 - executable fixed-point schedule generation for C and SystemVerilog;
 - schedule-level fixed C/RTL nominal and overflow equivalence vectors;
@@ -24,12 +27,14 @@ All notable changes are recorded here. Release compatibility follows `docs/RELEA
 - rejected NaN and non-finite embedded EML inputs with explicit status;
 - added fixed-product and accumulation overflow signaling to generated RTL;
 - invalidated RTL outputs when overflow is asserted;
-- corrected benchmark labels that overstated generated or complete backend coverage.
+- corrected benchmark labels that overstated generated or complete backend coverage;
+- corrected the numerical wedge fixture to compare the full bivector result;
+- made fixed-control validation portable across every supported Q1 through Q30 configuration.
 
 ### Validation
 
 - release-blocker changes passed the original 13-job host/sanitizer/Q-format/ESP32/RTL matrix before the expanded workflow was introduced;
-- expanded CUDA, workload, fixed-program, Cortex-M, and schedule-equivalence validation remains required on the final candidate commit;
+- the final candidate requires the expanded host, sanitizer, Q-format, ESP32, CUDA 13 compile, generated CUDA schedule, numerical-envelope, and RTL-equivalence matrix;
 - physical CUDA and ESP32-S3 results must be attached before hardware performance claims are published.
 
 ## 0.18.1
