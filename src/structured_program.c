@@ -252,6 +252,72 @@ geo_status_t geo_struct_program_execute(
                 }
                 break;
 
+            case GEO_STRUCT_OP_CL20_REVERSE:
+                status = geo_struct_require_kind(&left, GEO_STRUCT_VALUE_CL20);
+                if (status != GEO_STATUS_OK) return status;
+                result = geo_struct_value_from_cl20(geo_cl20_reverse(left.as.cl20));
+                break;
+
+            case GEO_STRUCT_OP_CL20_GRADE_INVOLUTION:
+                status = geo_struct_require_kind(&left, GEO_STRUCT_VALUE_CL20);
+                if (status != GEO_STATUS_OK) return status;
+                result = geo_struct_value_from_cl20(geo_cl20_grade_involution(left.as.cl20));
+                break;
+
+            case GEO_STRUCT_OP_CL20_CLIFFORD_CONJUGATE:
+                status = geo_struct_require_kind(&left, GEO_STRUCT_VALUE_CL20);
+                if (status != GEO_STATUS_OK) return status;
+                result = geo_struct_value_from_cl20(geo_cl20_clifford_conjugate(left.as.cl20));
+                break;
+
+            case GEO_STRUCT_OP_PROJECT_SCALAR:
+                status = geo_struct_require_kind(&left, GEO_STRUCT_VALUE_CL20);
+                if (status != GEO_STATUS_OK) return status;
+                result = geo_struct_value_from_cl20(geo_cl20_project(left.as.cl20, GEO_GRADE_SCALAR));
+                break;
+
+            case GEO_STRUCT_OP_PROJECT_VECTOR:
+                status = geo_struct_require_kind(&left, GEO_STRUCT_VALUE_CL20);
+                if (status != GEO_STATUS_OK) return status;
+                result = geo_struct_value_from_cl20(geo_cl20_project(left.as.cl20, GEO_GRADE_VECTOR));
+                break;
+
+            case GEO_STRUCT_OP_PROJECT_BIVECTOR:
+                status = geo_struct_require_kind(&left, GEO_STRUCT_VALUE_CL20);
+                if (status != GEO_STATUS_OK) return status;
+                result = geo_struct_value_from_cl20(geo_cl20_project(left.as.cl20, GEO_GRADE_BIVECTOR));
+                break;
+
+            case GEO_STRUCT_OP_PROJECT_EVEN:
+                status = geo_struct_require_kind(&left, GEO_STRUCT_VALUE_CL20);
+                if (status != GEO_STATUS_OK) return status;
+                result = geo_struct_value_from_cl20(
+                    geo_cl20_project(left.as.cl20, (uint8_t)(GEO_GRADE_SCALAR | GEO_GRADE_BIVECTOR))
+                );
+                break;
+
+            case GEO_STRUCT_OP_PROJECT_ODD:
+                status = geo_struct_require_kind(&left, GEO_STRUCT_VALUE_CL20);
+                if (status != GEO_STATUS_OK) return status;
+                result = geo_struct_value_from_cl20(geo_cl20_project(left.as.cl20, GEO_GRADE_VECTOR));
+                break;
+
+            case GEO_STRUCT_OP_DUAL:
+                status = geo_struct_require_kind(&left, GEO_STRUCT_VALUE_CL20);
+                if (status != GEO_STATUS_OK) return status;
+                result = geo_struct_value_from_cl20(
+                    geo_cl20_mul(left.as.cl20, geo_cl20_neg(geo_cl20_basis_e12()))
+                );
+                break;
+
+            case GEO_STRUCT_OP_ROTOR_NORM_SQUARED:
+                status = geo_struct_require_kind(&left, GEO_STRUCT_VALUE_CL20);
+                if (status != GEO_STATUS_OK) return status;
+                result = geo_struct_value_from_scalar(
+                    geo_cl20_mul(left.as.cl20, geo_cl20_reverse(left.as.cl20)).scalar
+                );
+                break;
+
             default:
                 return GEO_STATUS_BAD_OPCODE;
         }
@@ -289,5 +355,15 @@ geo_status_t geo_struct_read_scaled_cl20(
     if (value == NULL || output == NULL) return GEO_STATUS_NULL_ARGUMENT;
     if (value->kind != (uint8_t)GEO_STRUCT_VALUE_SCALED_CL20) return GEO_STATUS_BAD_OPCODE;
     *output = value->as.scaled_cl20;
+    return GEO_STATUS_OK;
+}
+
+geo_status_t geo_struct_read_unipotent(
+    const geo_struct_value_t *value,
+    geo_unipotent_t *output
+) {
+    if (value == NULL || output == NULL) return GEO_STATUS_NULL_ARGUMENT;
+    if (value->kind != (uint8_t)GEO_STRUCT_VALUE_UNIPOTENT) return GEO_STATUS_BAD_OPCODE;
+    *output = value->as.unipotent;
     return GEO_STATUS_OK;
 }
