@@ -12,6 +12,10 @@ extern "C" {
 #define GEO_FIXED_FRACTION_BITS 16
 #endif
 
+#if GEO_FIXED_FRACTION_BITS < 1 || GEO_FIXED_FRACTION_BITS > 30
+#error "GEO_FIXED_FRACTION_BITS must be in the supported range 1..30 for signed 32-bit storage"
+#endif
+
 typedef int32_t geo_fixed_t;
 
 typedef struct {
@@ -41,7 +45,20 @@ geo_fixed_status_t geo_fixed_cl20_mul(
     geo_fixed_cl20_t *output
 );
 
+/* Compatibility helper. For exact error reporting use the checked form. */
 geo_fixed_cl20_t geo_fixed_cl20_reverse(geo_fixed_cl20_t value);
+geo_fixed_status_t geo_fixed_cl20_reverse_checked(
+    geo_fixed_cl20_t value,
+    geo_fixed_cl20_t *output
+);
+geo_fixed_status_t geo_fixed_cl20_grade_involution_checked(
+    geo_fixed_cl20_t value,
+    geo_fixed_cl20_t *output
+);
+geo_fixed_status_t geo_fixed_cl20_clifford_conjugate_checked(
+    geo_fixed_cl20_t value,
+    geo_fixed_cl20_t *output
+);
 geo_fixed_status_t geo_fixed_vector_dot(
     geo_fixed_cl20_t a,
     geo_fixed_cl20_t b,
