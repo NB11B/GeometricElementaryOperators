@@ -39,6 +39,7 @@ add_library(geo_kernel STATIC
     src/perf.c
     src/fixed.c
     src/fixed_geb36.c
+    src/fixed_program.c
     src/native_generated.c
 )
 
@@ -138,6 +139,7 @@ if(GEO_BUILD_TESTS)
         fixed_extended
         safety
         fixed_geb36
+        fixed_program
         native_generated
         release_hardening
     )
