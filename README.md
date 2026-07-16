@@ -23,6 +23,7 @@ The implementation is designed for microcontrollers and eventual hardware realiz
 - optional scalar EML lane;
 - flat instruction programs for deterministic execution;
 - explicit GEB-36 reference API and closure manifest;
+- fixed-size witness-tree validation and compilation;
 - desktop verification and embedded backends.
 
 ## Implemented kernel layers
@@ -37,15 +38,30 @@ The implementation is designed for microcontrollers and eventual hardware realiz
 8. Generative control algebra `Gc(X,Y)=XY-X` over `M2(R)`.
 9. Complete 36-target GEB reference API.
 10. Machine-readable GEB-36 closure manifest.
+11. Topologically ordered witness-tree representation.
+12. Iterative witness validation, register allocation, and lowering to Omega bytecode.
+
+## Witness compiler
+
+A witness tree is stored as a fixed array of topologically ordered nodes. Terminal nodes map to caller-preloaded registers. Each Omega node references only earlier nodes and is lowered to one flat `GEO_OPCODE_OMEGA` instruction.
+
+The compiler requires caller-owned buffers:
+
+- instruction storage;
+- node-to-register mapping storage;
+- runtime register storage.
+
+It performs no heap allocation and no recursive traversal. The JSON interchange definition is available at `artifacts/witness_tree_schema.json`.
 
 ## Remaining milestones
 
-1. Import and execute verified Omega witness trees.
-2. Lower witness trees into typed flat programs.
-3. Add lane-liveness, scale-propagation, constant-folding, and routing-elision passes.
-4. Benchmark direct GEB operations against compiled Omega programs.
-5. Add ESP32-S3 and ARM Cortex-M targets.
-6. Add fixed-point and RTL-oriented backends.
+1. Import the verified witness-tree artifacts produced during operator discovery.
+2. Attach terminal type, routing, and expected-scale metadata to each imported tree.
+3. Add lane-liveness, scale-propagation, constant-folding, subtree-sharing, and routing-elision passes.
+4. Reproduce each GEB-36 target through compiled Omega programs and compare against the direct reference API.
+5. Benchmark direct GEB operations against compiled Omega programs.
+6. Add ESP32-S3 and ARM Cortex-M targets.
+7. Add fixed-point and RTL-oriented backends.
 
 ## Build
 
