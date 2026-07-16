@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Generate portable C geometric-algebra kernels for Cl(p,q).
-
-The generated implementation uses bit-mask blades and a frozen multiplication
-lookup table, making it suitable for reference validation and subsequent
-specialization into unrolled kernels.
-"""
+"""Generate portable C geometric-algebra kernels for Cl(p,q)."""
 from __future__ import annotations
 
 import argparse
@@ -142,8 +137,11 @@ static const signed char GEO_REVERSE_SIGNS[{blades}] = {{{reverse_text}}};
 
 bool {prefix}_near({prefix}_t a, {prefix}_t b, geo_real_t tolerance) {{
     size_t i;
+    const double t = (double)tolerance;
+    if (!isfinite(t) || t < 0.0) return false;
     for (i = 0u; i < {blades}u; ++i) {{
-        if (fabs((double)(a.c[i] - b.c[i])) > (double)tolerance) return false;
+        const double difference = (double)a.c[i] - (double)b.c[i];
+        if (!isfinite(difference) || fabs(difference) > t) return false;
     }}
     return true;
 }}
@@ -159,9 +157,7 @@ def manifest(p: int, q: int, prefix: str) -> dict:
         "dimension": n,
         "blade_count": blades,
         "blades": [{"mask": i, "name": blade_name(i, n), "grade": grade(i)} for i in range(blades)],
-        "multiplication": [
-            [product_sign(i, j, p, q) for j in range(blades)] for i in range(blades)
-        ],
+        "multiplication": [[product_sign(i, j, p, q) for j in range(blades)] for i in range(blades)],
     }
 
 
