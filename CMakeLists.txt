@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.16.1
+    VERSION 0.17.0
     LANGUAGES C
 )
 
@@ -36,6 +36,7 @@ add_library(geo_kernel STATIC
     src/geb_witness.c
     src/perf.c
     src/fixed.c
+    src/fixed_geb36.c
 )
 
 target_include_directories(geo_kernel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -74,6 +75,8 @@ function(geo_link_target target_name)
     endif()
 endfunction()
 
+find_package(Python3 COMPONENTS Interpreter)
+
 if(GEO_BUILD_TESTS)
     enable_testing()
 
@@ -97,11 +100,22 @@ if(GEO_BUILD_TESTS)
         advanced
         fixed_extended
         safety
+        fixed_geb36
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})
         add_test(NAME ${test_name} COMMAND test_${test_name})
     endforeach()
+
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME generators
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_generators.py
+        )
+        set_tests_properties(generators PROPERTIES
+            ENVIRONMENT "CC=${CMAKE_C_COMPILER}"
+        )
+    endif()
 endif()
 
 if(GEO_BUILD_BENCHMARKS)
@@ -115,4 +129,38 @@ if(GEO_BUILD_BENCHMARKS)
         target_link_options(bench_host PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_host.map")
         target_link_options(bench_compare PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_compare.map")
     endif()
+
+    if(Python3_Interpreter_FOUND)
+        add_custom_target(benchmark_report
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/benchmark_report.py
+                $<TARGET_FILE:bench_host>
+                $<TARGET_FILE:bench_compare>
+                --repetitions 9
+                --out-dir ${CMAKE_CURRENT_BINARY_DIR}/benchmark-report
+            DEPENDS bench_host bench_compare
+            VERBATIM
+        )
+    endif()
+endif()
+
+if(Python3_Interpreter_FOUND)
+    add_custom_target(generate_cl30
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_clpq.py
+            --p 3 --q 0
+            --prefix generated_cl30
+            --out-dir ${CMAKE_CURRENT_BINARY_DIR}/generated-cl30
+            --self-test
+        VERBATIM
+    )
+
+    add_custom_target(generate_rtl
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_rtl.py
+            --out-dir ${CMAKE_CURRENT_BINARY_DIR}/rtl
+            --schedule-json ${CMAKE_CURRENT_SOURCE_DIR}/rtl/examples/rotor_action_schedule.json
+            --self-test
+        VERBATIM
+    )
 endif()
