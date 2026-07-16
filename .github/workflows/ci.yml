@@ -58,6 +58,14 @@ jobs:
           set -o pipefail
           ctest --test-dir build --output-on-failure 2>&1 | tee test.log
 
+      - name: Run comparison benchmarks
+        if: matrix.compiler == 'gcc' && matrix.precision == 'float'
+        shell: bash
+        run: |
+          set -o pipefail
+          ./build/bench_host 2>&1 | tee benchmark.log
+          ./build/bench_compare 2>&1 | tee -a benchmark.log
+
       - name: Upload diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -67,4 +75,5 @@ jobs:
             configure.log
             build.log
             test.log
+            benchmark.log
           if-no-files-found: ignore
