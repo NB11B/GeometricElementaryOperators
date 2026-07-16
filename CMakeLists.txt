@@ -47,6 +47,8 @@ add_library(geo_kernel STATIC
     src/fixed.c
     src/fixed_geb36.c
     src/fixed_program.c
+    src/fixed_omega.c
+    src/fixed_banked.c
     src/native_generated.c
 )
 
@@ -147,6 +149,8 @@ if(GEO_BUILD_TESTS)
         safety
         fixed_geb36
         fixed_program
+        fixed_omega
+        fixed_banked
         cortex_m_dwt
         native_generated
         release_hardening
