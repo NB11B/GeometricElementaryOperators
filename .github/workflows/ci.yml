@@ -23,6 +23,7 @@ jobs:
       - name: Configure
         shell: bash
         run: |
+          set -o pipefail
           if [ "${{ matrix.precision }}" = "double" ]; then USE_DOUBLE=ON; else USE_DOUBLE=OFF; fi
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGEO_BUILD_TESTS=ON \
             -DGEO_BUILD_BENCHMARKS=ON -DGEO_USE_DOUBLE="$USE_DOUBLE" 2>&1 | tee configure.log
@@ -87,6 +88,7 @@ jobs:
       - name: Configure sanitizer build
         shell: bash
         run: |
+          set -o pipefail
           if [ "${{ matrix.precision }}" = "double" ]; then USE_DOUBLE=ON; else USE_DOUBLE=OFF; fi
           CC=clang cmake -S . -B build-sanitize -DCMAKE_BUILD_TYPE=Debug \
             -DGEO_BUILD_TESTS=ON -DGEO_BUILD_BENCHMARKS=ON \
@@ -97,15 +99,24 @@ jobs:
         run: |
           set -o pipefail
           cmake --build build-sanitize --parallel 2>&1 | tee sanitizer-build.log
-      - name: Run sanitizer tests and benchmark regressions
+      - name: Run sanitizer tests
         shell: bash
         env:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: |
           set -o pipefail
-          ctest --test-dir build-sanitize --output-on-failure 2>&1 | tee sanitizer-test.log
-          ./build-sanitize/bench_selected_backends 2>&1 | tee sanitizer-benchmark.log
+          ctest --test-dir build-sanitize --output-on-failure \
+            -E '^selected_path_benchmark$' 2>&1 | tee sanitizer-test.log
+      - name: Run selected-path benchmark once under sanitizers
+        shell: bash
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          set -o pipefail
+          ctest --test-dir build-sanitize --output-on-failure \
+            -R '^selected_path_benchmark$' 2>&1 | tee sanitizer-benchmark.log
           ./build-sanitize/bench_numerical --samples 1024 --seed 1779033703 \
             2>&1 | tee sanitizer-numerical.log
       - name: Upload sanitizer logs
@@ -164,11 +175,13 @@ jobs:
       - name: Report ESP-IDF version
         shell: bash
         run: |
+          set -o pipefail
           . "$IDF_PATH/export.sh"
           idf.py --version | tee esp-idf-version.log
       - name: Configure ESP32-S3 target
         shell: bash
         run: |
+          set -o pipefail
           . "$IDF_PATH/export.sh"
           cd examples/esp32_s3
           idf.py set-target esp32s3 2>&1 | tee ../../esp32-configure.log
@@ -194,6 +207,22 @@ jobs:
             examples/esp32_s3/build/flasher_args.json
           if-no-files-found: ignore
 
+  windows-abi-consumer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure MSVC consumer build
+        run: >-
+          cmake -S . -B build
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_CUDA=OFF
+          -DGEO_USE_DOUBLE=ON
+      - name: Build MSVC consumer
+        run: cmake --build build --config Release --target test_abi_consumer --parallel
+      - name: Run mandatory ABI consumer test
+        run: ctest --test-dir build -C Release -R "^abi_consumer$" --output-on-failure
+
   cuda-13-compile:
     runs-on: ubuntu-latest
     container: nvidia/cuda:13.0.2-devel-ubuntu24.04
@@ -209,9 +238,12 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             cmake ninja-build g++ python3 ca-certificates
       - name: Report CUDA compiler
-        run: nvcc --version | tee cuda-version.log
+        run: |
+          set -o pipefail
+          nvcc --version | tee cuda-version.log
       - name: Configure CUDA 13 build
         run: |
+          set -o pipefail
           if [ "${{ matrix.precision }}" = "double" ]; then USE_DOUBLE=ON; else USE_DOUBLE=OFF; fi
           cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DGEO_BUILD_CUDA=ON -DGEO_BUILD_TESTS=ON -DGEO_BUILD_BENCHMARKS=ON \
@@ -264,6 +296,7 @@ jobs:
             --schedule-json rtl/examples/rotor_action_schedule.json
       - name: Validate generated schedule vectors against fixed C
         run: |
+          set -o pipefail
           : > c-schedule-equivalence.log
           for source in build-rtl/test_geo_schedule_*.c; do
             name="$(basename "$source" .c)"
@@ -273,11 +306,13 @@ jobs:
           done
       - name: Simulate fixed-point Cl(2,0) product
         run: |
+          set -o pipefail
           iverilog -g2012 -s tb_geo_cl20_product_q -o build-rtl/cl20_tb.vvp \
             build-rtl/geo_cl20_product_q.sv build-rtl/tb_geo_cl20_product_q.sv
           vvp build-rtl/cl20_tb.vvp | tee rtl-simulation.log
       - name: Simulate executable schedules
         run: |
+          set -o pipefail
           : > schedule-simulation.log
           for module_file in build-rtl/geo_schedule_*.sv; do
             module="$(basename "$module_file" .sv)"
@@ -288,11 +323,13 @@ jobs:
           done
       - name: Compile and simulate generated controller
         run: |
+          set -o pipefail
           iverilog -g2012 -s tb_geo_program_controller -o build-rtl/controller_tb.vvp \
             build-rtl/geo_program_controller.sv build-rtl/tb_geo_program_controller.sv
           vvp build-rtl/controller_tb.vvp | tee controller-simulation.log
       - name: Synthesize product cell, schedules, and controller
         run: |
+          set -o pipefail
           yosys -p 'read_verilog -sv build-rtl/geo_cl20_product_q.sv; synth -top geo_cl20_product_q; stat' \
             2>&1 | tee rtl-synthesis.log
           : > schedule-synthesis.log
@@ -320,3 +357,69 @@ jobs:
             schedule-synthesis.log
             controller-synthesis.log
           if-no-files-found: error
+
+  ci-summary:
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    needs:
+      - build-and-test
+      - sanitizers
+      - q-format-validation
+      - esp32-component-validation
+      - esp32-s3-application
+      - windows-abi-consumer
+      - cuda-13-compile
+      - rtl-validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Publish exact v0.19 gate summary
+        uses: actions/github-script@v7
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        with:
+          script: |
+            const marker = '<!-- geo-v019-ci-summary -->';
+            const needs = JSON.parse(process.env.NEEDS_JSON);
+            const gates = Object.entries(needs)
+              .map(([gate, data]) => [gate, data.result]);
+            const passed = gates.every(([, result]) => result === 'success');
+            const rows = gates
+              .map(([gate, result]) => `| ${gate} | ${result} |`)
+              .join('\n');
+            const body = [
+              marker,
+              '## v0.19 CI gate summary',
+              '',
+              `Candidate: \`${context.payload.pull_request.head.sha}\``,
+              '',
+              '| Required gate | Result |',
+              '|---|---|',
+              rows,
+              '',
+              `**Every required gate passed:** ${passed ? 'yes' : 'no'}`,
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number, per_page: 100 }
+            );
+            const existing = comments.find(
+              comment => comment.user?.type === 'Bot' && comment.body?.includes(marker)
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+            if (!passed) {
+              core.setFailed('One or more required v0.19 CI gates did not pass.');
+            }
