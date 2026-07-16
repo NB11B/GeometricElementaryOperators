@@ -1,0 +1,19 @@
+{
+  "name": "rotor_action",
+  "input_registers": [0, 1, 2],
+  "instructions": [
+    {
+      "opcode": "cl20_product",
+      "destination": 3,
+      "left": 0,
+      "right": 1
+    },
+    {
+      "opcode": "cl20_product",
+      "destination": 4,
+      "left": 3,
+      "right": 2
+    }
+  ],
+  "root_register": 4
+}
