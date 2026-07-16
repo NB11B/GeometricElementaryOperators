@@ -65,6 +65,33 @@ static geo_fixed_banked_status_t geo_fixed_banked_validate_reference(
     }
 }
 
+static geo_fixed_banked_status_t geo_fixed_banked_validate_program_reference(
+    const geo_fixed_banked_program_t *program,
+    geo_fixed_banked_ref_t reference
+) {
+    if (program == NULL) return GEO_FIXED_BANKED_NULL_ARGUMENT;
+
+    switch ((geo_fixed_bank_kind_t)reference.kind) {
+        case GEO_FIXED_BANK_SCALAR:
+            return (size_t)reference.index < program->scalar_count
+                ? GEO_FIXED_BANKED_OK
+                : GEO_FIXED_BANKED_STORAGE_RANGE;
+
+        case GEO_FIXED_BANK_GEOMETRIC:
+            return (size_t)reference.index < program->geometric_count
+                ? GEO_FIXED_BANKED_OK
+                : GEO_FIXED_BANKED_STORAGE_RANGE;
+
+        case GEO_FIXED_BANK_UNIFIED:
+            return (size_t)reference.index < program->unified_count
+                ? GEO_FIXED_BANKED_OK
+                : GEO_FIXED_BANKED_STORAGE_RANGE;
+
+        default:
+            return GEO_FIXED_BANKED_TYPE_MISMATCH;
+    }
+}
+
 static uint8_t geo_fixed_banked_lanes_for_kind(uint8_t kind) {
     switch ((geo_fixed_bank_kind_t)kind) {
         case GEO_FIXED_BANK_SCALAR:
@@ -173,6 +200,8 @@ geo_fixed_banked_status_t geo_fixed_banked_execute(
         return GEO_FIXED_BANKED_STORAGE_RANGE;
     }
 
+    status = geo_fixed_banked_validate_program_reference(program, program->root);
+    if (status != GEO_FIXED_BANKED_OK) return status;
     status = geo_fixed_banked_validate_reference(storage, program->root);
     if (status != GEO_FIXED_BANKED_OK) return status;
 
@@ -192,6 +221,16 @@ geo_fixed_banked_status_t geo_fixed_banked_execute(
         if (destination_lanes != instruction.requested_lanes) {
             return GEO_FIXED_BANKED_TYPE_MISMATCH;
         }
+
+        status = geo_fixed_banked_validate_program_reference(
+            program,
+            instruction.destination
+        );
+        if (status != GEO_FIXED_BANKED_OK) return status;
+        status = geo_fixed_banked_validate_program_reference(program, instruction.left);
+        if (status != GEO_FIXED_BANKED_OK) return status;
+        status = geo_fixed_banked_validate_program_reference(program, instruction.right);
+        if (status != GEO_FIXED_BANKED_OK) return status;
 
         status = geo_fixed_banked_read_state(storage, instruction.left, &left);
         if (status != GEO_FIXED_BANKED_OK) return status;
