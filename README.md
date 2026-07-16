@@ -25,6 +25,8 @@ The implementation is designed for microcontrollers and eventual hardware realiz
 - explicit GEB-36 reference API and closure manifest;
 - fixed-size witness-tree validation and compilation;
 - backward lane-liveness and duplicate-subtree elimination;
+- compile-time Omega evaluation for constant subgraphs;
+- scalar/geometric/unified register classification and memory estimates;
 - desktop verification and embedded backends.
 
 ## Implemented kernel layers
@@ -42,6 +44,8 @@ The implementation is designed for microcontrollers and eventual hardware realiz
 11. Topologically ordered witness-tree representation.
 12. Iterative witness validation, register allocation, and lowering to Omega bytecode.
 13. Reachability pruning, backward lane-liveness, duplicate-node merging, and compact register allocation.
+14. Compile-time constant folding for Omega subgraphs.
+15. Typed scalar/geometric/unified register planning and memory accounting.
 
 ## Witness compiler and optimizer
 
@@ -55,17 +59,28 @@ The baseline compiler preserves every Omega node. The optimized compiler additio
 - compacts the emitted instruction and register sequence;
 - reports original and optimized instruction counts.
 
-Both paths require caller-owned buffers and perform no heap allocation or recursive traversal. The JSON interchange definition is available at `artifacts/witness_tree_schema.json`.
+A second pass accepts terminal values and compile-time-constant flags. It evaluates any Omega instruction whose two inputs are constant, removes that instruction from the runtime program, and writes the result into the caller-owned initial register image.
+
+The same pass classifies every live register as:
+
+- scalar-only;
+- geometric-only;
+- unified scalar/geometric.
+
+It reports the memory required by a future physically banked allocator and compares that amount with the current all-registers-as-`geo_state_t` layout.
+
+All compiler paths require caller-owned buffers and perform no heap allocation or recursive traversal. The JSON interchange definition is available at `artifacts/witness_tree_schema.json`.
 
 ## Remaining milestones
 
 1. Import the verified witness-tree artifacts produced during operator discovery.
 2. Attach terminal type, routing, and expected-scale metadata to each imported tree.
-3. Add constant folding, scale propagation, routing elision, and typed register allocation.
-4. Reproduce each GEB-36 target through compiled Omega programs and compare against the direct reference API.
-5. Benchmark direct GEB operations against compiled Omega programs.
-6. Add ESP32-S3 and ARM Cortex-M targets.
-7. Add fixed-point and RTL-oriented backends.
+3. Convert typed memory planning into a physically banked scalar/geometric runtime.
+4. Add projective-scale propagation and routing-state elision.
+5. Reproduce each GEB-36 target through compiled Omega programs and compare against the direct reference API.
+6. Benchmark direct GEB operations against compiled Omega programs.
+7. Add ESP32-S3 and ARM Cortex-M targets.
+8. Add fixed-point and RTL-oriented backends.
 
 ## Build
 
