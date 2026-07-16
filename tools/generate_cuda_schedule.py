@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate batched CUDA kernels and launchers from checked schedule JSON."""
+'''Generate batched CUDA kernels and launchers from checked schedule JSON.'''
 from __future__ import annotations
 
 import argparse
@@ -20,8 +20,9 @@ SUPPORTED_OPCODES = {
 
 def validate_schedule(data: dict[str, Any]) -> dict[str, Any]:
     name = data.get("name")
-    if not isinstance(name, str) or not IDENTIFIER_RE.match(name):
+    if not isinstance(name, str) or not IDENTIFIER_RE.fullmatch(name):
         raise ValueError("schedule name must be a C/CUDA identifier")
+
     input_registers = data.get("input_registers")
     if not isinstance(input_registers, list) or not input_registers:
         raise ValueError(f"{name}: input_registers must be non-empty")
@@ -30,10 +31,11 @@ def validate_schedule(data: dict[str, Any]) -> dict[str, Any]:
     if len(set(input_registers)) != len(input_registers):
         raise ValueError(f"{name}: duplicate input register")
 
-    available = set(input_registers)
     instructions = data.get("instructions")
     if not isinstance(instructions, list) or not instructions:
         raise ValueError(f"{name}: instructions must be non-empty")
+
+    available = set(input_registers)
     normalized: list[dict[str, int | str]] = []
     for index, raw in enumerate(instructions):
         if not isinstance(raw, dict):
@@ -42,8 +44,11 @@ def validate_schedule(data: dict[str, Any]) -> dict[str, Any]:
         destination = raw.get("destination")
         if opcode not in SUPPORTED_OPCODES:
             raise ValueError(f"{name}: unsupported opcode {opcode!r}")
-        if not isinstance(destination, int) or destination < 0 or destination in available:
+        if not isinstance(destination, int) or destination < 0:
+            raise ValueError(f"{name}: invalid destination")
+        if destination in available:
             raise ValueError(f"{name}: destination must be a fresh register")
+
         if opcode == "reverse":
             source = raw.get("source", raw.get("left"))
             if not isinstance(source, int) or source not in available:
@@ -68,26 +73,44 @@ def validate_schedule(data: dict[str, Any]) -> dict[str, Any]:
             })
         available.add(destination)
 
-    root = data.get("root_register")
-    if not isinstance(root, int) or root not in available:
+    root_register = data.get("root_register")
+    if not isinstance(root_register, int) or root_register not in available:
         raise ValueError(f"{name}: invalid root register")
+
     return {
         "name": name,
         "input_registers": input_registers,
         "instructions": normalized,
-        "root_register": root,
+        "root_register": root_register,
     }
+
+
+def parameters(schedule: dict[str, Any]) -> str:
+    values = [
+        f"const geo_cl20_t *input_r{register}"
+        for register in schedule["input_registers"]
+    ]
+    values.extend([
+        "geo_cl20_t *output",
+        "size_t count",
+        "unsigned int block_size",
+        "void *stream",
+    ])
+    return ",\n    ".join(values)
+
+
+def kernel_parameters(schedule: dict[str, Any]) -> str:
+    values = [
+        f"const geo_cl20_t *input_r{register}"
+        for register in schedule["input_registers"]
+    ]
+    values.extend(["geo_cl20_t *output", "size_t count"])
+    return ",\n    ".join(values)
 
 
 def header_text(schedule: dict[str, Any]) -> str:
     name = schedule["name"]
     guard = f"GEO_CUDA_SCHEDULE_{name.upper()}_H"
-    input_parameters = ",\n    ".join(
-        f"const geo_cl20_t *input_r{register}"
-        for register in schedule["input_registers"]
-    )
-    if input_parameters:
-        input_parameters += ",\n    "
     return f'''#ifndef {guard}
 #define {guard}
 
@@ -99,12 +122,13 @@ def header_text(schedule: dict[str, Any]) -> str:
 extern "C" {{
 #endif
 
-/* Device pointers are required for all input and output arrays. */
+/*
+ * Launches a generated schedule over device-resident arrays. Every input and
+ * output pointer is a CUDA device pointer. stream may be NULL for the default
+ * stream or a cudaStream_t converted to void *.
+ */
 int geo_cuda_schedule_{name}_launch(
-    {input_parameters}geo_cl20_t *output,
-    size_t count,
-    unsigned int block_size,
-    void *stream
+    {parameters(schedule)}
 );
 
 #ifdef __cplusplus
@@ -116,25 +140,27 @@ int geo_cuda_schedule_{name}_launch(
 
 
 def instruction_lines(schedule: dict[str, Any]) -> list[str]:
-    lines: list[str] = []
-    for register in schedule["input_registers"]:
-        lines.append(f"    const geo_cl20_t r{register} = input_r{register}[index];")
+    lines = [
+        f"    const geo_cl20_t r{register} = input_r{register}[index];"
+        for register in schedule["input_registers"]
+    ]
+    helper_by_opcode = {
+        "cl20_add": "geo_schedule_add",
+        "cl20_product": "geo_schedule_product",
+        "vector_dot": "geo_schedule_dot",
+        "vector_wedge": "geo_schedule_wedge",
+    }
     for instruction in schedule["instructions"]:
-        opcode = instruction["opcode"]
+        opcode = str(instruction["opcode"])
         destination = int(instruction["destination"])
         if opcode == "reverse":
-            source = int(instruction["source"])
-            expression = f"geo_schedule_reverse(r{source})"
+            expression = f"geo_schedule_reverse(r{int(instruction['source'])})"
         else:
-            left = int(instruction["left"])
-            right = int(instruction["right"])
-            helper = {
-                "cl20_add": "geo_schedule_add",
-                "cl20_product": "geo_schedule_product",
-                "vector_dot": "geo_schedule_dot",
-                "vector_wedge": "geo_schedule_wedge",
-            }[str(opcode)]
-            expression = f"{helper}(r{left}, r{right})"
+            helper = helper_by_opcode[opcode]
+            expression = (
+                f"{helper}(r{int(instruction['left'])}, "
+                f"r{int(instruction['right'])})"
+            )
         lines.append(f"    const geo_cl20_t r{destination} = {expression};")
     lines.append(f"    output[index] = r{schedule['root_register']};")
     return lines
@@ -142,19 +168,14 @@ def instruction_lines(schedule: dict[str, Any]) -> list[str]:
 
 def source_text(schedule: dict[str, Any]) -> str:
     name = schedule["name"]
-    input_parameters = ",\n    ".join(
-        f"const geo_cl20_t *input_r{register}"
-        for register in schedule["input_registers"]
-    )
-    if input_parameters:
-        input_parameters += ",\n    "
-    kernel_arguments = ", ".join(
+    input_arguments = ", ".join(
         f"input_r{register}" for register in schedule["input_registers"]
     )
-    if kernel_arguments:
-        kernel_arguments += ", "
+    if input_arguments:
+        input_arguments += ", "
     pointer_checks = " || ".join(
-        f"input_r{register} == nullptr" for register in schedule["input_registers"]
+        f"input_r{register} == nullptr"
+        for register in schedule["input_registers"]
     )
     if pointer_checks:
         pointer_checks += " || "
@@ -165,6 +186,13 @@ def source_text(schedule: dict[str, Any]) -> str:
 
 #include <climits>
 #include <cstddef>
+#include <cstdint>
+#include <type_traits>
+
+static_assert(std::is_standard_layout<geo_cl20_t>::value,
+    "geo_cl20_t must be standard layout");
+static_assert(sizeof(geo_cl20_t) == sizeof(geo_real_t) * 4u,
+    "geo_cl20_t must contain four packed scalars");
 
 static __device__ __forceinline__ geo_cl20_t geo_schedule_make(
     geo_real_t scalar,
@@ -231,40 +259,39 @@ static __device__ __forceinline__ geo_cl20_t geo_schedule_wedge(
 }}
 
 static __global__ void geo_cuda_schedule_{name}_kernel(
-    {input_parameters}geo_cl20_t *output,
-    size_t count
+    {kernel_parameters(schedule)}
 ) {{
-    const size_t index = (size_t)blockIdx.x * (size_t)blockDim.x +
-        (size_t)threadIdx.x;
+    const size_t index =
+        (size_t)blockIdx.x * (size_t)blockDim.x + (size_t)threadIdx.x;
     if (index >= count) return;
 {chr(10).join(instruction_lines(schedule))}
 }}
 
 extern "C" int geo_cuda_schedule_{name}_launch(
-    {input_parameters}geo_cl20_t *output,
-    size_t count,
-    unsigned int block_size,
-    void *stream
+    {parameters(schedule)}
 ) {{
     size_t block_count;
     cudaStream_t cuda_stream = reinterpret_cast<cudaStream_t>(stream);
 
     if (count == 0u) return (int)cudaSuccess;
-    if ({pointer_checks}output == nullptr || block_size == 0u || block_size > 1024u) {{
+    if ({pointer_checks}output == nullptr ||
+        block_size == 0u || block_size > 1024u) {{
         return (int)cudaErrorInvalidValue;
     }}
     if (count > SIZE_MAX - (size_t)(block_size - 1u)) {{
         return (int)cudaErrorInvalidValue;
     }}
     block_count = (count + (size_t)block_size - 1u) / (size_t)block_size;
-    if (block_count > (size_t)UINT_MAX) return (int)cudaErrorInvalidConfiguration;
+    if (block_count > (size_t)UINT_MAX) {{
+        return (int)cudaErrorInvalidConfiguration;
+    }}
 
     geo_cuda_schedule_{name}_kernel<<<
         (unsigned int)block_count,
         block_size,
         0u,
         cuda_stream
-    >>>({kernel_arguments}output, count);
+    >>>({input_arguments}output, count);
     return (int)cudaGetLastError();
 }}
 '''
@@ -280,10 +307,13 @@ def self_test() -> None:
         ],
         "root_register": 3,
     })
+    header = header_text(schedule)
     source = source_text(schedule)
+    assert "geo_cuda_schedule_self_test_launch" in header
     assert "geo_cuda_schedule_self_test_kernel" in source
     assert "geo_schedule_product" in source
     assert "geo_schedule_reverse" in source
+    assert "#include <cstdint>" in source
     assert "SIZE_MAX" in source
 
 
@@ -303,7 +333,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         schedule = validate_schedule(
             json.loads(schedule_path.read_text(encoding="utf-8"))
         )
-        name = schedule["name"]
+        name = str(schedule["name"])
         header = args.out_dir / f"geo_cuda_schedule_{name}.h"
         source = args.out_dir / f"geo_cuda_schedule_{name}.cu"
         header.write_text(header_text(schedule), encoding="utf-8")
