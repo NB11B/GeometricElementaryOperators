@@ -1,11 +1,14 @@
+#include "geo/banked.h"
 #include "geo/cl20.h"
 #include "geo/cl30.h"
 #include "geo/control.h"
+#include "geo/eml_embedded.h"
 #include "geo/fixed.h"
 #include "geo/fixed_geb36.h"
 #include "geo/fused.h"
 #include "geo/optimizer.h"
 #include "geo/report.h"
+#include "geo/structured_program.h"
 
 #include <limits.h>
 #include <math.h>
@@ -25,25 +28,40 @@ static void expect(int condition, const char *message) {
 
 static void test_malformed_programs(void) {
     geo_struct_value_t registers[1];
+    geo_struct_program_t structured = {NULL, 1u, 1u, 0u};
     geo_fused_program_t fused = {NULL, 1u, 1u, 0u};
     geo_banked_program_t banked;
+    geo_banked_storage_t storage;
     char buffer[512];
 
     registers[0] = geo_struct_value_from_cl20(geo_cl20_zero());
+    expect(
+        geo_struct_program_execute(&structured, registers, 1u) == GEO_STATUS_NULL_ARGUMENT,
+        "public structured executor rejects null instruction stream"
+    );
     expect(
         geo_fused_execute(&fused, registers, 1u) == GEO_STATUS_NULL_ARGUMENT,
         "fused executor rejects null instruction stream"
     );
 
     memset(&banked, 0, sizeof(banked));
+    memset(&storage, 0, sizeof(storage));
     banked.instruction_count = 1u;
     banked.root.kind = GEO_REGISTER_SCALAR;
+    expect(
+        geo_banked_execute(&banked, &storage) == GEO_STATUS_NULL_ARGUMENT,
+        "public banked executor rejects null instruction stream"
+    );
     expect(
         geo_emit_banked_program_c(&banked, "bad", buffer, sizeof(buffer)) == -1,
         "static emitter rejects null instruction stream"
     );
 
     banked.instruction_count = 0u;
+    expect(
+        geo_banked_execute(&banked, &storage) == GEO_STATUS_OK,
+        "public banked executor supports empty programs"
+    );
     expect(
         geo_emit_banked_program_c(&banked, "empty", buffer, sizeof(buffer)) > 0,
         "static emitter supports empty programs"
@@ -56,6 +74,7 @@ static void test_nan_rejection(void) {
     geo_cl20_t a = geo_cl20_zero();
     geo_cl30_t c = geo_cl30_zero();
     geo_mat2_t m = geo_mat2_zero();
+    geo_real_t eml_output = (geo_real_t)123;
     a.scalar = (geo_real_t)NAN;
     c.c[0] = (geo_real_t)NAN;
     m.m00 = (geo_real_t)NAN;
@@ -64,6 +83,15 @@ static void test_nan_rejection(void) {
     expect(!geo_mat2_near(m, m, (geo_real_t)1), "control near rejects NaN");
     expect(!geo_cl20_near(geo_cl20_zero(), geo_cl20_zero(), (geo_real_t)NAN),
         "near rejects NaN tolerance");
+    expect(
+        geo_eml_log((geo_real_t)NAN, GEO_EML_BALANCED, &eml_output) == GEO_EML_DOMAIN,
+        "embedded log rejects NaN"
+    );
+    expect(eml_output == (geo_real_t)123, "embedded log leaves output unchanged on NaN");
+    expect(
+        geo_eml_exp((geo_real_t)NAN, GEO_EML_BALANCED, &eml_output) == GEO_EML_DOMAIN,
+        "embedded exp rejects NaN"
+    );
 }
 
 static void test_checked_involutions(void) {
