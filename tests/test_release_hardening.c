@@ -36,7 +36,8 @@ static void test_malformed_programs(void) {
 
     registers[0] = geo_struct_value_from_cl20(geo_cl20_zero());
     expect(
-        geo_struct_program_execute(&structured, registers, 1u) == GEO_STATUS_NULL_ARGUMENT,
+        geo_struct_program_execute(&structured, registers, 1u) ==
+            GEO_STATUS_NULL_ARGUMENT,
         "public structured executor rejects null instruction stream"
     );
     expect(
@@ -66,11 +67,17 @@ static void test_malformed_programs(void) {
         geo_emit_banked_program_c(&banked, "empty", buffer, sizeof(buffer)) > 0,
         "static emitter supports empty programs"
     );
-    expect(strstr(buffer, "[0]") == NULL, "empty program emits no zero-length array");
-    expect(strstr(buffer, "= NULL") != NULL, "empty program emits null pointer");
+    expect(
+        strstr(buffer, "[0]") == NULL,
+        "empty program emits no zero-length array"
+    );
+    expect(
+        strstr(buffer, "= NULL") != NULL,
+        "empty program emits null pointer"
+    );
 }
 
-static void test_nan_rejection(void) {
+static void test_nonfinite_rejection(void) {
     geo_cl20_t a = geo_cl20_zero();
     geo_cl30_t c = geo_cl30_zero();
     geo_mat2_t m = geo_mat2_zero();
@@ -78,19 +85,87 @@ static void test_nan_rejection(void) {
     a.scalar = (geo_real_t)NAN;
     c.c[0] = (geo_real_t)NAN;
     m.m00 = (geo_real_t)NAN;
+
     expect(!geo_cl20_near(a, a, (geo_real_t)1), "Cl20 near rejects NaN");
     expect(!geo_cl30_near(c, c, (geo_real_t)1), "Cl30 near rejects NaN");
     expect(!geo_mat2_near(m, m, (geo_real_t)1), "control near rejects NaN");
-    expect(!geo_cl20_near(geo_cl20_zero(), geo_cl20_zero(), (geo_real_t)NAN),
-        "near rejects NaN tolerance");
     expect(
-        geo_eml_log((geo_real_t)NAN, GEO_EML_BALANCED, &eml_output) == GEO_EML_DOMAIN,
+        !geo_cl20_near(
+            geo_cl20_zero(),
+            geo_cl20_zero(),
+            (geo_real_t)NAN
+        ),
+        "near rejects NaN tolerance"
+    );
+
+    expect(
+        geo_eml_log(
+            (geo_real_t)NAN,
+            GEO_EML_BALANCED,
+            &eml_output
+        ) == GEO_EML_DOMAIN,
         "embedded log rejects NaN"
     );
-    expect(eml_output == (geo_real_t)123, "embedded log leaves output unchanged on NaN");
     expect(
-        geo_eml_exp((geo_real_t)NAN, GEO_EML_BALANCED, &eml_output) == GEO_EML_DOMAIN,
+        eml_output == (geo_real_t)123,
+        "embedded log leaves output unchanged on NaN"
+    );
+    expect(
+        geo_eml_exp(
+            (geo_real_t)NAN,
+            GEO_EML_BALANCED,
+            &eml_output
+        ) == GEO_EML_DOMAIN,
         "embedded exp rejects NaN"
+    );
+    expect(
+        eml_output == (geo_real_t)123,
+        "embedded exp leaves output unchanged on NaN"
+    );
+
+    expect(
+        geo_eml_log(
+            (geo_real_t)INFINITY,
+            GEO_EML_BALANCED,
+            &eml_output
+        ) == GEO_EML_OVERFLOW,
+        "embedded log rejects positive infinity"
+    );
+    expect(
+        eml_output == (geo_real_t)123,
+        "embedded log leaves output unchanged on infinity"
+    );
+    expect(
+        geo_eml_log(
+            (geo_real_t)-INFINITY,
+            GEO_EML_BALANCED,
+            &eml_output
+        ) == GEO_EML_DOMAIN,
+        "embedded log rejects negative infinity as outside its domain"
+    );
+    expect(
+        eml_output == (geo_real_t)123,
+        "embedded log leaves output unchanged on negative infinity"
+    );
+    expect(
+        geo_eml_exp(
+            (geo_real_t)INFINITY,
+            GEO_EML_BALANCED,
+            &eml_output
+        ) == GEO_EML_OVERFLOW,
+        "embedded exp rejects positive infinity"
+    );
+    expect(
+        geo_eml_exp(
+            (geo_real_t)-INFINITY,
+            GEO_EML_BALANCED,
+            &eml_output
+        ) == GEO_EML_OVERFLOW,
+        "embedded exp rejects negative infinity"
+    );
+    expect(
+        eml_output == (geo_real_t)123,
+        "embedded exp leaves output unchanged on infinities"
     );
 }
 
@@ -103,8 +178,13 @@ static void test_checked_involutions(void) {
         "checked reverse reports unrepresentable negation"
     );
     expect(
-        geo_fixed_geb36_execute(GEO_GEB_REVERSION, value, value, value, &result) ==
-            GEO_FIXED_OVERFLOW,
+        geo_fixed_geb36_execute(
+            GEO_GEB_REVERSION,
+            value,
+            value,
+            value,
+            &result
+        ) == GEO_FIXED_OVERFLOW,
         "fixed GEB reversion propagates overflow"
     );
 }
@@ -119,7 +199,7 @@ static void test_abi_prefix(void) {
 
 int main(void) {
     test_malformed_programs();
-    test_nan_rejection();
+    test_nonfinite_rejection();
     test_checked_involutions();
     test_abi_prefix();
     if (failures != 0) {
