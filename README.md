@@ -61,6 +61,7 @@ The preserved Milestone W package did not contain the original complete per-targ
 24. Shared workload timing/error reports across direct, specialized, structured, fused, fixed, banked, and optional CUDA paths.
 25. Generated fixed-point RTL product, controller, and executable schedule datapaths with explicit overflow signaling.
 26. Standalone ESP32-S3 correctness, benchmark, and heap-stability soak application.
+27. Vendor-neutral ARM Cortex-M DWT cycle source for the portable benchmark API.
 
 ## Host build and test
 
@@ -168,6 +169,8 @@ nsys profile --stats=true --output=geo_cuda ./build-cuda/bench_cuda
 ncu --set full --target-processes all ./build-cuda/bench_cuda
 ```
 
+A CUDA compile job is not a GPU execution result. Published GPU claims must record the GPU model, compute capability, driver, exact CUDA 13.x update, and Compute Sanitizer result.
+
 ## Fixed-point program backend
 
 `include/geo/fixed.h` provides configurable signed 32-bit Q-format arithmetic. The default is Q16.16:
@@ -209,18 +212,48 @@ idf.py -p PORT flash monitor
 
 It runs deterministic float and fixed checks, reports memory and timing records, and continuously verifies that allocation-free execution does not change free heap or the largest free block.
 
+## ARM Cortex-M DWT timing
+
+`include/geo/cortex_m_dwt.h` adapts the ARM Data Watchpoint and Trace cycle counter to `geo_cycle_source_t` without depending on a vendor SDK. The caller supplies the register addresses and core clock.
+
+CMSIS projects can bind it as follows:
+
+```c
+geo_cortex_m_dwt_registers_t registers = {
+    &CoreDebug->DEMCR,
+    &DWT->CTRL,
+    &DWT->CYCCNT,
+    CoreDebug_DEMCR_TRCENA_Msk,
+    DWT_CTRL_CYCCNTENA_Msk
+};
+geo_cortex_m_dwt_context_t context;
+geo_cycle_source_t source;
+
+geo_cortex_m_dwt_status_t status = geo_cortex_m_dwt_start(
+    &context,
+    &registers,
+    SystemCoreClock,
+    &source
+);
+```
+
+The adapter extends the 32-bit hardware counter to 64 bits in software. Call it more frequently than one complete hardware wrap interval; at 480 MHz that interval is approximately 8.95 seconds.
+
 ## Generated RTL and equivalence
 
 Generate the fixed product cell and controller:
 
 ```sh
-python3 tools/generate_rtl.py \
-  --out-dir build-rtl \
-  --schedule-json rtl/examples/rotor_action_schedule.json \
-  --self-test
+cmake --build build --target generate_rtl
 ```
 
 Generate executable schedule datapaths plus matching checked-C harnesses:
+
+```sh
+cmake --build build --target generate_rtl_schedules
+```
+
+The equivalent direct generator command is:
 
 ```sh
 python3 tools/generate_rtl_schedule.py \
@@ -249,6 +282,12 @@ cmake --build build-report --parallel
 ```
 
 This emits compiler `.su` files for per-function static stack estimates and linker maps for the benchmark executables. Standard tools such as `size`, `nm`, and `objdump` can then be applied to the executables and `libgeo_kernel.a`.
+
+## Release and compatibility
+
+Release, ABI, fixed/RTL numerical, benchmark-labeling, generated-artifact, and hardware-evidence requirements are defined in `docs/RELEASE_POLICY.md`. Notable changes are recorded in `CHANGELOG.md`.
+
+A release remains untagged until the exact candidate commit has passing required validation. An empty or unstarted hosted workflow is not treated as a pass.
 
 ## Design constraints
 
