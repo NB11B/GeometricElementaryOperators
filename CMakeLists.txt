@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.6.0
+    VERSION 0.7.0
     LANGUAGES C
 )
 
@@ -20,6 +20,7 @@ add_library(geo_kernel STATIC
     src/control.c
     src/geb36.c
     src/compiler.c
+    src/optimizer.c
 )
 
 target_include_directories(geo_kernel
@@ -40,75 +41,31 @@ endif()
 if(GEO_BUILD_TESTS)
     enable_testing()
 
-    add_executable(test_cl20
-        tests/test_cl20.c
-    )
-
-    target_link_libraries(test_cl20
-        PRIVATE
-            geo_kernel
-            m
-    )
-
+    add_executable(test_cl20 tests/test_cl20.c)
+    target_link_libraries(test_cl20 PRIVATE geo_kernel m)
     add_test(NAME cl20 COMMAND test_cl20)
 
-    add_executable(test_omega
-        tests/test_omega.c
-    )
-
-    target_link_libraries(test_omega
-        PRIVATE
-            geo_kernel
-            m
-    )
-
+    add_executable(test_omega tests/test_omega.c)
+    target_link_libraries(test_omega PRIVATE geo_kernel m)
     add_test(NAME omega COMMAND test_omega)
 
-    add_executable(test_structured
-        tests/test_structured.c
-    )
-
-    target_link_libraries(test_structured
-        PRIVATE
-            geo_kernel
-            m
-    )
-
+    add_executable(test_structured tests/test_structured.c)
+    target_link_libraries(test_structured PRIVATE geo_kernel m)
     add_test(NAME structured COMMAND test_structured)
 
-    add_executable(test_control
-        tests/test_control.c
-    )
-
-    target_link_libraries(test_control
-        PRIVATE
-            geo_kernel
-            m
-    )
-
+    add_executable(test_control tests/test_control.c)
+    target_link_libraries(test_control PRIVATE geo_kernel m)
     add_test(NAME control COMMAND test_control)
 
-    add_executable(test_geb36
-        tests/test_geb36.c
-    )
-
-    target_link_libraries(test_geb36
-        PRIVATE
-            geo_kernel
-            m
-    )
-
+    add_executable(test_geb36 tests/test_geb36.c)
+    target_link_libraries(test_geb36 PRIVATE geo_kernel m)
     add_test(NAME geb36 COMMAND test_geb36)
 
-    add_executable(test_compiler
-        tests/test_compiler.c
-    )
-
-    target_link_libraries(test_compiler
-        PRIVATE
-            geo_kernel
-            m
-    )
-
+    add_executable(test_compiler tests/test_compiler.c)
+    target_link_libraries(test_compiler PRIVATE geo_kernel m)
     add_test(NAME compiler COMMAND test_compiler)
+
+    add_executable(test_optimizer tests/test_optimizer.c)
+    target_link_libraries(test_optimizer PRIVATE geo_kernel m)
+    add_test(NAME optimizer COMMAND test_optimizer)
 endif()
