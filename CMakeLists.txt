@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.15.0
+    VERSION 0.16.0
     LANGUAGES C
 )
 
@@ -17,10 +17,13 @@ option(GEO_ENABLE_LINK_MAP "Emit linker map for benchmark executable" OFF)
 
 add_library(geo_kernel STATIC
     src/cl20.c
+    src/cl30.c
     src/opposite.c
     src/omega.c
+    src/eml_embedded.c
     src/structured.c
     src/structured_program.c
+    src/fused.c
     src/control.c
     src/geb36.c
     src/compiler.c
@@ -28,6 +31,7 @@ add_library(geo_kernel STATIC
     src/folding.c
     src/banked.c
     src/lowering.c
+    src/report.c
     src/geb_witness.c
     src/perf.c
     src/fixed.c
@@ -113,6 +117,14 @@ if(GEO_BUILD_TESTS)
     add_executable(test_fixed tests/test_fixed.c)
     target_link_libraries(test_fixed PRIVATE geo_kernel m)
     add_test(NAME fixed COMMAND test_fixed)
+
+    add_executable(test_randomized tests/test_randomized.c)
+    target_link_libraries(test_randomized PRIVATE geo_kernel m)
+    add_test(NAME randomized COMMAND test_randomized)
+
+    add_executable(test_advanced tests/test_advanced.c)
+    target_link_libraries(test_advanced PRIVATE geo_kernel m)
+    add_test(NAME advanced COMMAND test_advanced)
 endif()
 
 if(GEO_BUILD_BENCHMARKS)
