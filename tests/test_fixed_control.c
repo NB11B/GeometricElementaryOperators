@@ -32,11 +32,12 @@ static void test_identity_control(void) {
     const geo_fixed_m2_t identity = {
         fixed(1.0), fixed(0.0), fixed(0.0), fixed(1.0)
     };
+    /* Multiples of 0.5 remain exact in every supported Q-format, including Q1. */
     const geo_fixed_m2_t right = {
-        fixed(0.75), fixed(-0.25), fixed(0.5), fixed(1.25)
+        fixed(0.5), fixed(-0.5), fixed(0.5), fixed(1.5)
     };
     const geo_fixed_m2_t expected = {
-        fixed(-0.25), fixed(-0.25), fixed(0.5), fixed(0.25)
+        fixed(-0.5), fixed(-0.5), fixed(0.5), fixed(0.5)
     };
     geo_fixed_m2_t output;
 
@@ -50,10 +51,10 @@ static void test_identity_control(void) {
 static void test_zero_control(void) {
     const geo_fixed_m2_t zero = {0, 0, 0, 0};
     const geo_fixed_m2_t right = {
-        fixed(0.25), fixed(0.5), fixed(-0.25), fixed(1.0)
+        fixed(0.5), fixed(0.5), fixed(-0.5), fixed(1.0)
     };
     geo_fixed_m2_t output = {
-        fixed(0.25), fixed(0.25), fixed(0.25), fixed(0.25)
+        fixed(0.5), fixed(0.5), fixed(0.5), fixed(0.5)
     };
 
     expect(
