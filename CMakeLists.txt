@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.13.0
+    VERSION 0.14.0
     LANGUAGES C
 )
 
@@ -65,6 +65,10 @@ if(GEO_BUILD_TESTS)
     add_executable(test_metric_program tests/test_metric_program.c)
     target_link_libraries(test_metric_program PRIVATE geo_kernel m)
     add_test(NAME metric_program COMMAND test_metric_program)
+
+    add_executable(test_closure_program tests/test_closure_program.c)
+    target_link_libraries(test_closure_program PRIVATE geo_kernel m)
+    add_test(NAME closure_program COMMAND test_closure_program)
 
     add_executable(test_control tests/test_control.c)
     target_link_libraries(test_control PRIVATE geo_kernel m)
