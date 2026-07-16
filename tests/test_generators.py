@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
@@ -43,18 +44,20 @@ def test_clpq(temp: Path) -> None:
         '}\n',
         encoding="utf-8",
     )
-    compiler = os.environ.get("CC", "cc")
+    compiler = shlex.split(os.environ.get("CC", "cc"))
     executable = out / ("test_generated.exe" if os.name == "nt" else "test_generated")
-    run(
-        compiler,
+    command = [
+        *compiler,
         "-std=c11",
         "-I", str(ROOT / "include"),
         "-I", str(out),
         str(out / "generated_cl30.c"),
         str(test_c),
-        "-lm",
-        "-o", str(executable),
-    )
+    ]
+    if os.name != "nt":
+        command.append("-lm")
+    command.extend(["-o", str(executable)])
+    run(*command)
     run(str(executable))
 
 
@@ -72,6 +75,7 @@ def test_rtl(temp: Path) -> None:
     assert len(schedule["operations"]) == 2
     sv = (out / "geo_cl20_product_q.sv").read_text(encoding="utf-8")
     assert "always_comb" in sv
+    assert "sum_s   = q00" in sv
     assert "sum_e12" in sv
     controller = (out / "geo_program_controller.sv").read_text(encoding="utf-8")
     assert "TOTAL_CYCLES = 4" in controller
