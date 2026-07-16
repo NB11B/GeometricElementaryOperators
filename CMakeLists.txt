@@ -134,8 +134,8 @@ if(GEO_BUILD_CUDA AND Python3_Interpreter_FOUND)
         vector_wedge
         rotor_action
     )
-    set(GEO_CUDA_SCHEDULE_SOURCES "")
-    set(GEO_CUDA_SCHEDULE_HEADERS "")
+    set(GEO_CUDA_SCHEDULE_SOURCES)
+    set(GEO_CUDA_SCHEDULE_HEADERS)
     foreach(schedule_name IN LISTS GEO_CUDA_SCHEDULE_NAMES)
         list(APPEND GEO_CUDA_SCHEDULE_SOURCES
             ${GEO_CUDA_SCHEDULE_DIR}/geo_cuda_schedule_${schedule_name}.cu
@@ -235,6 +235,15 @@ if(GEO_BUILD_TESTS)
         target_compile_features(test_cuda PRIVATE cuda_std_17)
         add_test(NAME cuda_equivalence COMMAND test_cuda)
         set_tests_properties(cuda_equivalence PROPERTIES SKIP_RETURN_CODE 77)
+
+        if(TARGET geo_cuda_schedules)
+            add_executable(test_cuda_schedules tests/test_cuda_schedules.cu)
+            add_dependencies(test_cuda_schedules generate_cuda_schedules)
+            target_link_libraries(test_cuda_schedules PRIVATE geo_cuda_schedules)
+            target_compile_features(test_cuda_schedules PRIVATE cuda_std_17)
+            add_test(NAME cuda_schedule_equivalence COMMAND test_cuda_schedules)
+            set_tests_properties(cuda_schedule_equivalence PROPERTIES SKIP_RETURN_CODE 77)
+        endif()
     endif()
 
     if(Python3_Interpreter_FOUND)
