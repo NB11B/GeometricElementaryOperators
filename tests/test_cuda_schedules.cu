@@ -340,6 +340,63 @@ int main() {
         return EXIT_FAILURE;
     }
 
+    int active_device = -1;
+    cudaDeviceProp device_properties;
+    cudaError_t query_status = cudaGetDevice(&active_device);
+    if (query_status != cudaSuccess) {
+        return fail_cuda("query active device", query_status);
+    }
+    query_status = cudaGetDeviceProperties(&device_properties, active_device);
+    if (query_status != cudaSuccess) {
+        return fail_cuda("query active device properties", query_status);
+    }
+    if (device_properties.maxGridSize[0] <= 0) {
+        std::fputs("FAIL: active device reports no x-dimension grid capacity\n", stderr);
+        return EXIT_FAILURE;
+    }
+    if (device_properties.maxThreadsPerBlock <= 0) {
+        std::fputs("FAIL: active device reports no thread-block capacity\n", stderr);
+        return EXIT_FAILURE;
+    }
+    const unsigned int excessive_block_size =
+        static_cast<unsigned int>(device_properties.maxThreadsPerBlock) + 1u;
+    launch_status = geo_cuda_schedule_addition_launch(
+        resources.d0,
+        resources.d1,
+        resources.output,
+        1u,
+        excessive_block_size,
+        nullptr
+    );
+    if (launch_status != static_cast<int>(cudaErrorInvalidConfiguration)) {
+        std::fputs(
+            "FAIL: generated launcher must reject a block larger than maxThreadsPerBlock\n",
+            stderr
+        );
+        return EXIT_FAILURE;
+    }
+    const std::size_t excessive_grid_count =
+        static_cast<std::size_t>(device_properties.maxGridSize[0]) +
+        static_cast<std::size_t>(1u);
+    launch_status = geo_cuda_schedule_addition_launch(
+        resources.d0,
+        resources.d1,
+        resources.output,
+        excessive_grid_count,
+        1u,
+        nullptr
+    );
+    if (launch_status != static_cast<int>(cudaErrorInvalidConfiguration)) {
+        std::fputs(
+            "FAIL: generated launcher must reject a grid larger than maxGridSize.x\n",
+            stderr
+        );
+        return EXIT_FAILURE;
+    }
+    if (synchronize("rejected launch synchronization") != EXIT_SUCCESS) {
+        return EXIT_FAILURE;
+    }
+
     std::puts("PASS generated CUDA schedule equivalence");
     return EXIT_SUCCESS;
 }

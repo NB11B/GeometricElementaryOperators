@@ -135,7 +135,9 @@ extern "C" {{
 /*
  * Launches a generated schedule over device-resident arrays. Every input and
  * output pointer is a CUDA device pointer. stream may be NULL for the default
- * stream or a cudaStream_t converted to void *.
+ * stream or a cudaStream_t converted to void *. output contains the complete
+ * Cl(2,0) value of the schedule root; for vector_wedge that value is the blade
+ * (0, 0, 0, e12_coefficient), not a scalar-only array.
  */
 int geo_cuda_schedule_{name}_launch(
     {parameters(schedule)}
@@ -349,6 +351,7 @@ def self_test() -> None:
     assert "cudaDevAttrMaxGridDimX" in source
     assert "cudaDevAttrMaxThreadsPerBlock" in source
     assert "SIZE_MAX" in source
+    assert "cudaGetDevice(&device)" in source
 
     try:
         validate_schedule({

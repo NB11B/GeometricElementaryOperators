@@ -21,6 +21,10 @@ COMPONENTS = ("s", "e1", "e2", "e12")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
+def is_identifier(value: object) -> bool:
+    return isinstance(value, str) and IDENTIFIER_RE.fullmatch(value) is not None
+
+
 @dataclass(frozen=True)
 class Multivector:
     scalar: int = 0
@@ -102,7 +106,7 @@ def fixed_wedge(a: Multivector, b: Multivector, width: int, fraction_bits: int) 
 
 def validate_schedule(data: dict[str, Any]) -> dict[str, Any]:
     name = data.get("name")
-    if not isinstance(name, str) or not IDENTIFIER_RE.match(name):
+    if not is_identifier(name):
         raise ValueError("schedule name must be a SystemVerilog/C identifier")
     input_registers = data.get("input_registers")
     if not isinstance(input_registers, list) or not input_registers:
@@ -640,7 +644,7 @@ static int same_mv(geo_fixed_cl20_t a, geo_fixed_cl20_t b) {{
 }}
 
 static void fail_case(int index, const char *field) {{
-    fprintf(stderr, "FAIL {schedule['name']} case %d: %s\n", index, field);
+    fprintf(stderr, "FAIL {schedule['name']} case %d: %s\\n", index, field);
     exit(EXIT_FAILURE);
 }}
 
@@ -671,6 +675,16 @@ def self_test() -> None:
     )
     assert not overflow and result.e12 == -one
     assert "geo_schedule_self_test" in schedule_module(schedule, 32, 16, "geo_cl20_product_q")
+    assert not is_identifier("self_test\ntrailing_junk")
+    assert not is_identifier("geo_cl20_product_q\ntrailing_junk")
+    invalid_schedule = dict(schedule)
+    invalid_schedule["name"] = "self_test\ntrailing_junk"
+    try:
+        validate_schedule(invalid_schedule)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("schedule identifiers must reject trailing junk")
 
 
 def main(argv: Iterable[str] | None = None) -> int:
@@ -685,7 +699,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     if args.width < 4 or args.frac < 1 or args.frac >= args.width - 1:
         parser.error("invalid fixed-point width/fraction")
-    if not IDENTIFIER_RE.match(args.product_module):
+    if not is_identifier(args.product_module):
         parser.error("invalid product module name")
     if args.self_test:
         self_test()

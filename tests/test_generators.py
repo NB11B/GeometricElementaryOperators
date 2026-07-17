@@ -135,6 +135,21 @@ def test_rtl_schedules(temp: Path) -> None:
     out = temp / "rtl-schedules"
     paths = schedule_paths()
 
+    invalid_product = subprocess.run(
+        [
+            PYTHON,
+            str(ROOT / "tools" / "generate_rtl_schedule.py"),
+            "--out-dir", str(out),
+            "--schedule-json", str(paths[0]),
+            "--product-module", "geo_cl20_product_q\ntrailing_junk",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert invalid_product.returncode != 0
+    assert "invalid product module name" in invalid_product.stderr
+
     run(
         PYTHON,
         str(ROOT / "tools" / "generate_rtl.py"),
@@ -239,6 +254,15 @@ def test_cuda_schedules(temp: Path) -> None:
         assert f"geo_cuda_schedule_{entry['name']}_kernel" in source
         assert "cudaGetLastError" in source
         assert "SIZE_MAX" in source
+        assert "cudaGetDevice(&device)" in source
+        assert "cudaDevAttrMaxGridDimX" in source
+        assert "cudaDevAttrMaxThreadsPerBlock" in source
+        assert "block_size > (unsigned int)max_threads_per_block" in source
+        assert "block_count > (size_t)max_grid_x" in source
+
+        if entry["name"] == "vector_wedge":
+            assert "complete" in header
+            assert "(0, 0, 0, e12_coefficient)" in header
 
 
 def main() -> int:

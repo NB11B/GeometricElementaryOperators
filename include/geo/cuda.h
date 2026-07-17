@@ -79,6 +79,11 @@ geo_cuda_status_t geo_cuda_cl20_vector_dot_batch(
     size_t count
 );
 
+/*
+ * Computes the scalar e12 coefficient of the wedge of each input-vector pair.
+ * Unlike generated schedule launchers, this public batch API does not return a
+ * full Cl(2,0) multivector for vector wedge.
+ */
 geo_cuda_status_t geo_cuda_cl20_vector_wedge_batch(
     geo_cuda_context_t *context,
     const geo_cl20_t *a,
