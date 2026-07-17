@@ -24,14 +24,11 @@ static geo_fixed_t fixed(double value) {
     return output;
 }
 
+#if GEO_FIXED_FRACTION_BITS >= 8
 static int near_double(geo_fixed_t actual, double expected, double tolerance) {
     return fabs(geo_fixed_to_double(actual) - expected) <= tolerance;
 }
-
-static int same_mv(geo_fixed_cl20_t left, geo_fixed_cl20_t right) {
-    return left.scalar == right.scalar && left.e1 == right.e1 &&
-        left.e2 == right.e2 && left.e12 == right.e12;
-}
+#endif
 
 static void test_fixed_eml(void) {
     const geo_fixed_t zero = fixed(0.0);
