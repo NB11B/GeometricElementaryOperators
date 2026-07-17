@@ -21,7 +21,6 @@ concurrency:
 
 jobs:
   esp32-c6-imu-benchmark:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     container: espressif/idf:v5.3.4
     steps:
