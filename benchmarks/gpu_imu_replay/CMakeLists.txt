@@ -29,7 +29,7 @@ if(MSVC)
         geo_gpu_imu_replay
         PRIVATE
             $<$<COMPILE_LANGUAGE:CXX>:/O2;/W4;/permissive->
-            $<$<COMPILE_LANGUAGE:CUDA>:-O3;--fmad=false;--prec-div=true;--prec-sqrt=true;-lineinfo;-Xcompiler=/O2;-Xcompiler=/W4>
+            $<$<COMPILE_LANGUAGE:CUDA>:-O3;--fmad=false;--prec-div=true;--prec-sqrt=true;-lineinfo;-diag-suppress=128;-Xcompiler=/O2;-Xcompiler=/W4>
     )
 else()
     target_compile_options(
