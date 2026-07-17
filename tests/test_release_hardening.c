@@ -94,7 +94,7 @@ static void test_nan_rejection(void) {
         "near rejects NaN tolerance");
 }
 
-static void test_eml_nonfinite_log_rejection(void) {
+static void test_eml_nonfinite_rejection(void) {
     const geo_real_t sentinel = (geo_real_t)123.25;
     geo_real_t output = sentinel;
 
@@ -117,6 +117,27 @@ static void test_eml_nonfinite_log_rejection(void) {
         "embedded log rejects negative infinity"
     );
     expect(output == sentinel, "embedded log leaves output unchanged for negative infinity");
+
+    output = sentinel;
+    expect(
+        geo_eml_exp((geo_real_t)NAN, GEO_EML_BALANCED, &output) == GEO_EML_DOMAIN,
+        "embedded exp rejects NaN"
+    );
+    expect(output == sentinel, "embedded exp leaves output unchanged for NaN");
+
+    output = sentinel;
+    expect(
+        geo_eml_exp((geo_real_t)INFINITY, GEO_EML_BALANCED, &output) == GEO_EML_OVERFLOW,
+        "embedded exp rejects positive infinity"
+    );
+    expect(output == sentinel, "embedded exp leaves output unchanged for positive infinity");
+
+    output = sentinel;
+    expect(
+        geo_eml_exp((geo_real_t)-INFINITY, GEO_EML_BALANCED, &output) == GEO_EML_OVERFLOW,
+        "embedded exp rejects negative infinity"
+    );
+    expect(output == sentinel, "embedded exp leaves output unchanged for negative infinity");
 }
 
 static void test_checked_involutions(void) {
@@ -149,7 +170,7 @@ static void test_optimizer_abi_layout(void) {
 int main(void) {
     test_malformed_programs();
     test_nan_rejection();
-    test_eml_nonfinite_log_rejection();
+    test_eml_nonfinite_rejection();
     test_checked_involutions();
     test_optimizer_abi_layout();
     if (failures != 0) {
