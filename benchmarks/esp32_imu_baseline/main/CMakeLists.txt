@@ -3,9 +3,19 @@ idf_component_register(
         "main.c"
         "benchmark_common.c"
         "replay_trace.c"
+        "geo_filter.c"
         "conventional_filter.c"
         "tinyml_baseline.c"
     INCLUDE_DIRS "."
+    REQUIRES
+        esp32
 )
 
-target_compile_options(${COMPONENT_LIB} PRIVATE -O3 -Wall -Wextra -Wpedantic)
+target_compile_options(
+    ${COMPONENT_LIB}
+    PRIVATE
+        -O3
+        -Wall
+        -Wextra
+        -Wpedantic
+)
