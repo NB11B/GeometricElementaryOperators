@@ -10,6 +10,8 @@ idf_component_register(
     INCLUDE_DIRS "."
     REQUIRES
         esp32
+        esp_timer
+        heap
 )
 
 target_compile_options(
