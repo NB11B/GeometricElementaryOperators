@@ -1,13 +1,13 @@
 # Knowledge Graph Summary
 
-- Nodes: 10
-- Edges: 11
+- Nodes: 11
+- Edges: 13
 
 ## Node types
 
 - Component: 3
 - Decision: 2
-- Experiment: 1
+- Experiment: 2
 - Risk: 1
 - Task: 3
 
@@ -18,7 +18,7 @@
 - EXTENDS: 1
 - IMPLEMENTS: 3
 - MITIGATES: 1
-- VALIDATED_BY: 1
+- VALIDATED_BY: 3
 
 ## Provenance
 
