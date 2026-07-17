@@ -16,3 +16,14 @@ Testing/
 .vscode/
 .idea/
 .DS_Store
+
+# Local ESP-IDF generated configuration and benchmark evidence.
+/local-evidence/
+/benchmarks/esp32_imu_baseline/evidence/
+/benchmarks/esp32_imu_baseline/sdkconfig
+/benchmarks/esp32_imu_baseline/sdkconfig.old
+/benchmarks/esp32_imu_baseline/*.log
+/benchmarks/esp32_imu_baseline/*.csv
+/examples/esp32_s3/sdkconfig
+/examples/esp32_s3/sdkconfig.old
+/examples/esp32_s3/*.log
