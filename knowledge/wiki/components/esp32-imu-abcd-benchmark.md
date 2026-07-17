@@ -51,7 +51,7 @@ A startup check runs the A, B, and C paths on the same deterministic fixture for
 
 ## Validation boundary
 
-The branch includes an ESP-IDF 5.3.4 ESP32-C6 compile workflow, but the pull request remains draft. A compile-only result will establish integration and toolchain compatibility, not physical timing. Hardware claims require a named ESP32-C6 board, exact commit, ESP-IDF version, clock configuration, full serial capture, and preserved CSV rows.
+The branch includes an ESP-IDF 5.3.4 ESP32-C6 compile workflow. Run `29604937424` failed before checkout with an empty step list and no downloadable job log because of the existing GitHub billing/spending gate. Repository code did not execute, so this is neither a compile failure nor a pass. A later compile-only result will establish integration and toolchain compatibility, not physical timing. Hardware claims require a named ESP32-C6 board, exact commit, ESP-IDF version, clock configuration, full serial capture, and preserved CSV rows.
 
 ## Provenance
 
