@@ -933,9 +933,16 @@ int main(int argc, char **argv) {
     rotor_a = rotor_from_seed(&random_state);
     rotor_b = rotor_from_seed(&random_state);
 
+#if defined(GEO_REAL_IS_DOUBLE) && GEO_REAL_IS_DOUBLE
+    const char *precision = "double";
+#else
+    const char *precision = "float";
+#endif
     printf(
         "Geometric Elementary Operators shared workload harness\n"
-        "iterations=%" PRIu64 " warmup=%" PRIu64 " seed=%" PRIu32 "\n",
+        "configuration: precision=%s iterations=%" PRIu64
+        " warmup=%" PRIu64 " seed=%" PRIu32 "\n",
+        precision,
         options.iterations,
         options.warmup,
         options.seed

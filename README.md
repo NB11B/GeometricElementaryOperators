@@ -155,7 +155,7 @@ cmake --build build-cuda --target generate_cuda_schedules
 
 `cuda_equivalence` tests the public batched C ABI. `cuda_schedule_equivalence` executes generated launchers with the same operation semantics. Both return CTest skip code 77 when no compatible CUDA device or driver is available, while the CUDA 13 compile job still builds every source.
 
-Run the CUDA event harness:
+Run the CUDA selected-path harness:
 
 ```sh
 ./build-cuda/bench_cuda \
@@ -163,19 +163,23 @@ Run the CUDA event harness:
   --batch 262144 \
   --iterations 100 \
   --warmup 10 \
+  --seed 608135816 \
   --operation all \
   --csv cuda-benchmark.csv
 ```
 
-The harness validates batch byte counts and grid dimensions before allocation. It transfers only the inputs required by each operation and reports:
+The harness validates batch byte counts and grid dimensions before allocation and uses one deterministic seed for every compared path. It reports six public batched C APIs with `backend=cuda_public_api` and `timing_scope=host_end_to_end`; those host wall-clock measurements include the allocation, copies, launch, synchronization, and release performed by the API. It separately reports the five available generated launchers (addition, geometric product, dot, wedge, and rotor action) with `backend=cuda_generated_schedule` and `timing_scope=device_kernel`, measured by CUDA events on device-resident buffers. There is intentionally no generated reverse schedule.
 
-- GPU model, compute capability, runtime, and driver;
-- precision, batch size, block count, and thread count;
-- upload, kernel-only, download, and transfer-inclusive time;
-- items per second;
-- logical kernel bandwidth and measured transfer bandwidth;
+The harness header reports GPU model, compute capability, runtime, and driver.
+Every CSV row includes:
+
+- operation, backend/path, timing scope, precision, batch, iterations, warmup, and seed;
+- per-item timing for that row's declared scope;
+- overflow-checked upload, download, and logical-kernel byte counts;
 - maximum absolute and relative error;
 - mismatch count.
+
+Byte accounting follows each real interface: public dot and wedge download scalar coefficient arrays, while their generated schedules download full `Cl(2,0)` values; generated rotor action uploads `R`, `x`, and `reverse(R)`, while the public API accepts only `R` and `x`. The workload report rejects missing, extra, duplicate, mislabeled, mis-seeded, or incorrectly byte-counted rows against its exact CPU/CUDA capability manifest.
 
 Canonical operation names in CSV output are `addition`, `geometric_product`, `reverse`, `vector_dot`, `vector_wedge`, and `rotor_action`. The shorter CLI aliases `add`, `product`, `dot`, `wedge`, and `rotor` remain accepted.
 

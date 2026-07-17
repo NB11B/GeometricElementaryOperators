@@ -1,11 +1,19 @@
 #include "geo/cl20.h"
 #include "geo/cuda.h"
 
+#if defined(GEO_HAVE_GENERATED_CUDA_SCHEDULES)
+#include "geo_cuda_schedule_addition.h"
+#include "geo_cuda_schedule_geometric_product.h"
+#include "geo_cuda_schedule_rotor_action.h"
+#include "geo_cuda_schedule_vector_dot.h"
+#include "geo_cuda_schedule_vector_wedge.h"
+#endif
+
 #include <cuda_runtime.h>
 
 #include <algorithm>
 #include <cerrno>
-#include <climits>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -44,6 +52,7 @@ struct Options {
     std::size_t batch = 262144u;
     unsigned int iterations = 100u;
     unsigned int warmup = 10u;
+    uint32_t seed = UINT32_C(0x243f6a88);
     std::string operation = "all";
     std::string csv_path;
 };
@@ -54,16 +63,10 @@ struct BatchLayout {
     unsigned int blocks = 0u;
 };
 
-struct TransferLayout {
+struct ByteCounts {
     std::size_t upload_bytes = 0u;
     std::size_t download_bytes = 0u;
     std::size_t logical_kernel_bytes = 0u;
-};
-
-struct Timing {
-    float upload_ms = 0.0f;
-    float kernel_total_ms = 0.0f;
-    float download_ms = 0.0f;
 };
 
 struct ErrorStats {
@@ -82,146 +85,23 @@ struct EventPair {
     }
 };
 
-struct Resources {
+struct GeneratedResources {
     int device = 0;
-    geo_cuda_context_t *api_context = nullptr;
     cudaStream_t stream = nullptr;
     geo_cl20_t *device_a = nullptr;
     geo_cl20_t *device_b = nullptr;
-    geo_cl20_t *device_rotor = nullptr;
-    geo_cl20_t *device_mv_output = nullptr;
-    geo_real_t *device_scalar_output = nullptr;
+    geo_cl20_t *device_reverse = nullptr;
+    geo_cl20_t *device_output = nullptr;
 
-    ~Resources() {
+    ~GeneratedResources() {
         (void)cudaSetDevice(device);
-        if (device_scalar_output != nullptr) {
-            (void)cudaFree(device_scalar_output);
-        }
-        if (device_mv_output != nullptr) {
-            (void)cudaFree(device_mv_output);
-        }
-        if (device_rotor != nullptr) (void)cudaFree(device_rotor);
+        if (device_output != nullptr) (void)cudaFree(device_output);
+        if (device_reverse != nullptr) (void)cudaFree(device_reverse);
         if (device_b != nullptr) (void)cudaFree(device_b);
         if (device_a != nullptr) (void)cudaFree(device_a);
         if (stream != nullptr) (void)cudaStreamDestroy(stream);
-        geo_cuda_context_destroy(api_context);
     }
 };
-
-__device__ __forceinline__ geo_cl20_t device_add(
-    geo_cl20_t left,
-    geo_cl20_t right
-) {
-    geo_cl20_t output;
-    output.scalar = left.scalar + right.scalar;
-    output.e1 = left.e1 + right.e1;
-    output.e2 = left.e2 + right.e2;
-    output.e12 = left.e12 + right.e12;
-    return output;
-}
-
-__device__ __forceinline__ geo_cl20_t device_product(
-    geo_cl20_t left,
-    geo_cl20_t right
-) {
-    geo_cl20_t output;
-    output.scalar =
-        left.scalar * right.scalar + left.e1 * right.e1 +
-        left.e2 * right.e2 - left.e12 * right.e12;
-    output.e1 =
-        left.scalar * right.e1 + left.e1 * right.scalar -
-        left.e2 * right.e12 + left.e12 * right.e2;
-    output.e2 =
-        left.scalar * right.e2 + left.e2 * right.scalar +
-        left.e1 * right.e12 - left.e12 * right.e1;
-    output.e12 =
-        left.scalar * right.e12 + left.e12 * right.scalar +
-        left.e1 * right.e2 - left.e2 * right.e1;
-    return output;
-}
-
-__device__ __forceinline__ geo_cl20_t device_reverse(geo_cl20_t value) {
-    value.e12 = -value.e12;
-    return value;
-}
-
-__global__ void addition_kernel(
-    const geo_cl20_t *left,
-    const geo_cl20_t *right,
-    geo_cl20_t *output,
-    std::size_t count
-) {
-    const std::size_t index =
-        static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-    if (index < count) output[index] = device_add(left[index], right[index]);
-}
-
-__global__ void product_kernel(
-    const geo_cl20_t *left,
-    const geo_cl20_t *right,
-    geo_cl20_t *output,
-    std::size_t count
-) {
-    const std::size_t index =
-        static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-    if (index < count) output[index] = device_product(left[index], right[index]);
-}
-
-__global__ void reverse_kernel(
-    const geo_cl20_t *input,
-    geo_cl20_t *output,
-    std::size_t count
-) {
-    const std::size_t index =
-        static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-    if (index < count) output[index] = device_reverse(input[index]);
-}
-
-__global__ void dot_kernel(
-    const geo_cl20_t *left,
-    const geo_cl20_t *right,
-    geo_real_t *output,
-    std::size_t count
-) {
-    const std::size_t index =
-        static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-    if (index < count) {
-        output[index] =
-            left[index].e1 * right[index].e1 +
-            left[index].e2 * right[index].e2;
-    }
-}
-
-__global__ void wedge_kernel(
-    const geo_cl20_t *left,
-    const geo_cl20_t *right,
-    geo_real_t *output,
-    std::size_t count
-) {
-    const std::size_t index =
-        static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-    if (index < count) {
-        output[index] =
-            left[index].e1 * right[index].e2 -
-            left[index].e2 * right[index].e1;
-    }
-}
-
-__global__ void rotor_kernel(
-    const geo_cl20_t *rotor,
-    const geo_cl20_t *value,
-    geo_cl20_t *output,
-    std::size_t count
-) {
-    const std::size_t index =
-        static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-    if (index < count) {
-        output[index] = device_product(
-            device_product(rotor[index], value[index]),
-            device_reverse(rotor[index])
-        );
-    }
-}
 
 const char *operation_name(Operation operation) {
     switch (operation) {
@@ -241,10 +121,16 @@ const char *operation_name(Operation operation) {
     return "unknown";
 }
 
-bool operation_is_scalar(Operation operation) {
+bool operation_is_public_scalar(Operation operation) {
     return operation == Operation::VectorDot ||
         operation == Operation::VectorWedge;
 }
+
+#if defined(GEO_HAVE_GENERATED_CUDA_SCHEDULES)
+bool operation_has_generated_schedule(Operation operation) {
+    return operation != Operation::Reverse;
+}
+#endif
 
 std::string canonical_operation(const std::string &value) {
     if (value == "all") return value;
@@ -266,7 +152,6 @@ std::string canonical_operation(const std::string &value) {
 bool parse_unsigned(const char *text, unsigned long long *value) {
     char *end = nullptr;
     unsigned long long parsed;
-
     if (text == nullptr || value == nullptr || text[0] == '\0' ||
         text[0] == '-') {
         return false;
@@ -281,15 +166,14 @@ bool parse_unsigned(const char *text, unsigned long long *value) {
 void print_usage(const char *program) {
     std::printf(
         "Usage: %s [--device N] [--batch N] [--iterations N] [--warmup N] "
-        "[--operation all|addition|geometric_product|reverse|vector_dot|"
-        "vector_wedge|rotor_action] [--csv PATH]\n",
+        "[--seed N] [--operation all|addition|geometric_product|reverse|"
+        "vector_dot|vector_wedge|rotor_action] [--csv PATH]\n",
         program
     );
 }
 
 bool parse_options(int argc, char **argv, Options *options) {
     if (options == nullptr) return false;
-
     for (int index = 1; index < argc; ++index) {
         const std::string argument(argv[index]);
         if (argument == "--help" || argument == "-h") {
@@ -297,7 +181,6 @@ bool parse_options(int argc, char **argv, Options *options) {
             std::exit(EXIT_SUCCESS);
         }
         if (index + 1 >= argc) return false;
-
         const char *value = argv[++index];
         unsigned long long parsed = 0u;
         if (argument == "--device") {
@@ -316,18 +199,21 @@ bool parse_options(int argc, char **argv, Options *options) {
             options->batch = static_cast<std::size_t>(parsed);
         } else if (argument == "--iterations") {
             if (!parse_unsigned(value, &parsed) || parsed == 0u ||
-                parsed > static_cast<unsigned long long>(
-                    std::numeric_limits<unsigned int>::max())) {
+                parsed > std::numeric_limits<unsigned int>::max()) {
                 return false;
             }
             options->iterations = static_cast<unsigned int>(parsed);
         } else if (argument == "--warmup") {
             if (!parse_unsigned(value, &parsed) ||
-                parsed > static_cast<unsigned long long>(
-                    std::numeric_limits<unsigned int>::max())) {
+                parsed > std::numeric_limits<unsigned int>::max()) {
                 return false;
             }
             options->warmup = static_cast<unsigned int>(parsed);
+        } else if (argument == "--seed") {
+            if (!parse_unsigned(value, &parsed) || parsed > UINT32_MAX) {
+                return false;
+            }
+            options->seed = static_cast<uint32_t>(parsed);
         } else if (argument == "--operation") {
             options->operation = canonical_operation(value);
             if (options->operation.empty()) return false;
@@ -379,68 +265,65 @@ bool prepare_layout(
 ) {
     if (layout == nullptr || batch == 0u || max_grid_x <= 0) return false;
     if (!checked_multiply(batch, sizeof(geo_cl20_t), &layout->mv_bytes) ||
-        !checked_multiply(
-            batch,
-            sizeof(geo_real_t),
-            &layout->scalar_bytes)) {
+        !checked_multiply(batch, sizeof(geo_real_t), &layout->scalar_bytes)) {
         return false;
     }
-
     const std::size_t threads = static_cast<std::size_t>(kThreadsPerBlock);
     const std::size_t block_count = batch / threads +
         (batch % threads == 0u ? 0u : 1u);
     if (block_count == 0u ||
         block_count > static_cast<std::size_t>(max_grid_x) ||
-        block_count > static_cast<std::size_t>(
-            std::numeric_limits<unsigned int>::max())) {
+        block_count > std::numeric_limits<unsigned int>::max()) {
         return false;
     }
     layout->blocks = static_cast<unsigned int>(block_count);
     return true;
 }
 
-bool transfer_layout(
+bool byte_counts(
     Operation operation,
-    const BatchLayout &batch,
-    TransferLayout *layout
+    bool generated,
+    const BatchLayout &layout,
+    ByteCounts *counts
 ) {
-    if (layout == nullptr) return false;
+    if (counts == nullptr) return false;
     std::size_t two_mv = 0u;
     std::size_t three_mv = 0u;
-    if (!checked_multiply(batch.mv_bytes, 2u, &two_mv) ||
-        !checked_multiply(batch.mv_bytes, 3u, &three_mv)) {
+    std::size_t four_mv = 0u;
+    if (!checked_multiply(layout.mv_bytes, 2u, &two_mv) ||
+        !checked_multiply(layout.mv_bytes, 3u, &three_mv) ||
+        !checked_multiply(layout.mv_bytes, 4u, &four_mv)) {
         return false;
     }
-
+    if (generated) {
+        counts->upload_bytes = operation == Operation::RotorAction
+            ? three_mv : two_mv;
+        counts->download_bytes = layout.mv_bytes;
+        counts->logical_kernel_bytes = operation == Operation::RotorAction
+            ? four_mv : three_mv;
+        return operation != Operation::Reverse;
+    }
     switch (operation) {
         case Operation::Addition:
         case Operation::GeometricProduct:
-            layout->upload_bytes = two_mv;
-            layout->download_bytes = batch.mv_bytes;
-            layout->logical_kernel_bytes = three_mv;
+        case Operation::RotorAction:
+            counts->upload_bytes = two_mv;
+            counts->download_bytes = layout.mv_bytes;
+            counts->logical_kernel_bytes = three_mv;
             return true;
-
         case Operation::Reverse:
-            layout->upload_bytes = batch.mv_bytes;
-            layout->download_bytes = batch.mv_bytes;
-            layout->logical_kernel_bytes = two_mv;
+            counts->upload_bytes = layout.mv_bytes;
+            counts->download_bytes = layout.mv_bytes;
+            counts->logical_kernel_bytes = two_mv;
             return true;
-
         case Operation::VectorDot:
         case Operation::VectorWedge:
-            layout->upload_bytes = two_mv;
-            layout->download_bytes = batch.scalar_bytes;
+            counts->upload_bytes = two_mv;
+            counts->download_bytes = layout.scalar_bytes;
             return checked_add(
-                two_mv,
-                batch.scalar_bytes,
-                &layout->logical_kernel_bytes
+                two_mv, layout.scalar_bytes,
+                &counts->logical_kernel_bytes
             );
-
-        case Operation::RotorAction:
-            layout->upload_bytes = two_mv;
-            layout->download_bytes = batch.mv_bytes;
-            layout->logical_kernel_bytes = three_mv;
-            return true;
     }
     return false;
 }
@@ -459,16 +342,12 @@ geo_real_t sample(uint32_t *state) {
 
 geo_cl20_t random_mv(uint32_t *state) {
     return geo_cl20_make(
-        sample(state),
-        sample(state),
-        sample(state),
-        sample(state)
+        sample(state), sample(state), sample(state), sample(state)
     );
 }
 
-geo_cl20_t rotor_for(std::size_t index) {
-    const double angle =
-        0.0005 * static_cast<double>((index % 1009u) + 1u);
+geo_cl20_t random_rotor(uint32_t *state) {
+    const double angle = static_cast<double>(sample(state));
     return geo_cl20_make(
         static_cast<geo_real_t>(std::cos(angle)),
         static_cast<geo_real_t>(0),
@@ -480,9 +359,7 @@ geo_cl20_t rotor_for(std::size_t index) {
 bool cuda_ok(cudaError_t error, const char *stage) {
     if (error == cudaSuccess) return true;
     std::fprintf(
-        stderr,
-        "CUDA failure during %s: %s\n",
-        stage,
+        stderr, "CUDA failure during %s: %s\n", stage,
         cudaGetErrorString(error)
     );
     return false;
@@ -492,201 +369,8 @@ template <typename T>
 bool allocate_device(T **pointer, std::size_t bytes, const char *stage) {
     if (pointer == nullptr || bytes == 0u) return false;
     return cuda_ok(
-        cudaMalloc(reinterpret_cast<void **>(pointer), bytes),
-        stage
+        cudaMalloc(reinterpret_cast<void **>(pointer), bytes), stage
     );
-}
-
-bool create_events(EventPair *events) {
-    if (events == nullptr) return false;
-    if (!cuda_ok(cudaEventCreate(&events->start), "event creation")) {
-        return false;
-    }
-    return cuda_ok(cudaEventCreate(&events->stop), "event creation");
-}
-
-bool begin_timing(EventPair *events, cudaStream_t stream, const char *stage) {
-    return events != nullptr &&
-        cuda_ok(cudaEventRecord(events->start, stream), stage);
-}
-
-bool end_timing(
-    EventPair *events,
-    cudaStream_t stream,
-    float *milliseconds,
-    const char *stage
-) {
-    if (events == nullptr || milliseconds == nullptr) return false;
-    return cuda_ok(cudaEventRecord(events->stop, stream), stage) &&
-        cuda_ok(cudaEventSynchronize(events->stop), stage) &&
-        cuda_ok(
-            cudaEventElapsedTime(milliseconds, events->start, events->stop),
-            stage
-        );
-}
-
-bool enqueue_uploads(
-    Operation operation,
-    const BatchLayout &layout,
-    const std::vector<geo_cl20_t> &a,
-    const std::vector<geo_cl20_t> &b,
-    const std::vector<geo_cl20_t> &rotor,
-    Resources *resources
-) {
-    if (resources == nullptr) return false;
-
-    switch (operation) {
-        case Operation::Addition:
-        case Operation::GeometricProduct:
-        case Operation::VectorDot:
-        case Operation::VectorWedge:
-            return cuda_ok(
-                cudaMemcpyAsync(
-                    resources->device_a,
-                    a.data(),
-                    layout.mv_bytes,
-                    cudaMemcpyHostToDevice,
-                    resources->stream
-                ),
-                "upload a"
-            ) && cuda_ok(
-                cudaMemcpyAsync(
-                    resources->device_b,
-                    b.data(),
-                    layout.mv_bytes,
-                    cudaMemcpyHostToDevice,
-                    resources->stream
-                ),
-                "upload b"
-            );
-
-        case Operation::Reverse:
-            return cuda_ok(
-                cudaMemcpyAsync(
-                    resources->device_a,
-                    a.data(),
-                    layout.mv_bytes,
-                    cudaMemcpyHostToDevice,
-                    resources->stream
-                ),
-                "upload reverse input"
-            );
-
-        case Operation::RotorAction:
-            return cuda_ok(
-                cudaMemcpyAsync(
-                    resources->device_rotor,
-                    rotor.data(),
-                    layout.mv_bytes,
-                    cudaMemcpyHostToDevice,
-                    resources->stream
-                ),
-                "upload rotor"
-            ) && cuda_ok(
-                cudaMemcpyAsync(
-                    resources->device_a,
-                    a.data(),
-                    layout.mv_bytes,
-                    cudaMemcpyHostToDevice,
-                    resources->stream
-                ),
-                "upload rotor value"
-            );
-    }
-    return false;
-}
-
-bool launch(
-    Operation operation,
-    const Options &options,
-    const BatchLayout &layout,
-    const Resources &resources
-) {
-    switch (operation) {
-        case Operation::Addition:
-            addition_kernel<<<
-                layout.blocks,
-                kThreadsPerBlock,
-                0u,
-                resources.stream
-            >>>(
-                resources.device_a,
-                resources.device_b,
-                resources.device_mv_output,
-                options.batch
-            );
-            break;
-
-        case Operation::GeometricProduct:
-            product_kernel<<<
-                layout.blocks,
-                kThreadsPerBlock,
-                0u,
-                resources.stream
-            >>>(
-                resources.device_a,
-                resources.device_b,
-                resources.device_mv_output,
-                options.batch
-            );
-            break;
-
-        case Operation::Reverse:
-            reverse_kernel<<<
-                layout.blocks,
-                kThreadsPerBlock,
-                0u,
-                resources.stream
-            >>>(
-                resources.device_a,
-                resources.device_mv_output,
-                options.batch
-            );
-            break;
-
-        case Operation::VectorDot:
-            dot_kernel<<<
-                layout.blocks,
-                kThreadsPerBlock,
-                0u,
-                resources.stream
-            >>>(
-                resources.device_a,
-                resources.device_b,
-                resources.device_scalar_output,
-                options.batch
-            );
-            break;
-
-        case Operation::VectorWedge:
-            wedge_kernel<<<
-                layout.blocks,
-                kThreadsPerBlock,
-                0u,
-                resources.stream
-            >>>(
-                resources.device_a,
-                resources.device_b,
-                resources.device_scalar_output,
-                options.batch
-            );
-            break;
-
-        case Operation::RotorAction:
-            rotor_kernel<<<
-                layout.blocks,
-                kThreadsPerBlock,
-                0u,
-                resources.stream
-            >>>(
-                resources.device_rotor,
-                resources.device_a,
-                resources.device_mv_output,
-                options.batch
-            );
-            break;
-    }
-    return cuda_ok(cudaGetLastError(), "kernel launch");
 }
 
 void update_error(ErrorStats *stats, geo_real_t actual, geo_real_t expected) {
@@ -709,36 +393,50 @@ void update_error(ErrorStats *stats, geo_real_t actual, geo_real_t expected) {
     }
 }
 
+geo_cl20_t expected_multivector(
+    Operation operation,
+    geo_cl20_t a,
+    geo_cl20_t b,
+    geo_cl20_t rotor,
+    bool generated
+) {
+    switch (operation) {
+        case Operation::Addition:
+            return geo_cl20_add(a, b);
+        case Operation::GeometricProduct:
+            return geo_cl20_mul(a, b);
+        case Operation::Reverse:
+            return geo_cl20_reverse(a);
+        case Operation::VectorDot:
+            return geo_cl20_make(
+                geo_cl20_vector_dot(a, b), 0, 0, 0
+            );
+        case Operation::VectorWedge:
+            return geo_cl20_make(
+                0, 0, 0,
+                generated ? geo_cl20_vector_wedge(a, b) : 0
+            );
+        case Operation::RotorAction:
+            return geo_cl20_mul(
+                geo_cl20_mul(rotor, a), geo_cl20_reverse(rotor)
+            );
+    }
+    return geo_cl20_zero();
+}
+
 ErrorStats compare_multivectors(
     Operation operation,
     const std::vector<geo_cl20_t> &a,
     const std::vector<geo_cl20_t> &b,
     const std::vector<geo_cl20_t> &rotor,
-    const std::vector<geo_cl20_t> &actual
+    const std::vector<geo_cl20_t> &actual,
+    bool generated
 ) {
     ErrorStats stats;
     for (std::size_t index = 0u; index < actual.size(); ++index) {
-        geo_cl20_t expected;
-        switch (operation) {
-            case Operation::Addition:
-                expected = geo_cl20_add(a[index], b[index]);
-                break;
-            case Operation::GeometricProduct:
-                expected = geo_cl20_mul(a[index], b[index]);
-                break;
-            case Operation::Reverse:
-                expected = geo_cl20_reverse(a[index]);
-                break;
-            case Operation::RotorAction:
-                expected = geo_cl20_mul(
-                    geo_cl20_mul(rotor[index], a[index]),
-                    geo_cl20_reverse(rotor[index])
-                );
-                break;
-            default:
-                expected = geo_cl20_zero();
-                break;
-        }
+        const geo_cl20_t expected = expected_multivector(
+            operation, a[index], b[index], rotor[index], generated
+        );
         update_error(&stats, actual[index].scalar, expected.scalar);
         update_error(&stats, actual[index].e1, expected.e1);
         update_error(&stats, actual[index].e2, expected.e2);
@@ -747,7 +445,7 @@ ErrorStats compare_multivectors(
     return stats;
 }
 
-ErrorStats compare_scalars(
+ErrorStats compare_public_scalars(
     Operation operation,
     const std::vector<geo_cl20_t> &a,
     const std::vector<geo_cl20_t> &b,
@@ -763,180 +461,289 @@ ErrorStats compare_scalars(
     return stats;
 }
 
-bool run_operation(
+geo_cuda_status_t run_public_once(
+    Operation operation,
+    geo_cuda_context_t *context,
+    const std::vector<geo_cl20_t> &a,
+    const std::vector<geo_cl20_t> &b,
+    const std::vector<geo_cl20_t> &rotor,
+    std::vector<geo_cl20_t> *mv_output,
+    std::vector<geo_real_t> *scalar_output
+) {
+    switch (operation) {
+        case Operation::Addition:
+            return geo_cuda_cl20_add_batch(
+                context, a.data(), b.data(), mv_output->data(), a.size()
+            );
+        case Operation::GeometricProduct:
+            return geo_cuda_cl20_product_batch(
+                context, a.data(), b.data(), mv_output->data(), a.size()
+            );
+        case Operation::Reverse:
+            return geo_cuda_cl20_reverse_batch(
+                context, a.data(), mv_output->data(), a.size()
+            );
+        case Operation::VectorDot:
+            return geo_cuda_cl20_vector_dot_batch(
+                context, a.data(), b.data(), scalar_output->data(), a.size()
+            );
+        case Operation::VectorWedge:
+            return geo_cuda_cl20_vector_wedge_batch(
+                context, a.data(), b.data(), scalar_output->data(), a.size()
+            );
+        case Operation::RotorAction:
+            return geo_cuda_cl20_rotor_action_batch(
+                context, rotor.data(), a.data(), mv_output->data(), a.size()
+            );
+    }
+    return GEO_CUDA_INVALID_ARGUMENT;
+}
+
+bool run_public(
+    Operation operation,
+    const Options &options,
+    geo_cuda_context_t *context,
+    const std::vector<geo_cl20_t> &a,
+    const std::vector<geo_cl20_t> &b,
+    const std::vector<geo_cl20_t> &rotor,
+    std::vector<geo_cl20_t> *mv_output,
+    std::vector<geo_real_t> *scalar_output,
+    double *ns_per_item,
+    ErrorStats *errors
+) {
+    for (unsigned int index = 0u; index < options.warmup; ++index) {
+        const geo_cuda_status_t status = run_public_once(
+            operation, context, a, b, rotor, mv_output, scalar_output
+        );
+        if (status != GEO_CUDA_SUCCESS) {
+            std::fprintf(
+                stderr, "Public CUDA warmup failed for %s: %s\n",
+                operation_name(operation), geo_cuda_status_string(status)
+            );
+            return false;
+        }
+    }
+    const auto start = std::chrono::steady_clock::now();
+    for (unsigned int index = 0u; index < options.iterations; ++index) {
+        const geo_cuda_status_t status = run_public_once(
+            operation, context, a, b, rotor, mv_output, scalar_output
+        );
+        if (status != GEO_CUDA_SUCCESS) {
+            std::fprintf(
+                stderr, "Public CUDA execution failed for %s: %s\n",
+                operation_name(operation), geo_cuda_status_string(status)
+            );
+            return false;
+        }
+    }
+    const auto stop = std::chrono::steady_clock::now();
+    const double elapsed_ns = std::chrono::duration<double, std::nano>(
+        stop - start
+    ).count();
+    *ns_per_item = elapsed_ns /
+        (static_cast<double>(options.iterations) * options.batch);
+    *errors = operation_is_public_scalar(operation)
+        ? compare_public_scalars(operation, a, b, *scalar_output)
+        : compare_multivectors(
+            operation, a, b, rotor, *mv_output, false
+        );
+    return true;
+}
+
+#if defined(GEO_HAVE_GENERATED_CUDA_SCHEDULES)
+bool upload_generated(
+    Operation operation,
+    const BatchLayout &layout,
+    const std::vector<geo_cl20_t> &a,
+    const std::vector<geo_cl20_t> &b,
+    const std::vector<geo_cl20_t> &rotor,
+    const std::vector<geo_cl20_t> &reverse,
+    GeneratedResources *resources
+) {
+    const geo_cl20_t *input_a = operation == Operation::RotorAction
+        ? rotor.data() : a.data();
+    const geo_cl20_t *input_b = operation == Operation::RotorAction
+        ? a.data() : b.data();
+    if (!cuda_ok(cudaMemcpyAsync(
+            resources->device_a, input_a, layout.mv_bytes,
+            cudaMemcpyHostToDevice, resources->stream), "generated upload r0") ||
+        !cuda_ok(cudaMemcpyAsync(
+            resources->device_b, input_b, layout.mv_bytes,
+            cudaMemcpyHostToDevice, resources->stream), "generated upload r1")) {
+        return false;
+    }
+    if (operation == Operation::RotorAction &&
+        !cuda_ok(cudaMemcpyAsync(
+            resources->device_reverse, reverse.data(), layout.mv_bytes,
+            cudaMemcpyHostToDevice, resources->stream),
+            "generated upload r2")) {
+        return false;
+    }
+    return cuda_ok(
+        cudaStreamSynchronize(resources->stream),
+        "generated upload synchronization"
+    );
+}
+
+int launch_generated(
+    Operation operation,
+    const Options &options,
+    const GeneratedResources &resources
+) {
+    void *stream = reinterpret_cast<void *>(resources.stream);
+    switch (operation) {
+        case Operation::Addition:
+            return geo_cuda_schedule_addition_launch(
+                resources.device_a, resources.device_b,
+                resources.device_output, options.batch,
+                kThreadsPerBlock, stream
+            );
+        case Operation::GeometricProduct:
+            return geo_cuda_schedule_geometric_product_launch(
+                resources.device_a, resources.device_b,
+                resources.device_output, options.batch,
+                kThreadsPerBlock, stream
+            );
+        case Operation::VectorDot:
+            return geo_cuda_schedule_vector_dot_launch(
+                resources.device_a, resources.device_b,
+                resources.device_output, options.batch,
+                kThreadsPerBlock, stream
+            );
+        case Operation::VectorWedge:
+            return geo_cuda_schedule_vector_wedge_launch(
+                resources.device_a, resources.device_b,
+                resources.device_output, options.batch,
+                kThreadsPerBlock, stream
+            );
+        case Operation::RotorAction:
+            return geo_cuda_schedule_rotor_action_launch(
+                resources.device_a, resources.device_b,
+                resources.device_reverse, resources.device_output,
+                options.batch, kThreadsPerBlock, stream
+            );
+        case Operation::Reverse:
+            return static_cast<int>(cudaErrorInvalidValue);
+    }
+    return static_cast<int>(cudaErrorInvalidValue);
+}
+
+bool run_generated(
     Operation operation,
     const Options &options,
     const BatchLayout &layout,
     const std::vector<geo_cl20_t> &a,
     const std::vector<geo_cl20_t> &b,
     const std::vector<geo_cl20_t> &rotor,
-    std::vector<geo_cl20_t> *mv_output,
-    std::vector<geo_real_t> *scalar_output,
-    Resources *resources,
-    TransferLayout *transfers,
-    Timing *timing,
+    const std::vector<geo_cl20_t> &reverse,
+    std::vector<geo_cl20_t> *output,
+    GeneratedResources *resources,
+    double *ns_per_item,
     ErrorStats *errors
 ) {
-    if (mv_output == nullptr || scalar_output == nullptr || resources == nullptr ||
-        transfers == nullptr || timing == nullptr || errors == nullptr) {
+    if (!upload_generated(
+            operation, layout, a, b, rotor, reverse, resources)) {
         return false;
     }
-    if (!transfer_layout(operation, layout, transfers)) return false;
-
+    for (unsigned int index = 0u; index < options.warmup; ++index) {
+        const int status = launch_generated(operation, options, *resources);
+        if (status != static_cast<int>(cudaSuccess)) {
+            std::fprintf(
+                stderr, "Generated CUDA warmup failed for %s: %s\n",
+                operation_name(operation),
+                cudaGetErrorString(static_cast<cudaError_t>(status))
+            );
+            return false;
+        }
+    }
+    if (!cuda_ok(cudaStreamSynchronize(resources->stream),
+            "generated warmup synchronization")) {
+        return false;
+    }
     EventPair events;
-    if (!create_events(&events)) return false;
-
-    if (!begin_timing(&events, resources->stream, "upload timing start") ||
-        !enqueue_uploads(operation, layout, a, b, rotor, resources) ||
-        !end_timing(
-            &events,
-            resources->stream,
-            &timing->upload_ms,
-            "upload timing")) {
+    if (!cuda_ok(cudaEventCreate(&events.start), "generated event creation") ||
+        !cuda_ok(cudaEventCreate(&events.stop), "generated event creation") ||
+        !cuda_ok(cudaEventRecord(events.start, resources->stream),
+            "generated timing start")) {
         return false;
     }
-
-    for (unsigned int iteration = 0u;
-         iteration < options.warmup;
-         ++iteration) {
-        if (!launch(operation, options, layout, *resources)) return false;
-    }
-    if (!cuda_ok(
-            cudaStreamSynchronize(resources->stream),
-            "warmup synchronization")) {
-        return false;
-    }
-
-    if (!begin_timing(&events, resources->stream, "kernel timing start")) {
-        return false;
-    }
-    for (unsigned int iteration = 0u;
-         iteration < options.iterations;
-         ++iteration) {
-        if (!launch(operation, options, layout, *resources)) return false;
-    }
-    if (!end_timing(
-            &events,
-            resources->stream,
-            &timing->kernel_total_ms,
-            "kernel timing")) {
-        return false;
-    }
-
-    if (!begin_timing(&events, resources->stream, "download timing start")) {
-        return false;
-    }
-    if (operation_is_scalar(operation)) {
-        if (!cuda_ok(
-                cudaMemcpyAsync(
-                    scalar_output->data(),
-                    resources->device_scalar_output,
-                    layout.scalar_bytes,
-                    cudaMemcpyDeviceToHost,
-                    resources->stream
-                ),
-                "download scalar output")) {
-            return false;
-        }
-    } else {
-        if (!cuda_ok(
-                cudaMemcpyAsync(
-                    mv_output->data(),
-                    resources->device_mv_output,
-                    layout.mv_bytes,
-                    cudaMemcpyDeviceToHost,
-                    resources->stream
-                ),
-                "download multivector output")) {
+    for (unsigned int index = 0u; index < options.iterations; ++index) {
+        const int status = launch_generated(operation, options, *resources);
+        if (status != static_cast<int>(cudaSuccess)) {
+            std::fprintf(
+                stderr, "Generated CUDA execution failed for %s: %s\n",
+                operation_name(operation),
+                cudaGetErrorString(static_cast<cudaError_t>(status))
+            );
             return false;
         }
     }
-    if (!end_timing(
-            &events,
-            resources->stream,
-            &timing->download_ms,
-            "download timing")) {
+    float elapsed_ms = 0.0f;
+    if (!cuda_ok(cudaEventRecord(events.stop, resources->stream),
+            "generated timing stop") ||
+        !cuda_ok(cudaEventSynchronize(events.stop),
+            "generated timing synchronization") ||
+        !cuda_ok(cudaEventElapsedTime(
+            &elapsed_ms, events.start, events.stop),
+            "generated elapsed time")) {
         return false;
     }
-
-    *errors = operation_is_scalar(operation)
-        ? compare_scalars(operation, a, b, *scalar_output)
-        : compare_multivectors(operation, a, b, rotor, *mv_output);
+    if (!cuda_ok(cudaMemcpyAsync(
+            output->data(), resources->device_output, layout.mv_bytes,
+            cudaMemcpyDeviceToHost, resources->stream),
+            "generated output download") ||
+        !cuda_ok(cudaStreamSynchronize(resources->stream),
+            "generated output synchronization")) {
+        return false;
+    }
+    *ns_per_item = static_cast<double>(elapsed_ms) * 1.0e6 /
+        (static_cast<double>(options.iterations) * options.batch);
+    *errors = compare_multivectors(
+        operation, a, b, rotor, *output, true
+    );
     return true;
 }
+#endif
 
 void write_csv_header(std::ofstream *csv) {
     if (csv == nullptr || !csv->is_open()) return;
     *csv <<
-        "operation,precision,batch,iterations,warmup,upload_bytes,download_bytes,"
-        "logical_kernel_bytes,upload_ms,kernel_ms_per_batch,download_ms,"
-        "total_ms_per_batch,items_per_second,kernel_effective_gbps,transfer_gbps,"
+        "operation,backend,timing_scope,precision,batch,iterations,warmup,seed,"
+        "upload_bytes,download_bytes,logical_kernel_bytes,ns_per_item,"
         "max_absolute_error,max_relative_error,mismatches\n";
 }
 
 void report(
     Operation operation,
+    const char *backend,
+    const char *timing_scope,
     const Options &options,
-    const TransferLayout &transfers,
-    const Timing &timing,
+    const ByteCounts &bytes,
+    double ns_per_item,
     const ErrorStats &errors,
     std::ofstream *csv
 ) {
-    const double kernel_ms = static_cast<double>(timing.kernel_total_ms) /
-        static_cast<double>(options.iterations);
-    const double total_ms = static_cast<double>(timing.upload_ms) + kernel_ms +
-        static_cast<double>(timing.download_ms);
-    const double kernel_seconds = kernel_ms * 1.0e-3;
-    const double transfer_seconds =
-        (static_cast<double>(timing.upload_ms) +
-         static_cast<double>(timing.download_ms)) * 1.0e-3;
-    const double items_per_second = kernel_seconds > 0.0
-        ? static_cast<double>(options.batch) / kernel_seconds
-        : 0.0;
-    const double kernel_gbps = kernel_seconds > 0.0
-        ? static_cast<double>(transfers.logical_kernel_bytes) /
-            kernel_seconds / 1.0e9
-        : 0.0;
-    const double transfer_gbps = transfer_seconds > 0.0
-        ? static_cast<double>(
-            transfers.upload_bytes + transfers.download_bytes) /
-            transfer_seconds / 1.0e9
-        : 0.0;
 #if defined(GEO_REAL_IS_DOUBLE) && GEO_REAL_IS_DOUBLE
     const char *precision = "double";
 #else
     const char *precision = "float";
 #endif
-
     std::printf(
-        "%-20s upload=%9.4f ms kernel=%9.4f ms download=%9.4f ms "
-        "total=%9.4f ms throughput=%12.3f Mitems/s kernel_bw=%8.3f GB/s "
-        "transfer_bw=%8.3f GB/s max_abs=%10.3e max_rel=%10.3e "
+        "RESULT operation=%s backend=%s timing_scope=%s "
+        "ns_per_item=%.6f max_absolute=%.17g max_relative=%.17g "
         "mismatches=%zu\n",
-        operation_name(operation),
-        timing.upload_ms,
-        kernel_ms,
-        timing.download_ms,
-        total_ms,
-        items_per_second / 1.0e6,
-        kernel_gbps,
-        transfer_gbps,
-        errors.max_absolute,
-        errors.max_relative,
-        errors.mismatches
+        operation_name(operation), backend, timing_scope, ns_per_item,
+        errors.max_absolute, errors.max_relative, errors.mismatches
     );
-
     if (csv != nullptr && csv->is_open()) {
-        *csv << operation_name(operation) << ',' << precision << ','
-             << options.batch << ',' << options.iterations << ','
-             << options.warmup << ',' << transfers.upload_bytes << ','
-             << transfers.download_bytes << ','
-             << transfers.logical_kernel_bytes << ',' << std::setprecision(9)
-             << timing.upload_ms << ',' << kernel_ms << ','
-             << timing.download_ms << ',' << total_ms << ','
-             << items_per_second << ',' << kernel_gbps << ','
-             << transfer_gbps << ',' << errors.max_absolute << ','
-             << errors.max_relative << ',' << errors.mismatches << '\n';
+        *csv << operation_name(operation) << ',' << backend << ','
+             << timing_scope << ',' << precision << ',' << options.batch << ','
+             << options.iterations << ',' << options.warmup << ','
+             << options.seed << ',' << bytes.upload_bytes << ','
+             << bytes.download_bytes << ',' << bytes.logical_kernel_bytes
+             << ',' << std::setprecision(17) << ns_per_item << ','
+             << errors.max_absolute << ',' << errors.max_relative << ','
+             << errors.mismatches << '\n';
     }
 }
 
@@ -949,14 +756,12 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    Resources resources;
-    resources.device = options.device;
+    geo_cuda_context_t *api_context = nullptr;
     const geo_cuda_status_t context_status =
-        geo_cuda_context_create(options.device, &resources.api_context);
+        geo_cuda_context_create(options.device, &api_context);
     if (context_status != GEO_CUDA_SUCCESS) {
         std::fprintf(
-            stderr,
-            "CUDA context creation failed: %s\n",
+            stderr, "CUDA context creation failed: %s\n",
             geo_cuda_status_string(context_status)
         );
         return context_status == GEO_CUDA_NO_DEVICE ? 77 : EXIT_FAILURE;
@@ -964,98 +769,63 @@ int main(int argc, char **argv) {
 
     geo_cuda_device_info_t info;
     const geo_cuda_status_t info_status =
-        geo_cuda_get_device_info(resources.api_context, &info);
+        geo_cuda_get_device_info(api_context, &info);
     if (info_status != GEO_CUDA_SUCCESS) {
         std::fprintf(
-            stderr,
-            "CUDA device query failed: %s\n",
+            stderr, "CUDA device query failed: %s\n",
             geo_cuda_status_string(info_status)
         );
+        geo_cuda_context_destroy(api_context);
         return EXIT_FAILURE;
     }
-
     if (!cuda_ok(cudaSetDevice(options.device), "device selection")) {
+        geo_cuda_context_destroy(api_context);
         return EXIT_FAILURE;
     }
     int max_grid_x = 0;
-    if (!cuda_ok(
-            cudaDeviceGetAttribute(
-                &max_grid_x,
-                cudaDevAttrMaxGridDimX,
-                options.device
-            ),
+    if (!cuda_ok(cudaDeviceGetAttribute(
+            &max_grid_x, cudaDevAttrMaxGridDimX, options.device),
             "maximum grid query")) {
+        geo_cuda_context_destroy(api_context);
         return EXIT_FAILURE;
     }
-
     BatchLayout layout;
     if (!prepare_layout(options.batch, max_grid_x, &layout)) {
         std::fprintf(
-            stderr,
-            "Invalid batch size %zu for element sizes and device grid limit %d\n",
-            options.batch,
-            max_grid_x
+            stderr, "Invalid batch size %zu for element sizes and device grid limit %d\n",
+            options.batch, max_grid_x
         );
-        return EXIT_FAILURE;
-    }
-
-    if (!cuda_ok(
-            cudaStreamCreateWithFlags(
-                &resources.stream,
-                cudaStreamNonBlocking
-            ),
-            "stream creation")) {
-        return EXIT_FAILURE;
-    }
-
-    if (!allocate_device(
-            &resources.device_a,
-            layout.mv_bytes,
-            "allocate a") ||
-        !allocate_device(
-            &resources.device_b,
-            layout.mv_bytes,
-            "allocate b") ||
-        !allocate_device(
-            &resources.device_rotor,
-            layout.mv_bytes,
-            "allocate rotor") ||
-        !allocate_device(
-            &resources.device_mv_output,
-            layout.mv_bytes,
-            "allocate multivector output") ||
-        !allocate_device(
-            &resources.device_scalar_output,
-            layout.scalar_bytes,
-            "allocate scalar output")) {
+        geo_cuda_context_destroy(api_context);
         return EXIT_FAILURE;
     }
 
     std::vector<geo_cl20_t> a;
     std::vector<geo_cl20_t> b;
     std::vector<geo_cl20_t> rotor;
+    std::vector<geo_cl20_t> reverse;
     std::vector<geo_cl20_t> mv_output;
     std::vector<geo_real_t> scalar_output;
     try {
         a.resize(options.batch);
         b.resize(options.batch);
         rotor.resize(options.batch);
+        reverse.resize(options.batch);
         mv_output.resize(options.batch);
         scalar_output.resize(options.batch);
     } catch (const std::bad_alloc &) {
         std::fprintf(
-            stderr,
-            "Host allocation failed for batch size %zu\n",
+            stderr, "Host allocation failed for batch size %zu\n",
             options.batch
         );
+        geo_cuda_context_destroy(api_context);
         return EXIT_FAILURE;
     }
-
-    uint32_t random_state = UINT32_C(0x243f6a88);
+    uint32_t random_state = options.seed;
     for (std::size_t index = 0u; index < options.batch; ++index) {
         a[index] = random_mv(&random_state);
         b[index] = random_mv(&random_state);
-        rotor[index] = rotor_for(index);
+        rotor[index] = random_rotor(&random_state);
+        reverse[index] = geo_cl20_reverse(rotor[index]);
     }
 
     std::ofstream csv;
@@ -1063,10 +833,10 @@ int main(int argc, char **argv) {
         csv.open(options.csv_path, std::ios::out | std::ios::trunc);
         if (!csv.is_open()) {
             std::fprintf(
-                stderr,
-                "Unable to open CSV output: %s\n",
+                stderr, "Unable to open CSV output: %s\n",
                 options.csv_path.c_str()
             );
+            geo_cuda_context_destroy(api_context);
             return EXIT_FAILURE;
         }
         write_csv_header(&csv);
@@ -1078,56 +848,103 @@ int main(int argc, char **argv) {
     const char *precision = "float";
 #endif
     std::printf(
-        "Geometric Elementary Operators CUDA 13.x harness\n"
+        "Geometric Elementary Operators CUDA selected-path harness\n"
         "device: %s (compute %d.%d, %d SMs, runtime %d, driver %d)\n"
-        "precision: %s, batch: %zu, blocks: %u, threads: %u, "
-        "iterations: %u, warmup: %u, operation: %s\n",
-        info.name,
-        info.compute_major,
-        info.compute_minor,
-        info.multiprocessor_count,
-        info.runtime_version,
-        info.driver_version,
-        precision,
-        options.batch,
-        layout.blocks,
-        kThreadsPerBlock,
-        options.iterations,
-        options.warmup,
-        options.operation.c_str()
+        "configuration: precision=%s batch=%zu iterations=%u warmup=%u "
+        "seed=%u operation=%s\n",
+        info.name, info.compute_major, info.compute_minor,
+        info.multiprocessor_count, info.runtime_version, info.driver_version,
+        precision, options.batch, options.iterations, options.warmup,
+        options.seed, options.operation.c_str()
     );
 
     bool ok = true;
     for (Operation operation : kOperations) {
         if (!selected(options, operation)) continue;
-        TransferLayout transfers;
-        Timing timing;
+        double ns_per_item = 0.0;
         ErrorStats errors;
-        if (!run_operation(
-                operation,
-                options,
-                layout,
-                a,
-                b,
-                rotor,
-                &mv_output,
-                &scalar_output,
-                &resources,
-                &transfers,
-                &timing,
-                &errors)) {
+        ByteCounts bytes;
+        if (!byte_counts(operation, false, layout, &bytes)) {
+            ok = false;
+            break;
+        }
+        if (!run_public(
+                operation, options, api_context, a, b, rotor,
+                &mv_output, &scalar_output, &ns_per_item, &errors)) {
             ok = false;
             break;
         }
         report(
-            operation,
-            options,
-            transfers,
-            timing,
-            errors,
-            csv.is_open() ? &csv : nullptr
+            operation, "cuda_public_api", "host_end_to_end", options,
+            bytes, ns_per_item, errors, csv.is_open() ? &csv : nullptr
         );
         if (errors.mismatches != 0u) ok = false;
     }
+    geo_cuda_context_destroy(api_context);
+
+#if defined(GEO_HAVE_GENERATED_CUDA_SCHEDULES)
+    bool needs_generated_resources = false;
+    bool needs_generated_reverse = false;
+    for (Operation operation : kOperations) {
+        if (selected(options, operation) &&
+            operation_has_generated_schedule(operation)) {
+            needs_generated_resources = true;
+            if (operation == Operation::RotorAction) {
+                needs_generated_reverse = true;
+            }
+        }
+    }
+    GeneratedResources generated;
+    generated.device = options.device;
+    if (ok && needs_generated_resources &&
+        (!cuda_ok(cudaStreamCreateWithFlags(
+                    &generated.stream, cudaStreamNonBlocking),
+                    "generated stream creation") ||
+               !allocate_device(
+                    &generated.device_a, layout.mv_bytes,
+                    "generated allocate r0") ||
+               !allocate_device(
+                    &generated.device_b, layout.mv_bytes,
+                    "generated allocate r1") ||
+               !allocate_device(
+                    &generated.device_output, layout.mv_bytes,
+                    "generated allocate output"))) {
+        ok = false;
+    }
+    if (ok && needs_generated_reverse &&
+        !allocate_device(
+            &generated.device_reverse, layout.mv_bytes,
+            "generated allocate r2")) {
+        ok = false;
+    }
+    if (ok && needs_generated_resources) {
+        for (Operation operation : kOperations) {
+            if (!selected(options, operation) ||
+                !operation_has_generated_schedule(operation)) {
+                continue;
+            }
+            double ns_per_item = 0.0;
+            ErrorStats errors;
+            ByteCounts bytes;
+            if (!byte_counts(operation, true, layout, &bytes)) {
+                ok = false;
+                break;
+            }
+            if (!run_generated(
+                    operation, options, layout, a, b, rotor, reverse,
+                    &mv_output, &generated, &ns_per_item, &errors)) {
+                ok = false;
+                break;
+            }
+            report(
+                operation, "cuda_generated_schedule", "device_kernel",
+                options, bytes, ns_per_item, errors,
+                csv.is_open() ? &csv : nullptr
+            );
+            if (errors.mismatches != 0u) ok = false;
+        }
+    }
+#endif
+
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

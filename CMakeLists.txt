@@ -252,6 +252,10 @@ if(GEO_BUILD_TESTS)
             NAME generators
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_generators.py
         )
+        add_test(
+            NAME workload_report_contract
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_workload_report.py
+        )
         set_tests_properties(generators PROPERTIES
             ENVIRONMENT "CC=${CMAKE_C_COMPILER}"
         )
@@ -277,6 +281,13 @@ if(GEO_BUILD_BENCHMARKS)
     if(GEO_BUILD_CUDA)
         add_executable(bench_cuda benchmarks/bench_cuda.cu)
         target_link_libraries(bench_cuda PRIVATE geo_cuda)
+        if(TARGET geo_cuda_schedules)
+            add_dependencies(bench_cuda generate_cuda_schedules)
+            target_link_libraries(bench_cuda PRIVATE geo_cuda_schedules)
+            target_compile_definitions(bench_cuda PRIVATE
+                GEO_HAVE_GENERATED_CUDA_SCHEDULES=1
+            )
+        endif()
         target_compile_features(bench_cuda PRIVATE cuda_std_17)
     endif()
 
@@ -303,6 +314,17 @@ if(GEO_BUILD_BENCHMARKS)
                     --operation all
             )
             set_tests_properties(cuda_benchmark_smoke PROPERTIES SKIP_RETURN_CODE 77)
+            add_test(
+                NAME cuda_benchmark_reverse_smoke
+                COMMAND bench_cuda
+                    --batch 257
+                    --iterations 2
+                    --warmup 1
+                    --operation reverse
+            )
+            set_tests_properties(cuda_benchmark_reverse_smoke PROPERTIES
+                SKIP_RETURN_CODE 77
+            )
         endif()
     endif()
 
@@ -334,6 +356,7 @@ if(GEO_BUILD_BENCHMARKS)
                     ${CMAKE_CURRENT_SOURCE_DIR}/tools/workload_report.py
                     --cpu-executable $<TARGET_FILE:bench_workloads>
                     --cuda-executable $<TARGET_FILE:bench_cuda>
+                    --require-cuda
                     --precision ${GEO_PRECISION_NAME}
                     --out-dir ${CMAKE_CURRENT_BINARY_DIR}/workload-report
                 DEPENDS bench_workloads bench_cuda
