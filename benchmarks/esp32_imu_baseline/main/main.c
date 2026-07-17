@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "benchmark_common.h"
 #include "conventional_filter.h"
@@ -43,8 +44,15 @@ void app_main(void)
         },
     };
 
+    if (!geo_filter_self_test()) {
+        printf("GEO_AB_CHECKS,status=fail\n");
+        abort();
+    }
+    printf("GEO_AB_CHECKS,status=pass\n");
+
     printf(
-        "GEO_ESP32_IMU_BASELINE,mode=replay,sample_rate_hz=%u,samples=%u,runs=%u,q_fraction_bits=%u\n",
+        "GEO_ESP32_IMU_BASELINE,mode=replay,sample_rate_hz=%u,samples=%u,"
+        "runs=%u,q_fraction_bits=%u\n",
         BENCH_SAMPLE_RATE_HZ,
         BENCH_SAMPLE_COUNT,
         BENCH_RUNS,
