@@ -1,0 +1,236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/geo-identity-v1.schema.json",
+  "title": "Geometric Identity IR v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "name",
+    "expected",
+    "dimension",
+    "signature",
+    "variables",
+    "lhs",
+    "rhs"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "expected": {
+      "enum": [
+        "identity",
+        "counterexample"
+      ]
+    },
+    "dimension": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 6
+    },
+    "signature": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "items": {
+        "enum": [
+          -1,
+          1
+        ]
+      }
+    },
+    "prime": {
+      "type": "integer",
+      "minimum": 3,
+      "maximum": 1000003
+    },
+    "coefficient_bound": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "variables": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "grades"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "grades": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 6
+            }
+          }
+        }
+      }
+    },
+    "lhs": {
+      "$ref": "#/$defs/expression"
+    },
+    "rhs": {
+      "$ref": "#/$defs/expression"
+    }
+  },
+  "$defs": {
+    "expression": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "var"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "var": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "scalar"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "scalar": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "args"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "add"
+            },
+            "args": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "$ref": "#/$defs/expression"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "args"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "enum": [
+                "sub",
+                "gp",
+                "wedge",
+                "commutator"
+              ]
+            },
+            "args": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/expression"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "arg"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "enum": [
+                "neg",
+                "reverse"
+              ]
+            },
+            "arg": {
+              "$ref": "#/$defs/expression"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "value",
+            "arg"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "scale"
+            },
+            "value": {
+              "type": "integer"
+            },
+            "arg": {
+              "$ref": "#/$defs/expression"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "grade",
+            "arg"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "grade"
+            },
+            "grade": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 6
+            },
+            "arg": {
+              "$ref": "#/$defs/expression"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

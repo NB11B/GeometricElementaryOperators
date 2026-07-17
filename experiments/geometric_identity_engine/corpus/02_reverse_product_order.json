@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "name": "reverse_reverses_product_order",
+  "description": "Reversion is an anti-automorphism: reverse(a*b)=reverse(b)*reverse(a).",
+  "expected": "identity",
+  "dimension": 4,
+  "signature": [
+    1,
+    1,
+    -1,
+    -1
+  ],
+  "prime": 65521,
+  "coefficient_bound": 3,
+  "seed": 2718281828,
+  "variables": [
+    {
+      "name": "a",
+      "grades": [0, 1, 2, 3, 4]
+    },
+    {
+      "name": "b",
+      "grades": [0, 1, 2, 3, 4]
+    }
+  ],
+  "lhs": {
+    "op": "reverse",
+    "arg": {
+      "op": "gp",
+      "args": [
+        {"var": "a"},
+        {"var": "b"}
+      ]
+    }
+  },
+  "rhs": {
+    "op": "gp",
+    "args": [
+      {
+        "op": "reverse",
+        "arg": {"var": "b"}
+      },
+      {
+        "op": "reverse",
+        "arg": {"var": "a"}
+      }
+    ]
+  }
+}

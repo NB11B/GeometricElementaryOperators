@@ -1,0 +1,52 @@
+name: Geometric identity engine
+
+on:
+  push:
+    branches:
+      - research/geometric-identity-engine-v1
+  pull_request:
+    paths:
+      - "tools/geo_identity_compiler.py"
+      - "experiments/geometric_identity_engine/**"
+      - "benchmarks/geo_identity_search/**"
+      - "tests/test_geo_identity_compiler.py"
+      - ".github/workflows/geometric-identity-engine.yml"
+
+jobs:
+  exact-host-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate identity corpus
+        run: |
+          python tools/geo_identity_compiler.py \
+            --identity experiments/geometric_identity_engine/corpus/01_vector_square_scalar.json \
+            --identity experiments/geometric_identity_engine/corpus/02_reverse_product_order.json \
+            --identity experiments/geometric_identity_engine/corpus/03_vector_wedge_antisymmetry.json \
+            --identity experiments/geometric_identity_engine/corpus/04_vector_product_commutativity_false.json \
+            --identity experiments/geometric_identity_engine/corpus/05_mutated_reverse_order_false.json \
+            --output benchmarks/geo_identity_search/generated/geo_identity_corpus.cuh \
+            --python-checks 256
+
+      - name: Run exact compiler tests
+        run: python -m unittest tests.test_geo_identity_compiler
+
+      - name: Compile host generated evaluator
+        run: |
+          g++ \
+            -std=c++17 \
+            -O2 \
+            -Wall \
+            -Wextra \
+            -Wpedantic \
+            benchmarks/geo_identity_search/host_smoke.cpp \
+            -Ibenchmarks/geo_identity_search/generated \
+            -o geo_identity_host_smoke
+
+      - name: Run host identity smoke
+        run: ./geo_identity_host_smoke

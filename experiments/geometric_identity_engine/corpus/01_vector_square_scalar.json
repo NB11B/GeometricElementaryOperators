@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "name": "vector_square_is_scalar",
+  "description": "For every vector a, the geometric square a*a has only grade zero.",
+  "expected": "identity",
+  "dimension": 4,
+  "signature": [
+    1,
+    1,
+    1,
+    1
+  ],
+  "prime": 65521,
+  "coefficient_bound": 3,
+  "seed": 610839776,
+  "variables": [
+    {
+      "name": "a",
+      "grades": [
+        1
+      ]
+    }
+  ],
+  "lhs": {
+    "op": "gp",
+    "args": [
+      {
+        "var": "a"
+      },
+      {
+        "var": "a"
+      }
+    ]
+  },
+  "rhs": {
+    "op": "grade",
+    "grade": 0,
+    "arg": {
+      "op": "gp",
+      "args": [
+        {
+          "var": "a"
+        },
+        {
+          "var": "a"
+        }
+      ]
+    }
+  }
+}
