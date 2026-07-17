@@ -4,6 +4,7 @@ idf_component_register(
         "benchmark_common.c"
         "replay_trace.c"
         "geo_filter.c"
+        "geo_filter_fused.c"
         "geo_filter_self_test.c"
         "conventional_filter.c"
         "tinyml_baseline.c"
