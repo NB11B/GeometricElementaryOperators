@@ -69,18 +69,21 @@ static geo_fixed_status_t norm2(geo_fixed_cl20_t v, geo_fixed_t *o) {
     return geo_fixed_vector_dot(v, v, o);
 }
 
-static geo_fixed_status_t dot_mv(geo_fixed_cl20_t a, geo_fixed_cl20_t b, geo_fixed_cl20_t *o) {
-    geo_fixed_t d;
-    geo_fixed_status_t s = geo_fixed_vector_dot(a, b, &d);
-    if (s != GEO_FIXED_OK || o == NULL) return s;
-    *o = zero_mv(); o->scalar = d; return GEO_FIXED_OK;
-}
+static geo_fixed_status_t wedge_mv(
+    geo_fixed_cl20_t a,
+    geo_fixed_cl20_t b,
+    geo_fixed_cl20_t *output
+) {
+    geo_fixed_t wedge;
+    geo_fixed_status_t status;
 
-static geo_fixed_status_t wedge_mv(geo_fixed_cl20_t a, geo_fixed_cl20_t b, geo_fixed_cl20_t *o) {
-    geo_fixed_t w;
-    geo_fixed_status_t s = geo_fixed_vector_wedge(a, b, &w);
-    if (s != GEO_FIXED_OK || o == NULL) return s;
-    *o = zero_mv(); o->e12 = w; return GEO_FIXED_OK;
+    if (output == NULL) return GEO_FIXED_OVERFLOW;
+    status = geo_fixed_vector_wedge(a, b, &wedge);
+    if (status != GEO_FIXED_OK) return status;
+
+    *output = zero_mv();
+    output->e12 = wedge;
+    return GEO_FIXED_OK;
 }
 
 static geo_fixed_status_t half_sum_difference(
@@ -171,21 +174,33 @@ geo_fixed_status_t geo_fixed_geb36_execute(
             if (st == GEO_FIXED_OK) st = geo_fixed_cl20_reverse_checked(t, &r);
             break;
         case GEO_GEB_VECTOR_DOT:
-            st = geo_fixed_vector_dot(a, b, &s); if (st == GEO_FIXED_OK) set_scalar(output, s); return st;
+            st = geo_fixed_vector_dot(a, b, &s);
+            if (st == GEO_FIXED_OK) set_scalar(output, s);
+            return st;
         case GEO_GEB_VECTOR_WEDGE: st = wedge_mv(a, b, &r); break;
         case GEO_GEB_COMMUTATOR: st = half_sum_difference(a, b, 1, &r); break;
         case GEO_GEB_ANTICOMMUTATOR: st = half_sum_difference(a, b, 0, &r); break;
         case GEO_GEB_VECTOR_NORM_SQUARED:
-            st = norm2(a, &s); if (st == GEO_FIXED_OK) set_scalar(output, s); return st;
+            st = norm2(a, &s);
+            if (st == GEO_FIXED_OK) set_scalar(output, s);
+            return st;
         case GEO_GEB_DISTANCE_SQUARED:
-            st = mv_sub(a, b, &r); if (st == GEO_FIXED_OK) st = norm2(r, &s);
-            if (st == GEO_FIXED_OK) set_scalar(output, s); return st;
+            st = mv_sub(a, b, &r);
+            if (st == GEO_FIXED_OK) st = norm2(r, &s);
+            if (st == GEO_FIXED_OK) set_scalar(output, s);
+            return st;
         case GEO_GEB_PROJECTION_NUMERATOR:
-            st = projection_num(a, b, &r); if (st == GEO_FIXED_OK) set_projective(output, r, one_value()); return st;
+            st = projection_num(a, b, &r);
+            if (st == GEO_FIXED_OK) set_projective(output, r, one_value());
+            return st;
         case GEO_GEB_REJECTION_NUMERATOR:
-            st = rejection_num(a, b, &r); if (st == GEO_FIXED_OK) set_projective(output, r, one_value()); return st;
+            st = rejection_num(a, b, &r);
+            if (st == GEO_FIXED_OK) set_projective(output, r, one_value());
+            return st;
         case GEO_GEB_REFLECTION_NUMERATOR:
-            st = reflection_num(a, b, &r); if (st == GEO_FIXED_OK) set_projective(output, r, one_value()); return st;
+            st = reflection_num(a, b, &r);
+            if (st == GEO_FIXED_OK) set_projective(output, r, one_value());
+            return st;
         case GEO_GEB_DUAL:
             t = zero_mv(); t.e12 = -one_value(); st = geo_fixed_cl20_mul(a, t, &r); break;
         case GEO_GEB_EVEN_PROJECTION: r = project(a, (uint8_t)(GEO_GRADE_SCALAR | GEO_GRADE_BIVECTOR)); break;
@@ -195,15 +210,20 @@ geo_fixed_status_t geo_fixed_geb36_execute(
         case GEO_GEB_ROTOR_NORM_SQUARED:
             st = geo_fixed_cl20_reverse_checked(a, &t);
             if (st == GEO_FIXED_OK) st = geo_fixed_cl20_mul(a, t, &r);
-            if (st == GEO_FIXED_OK) set_scalar(output, r.scalar); return st;
+            if (st == GEO_FIXED_OK) set_scalar(output, r.scalar);
+            return st;
         case GEO_GEB_DILATION: st = geo_fixed_rotor_action(transform, a, &r); break;
         case GEO_GEB_TRANSLATION_UNIPOTENT:
             output->kind = (uint8_t)GEO_FIXED_RESULT_UNIPOTENT;
             output->as.unipotent_payload = a; return GEO_FIXED_OK;
         case GEO_GEB_VECTOR_INVERSE_PROJECTIVE:
-            st = norm2(a, &s); if (st == GEO_FIXED_OK) set_projective(output, a, s); return st;
+            st = norm2(a, &s);
+            if (st == GEO_FIXED_OK) set_projective(output, a, s);
+            return st;
         case GEO_GEB_ANGLE_COSINE_NUMERATOR:
-            st = geo_fixed_vector_dot(a, b, &s); if (st == GEO_FIXED_OK) set_scalar(output, s); return st;
+            st = geo_fixed_vector_dot(a, b, &s);
+            if (st == GEO_FIXED_OK) set_scalar(output, s);
+            return st;
         default: return GEO_FIXED_OVERFLOW;
     }
 
