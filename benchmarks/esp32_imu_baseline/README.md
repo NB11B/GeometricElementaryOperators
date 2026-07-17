@@ -1,13 +1,35 @@
-# ESP32-C6 IMU Replay Baselines: C and D
+# ESP32-C6 IMU Replay Benchmark: A, B, C, and D
 
-This ESP-IDF application establishes the two non-GEO baselines that will be measured before adding GEO float (A) and GEO fixed-point (B).
+This ESP-IDF application compares two GEO implementations against conventional quaternion and quantized TinyML baselines on the same deterministic orientation-estimation task.
 
 ## Implementations
 
+- **A_geo_float**: allocation-free Mahony-style orientation filter whose quaternion products and gravity-frame rotations are executed through the floating GEO `Cl(2,0)` kernel.
+- **B_geo_fixed_q16**: the same filter topology using the signed 32-bit Q16 GEO backend for quaternion products, correction arithmetic, integration, and state storage. Quaternion normalization is the explicit nonlinear boundary and is performed through decoded scalar values before requantization.
 - **C_conventional_quaternion**: allocation-free Mahony-style quaternion orientation filter using conventional scalar/vector arithmetic.
 - **D_quantized_tinyml**: compact int8 dense-network execution path using a 32 x 6 IMU window, 16 hidden activations, and 7 outputs. The checked-in sparse identity/copy weights make the executable deterministic and exercise a real quantized tensor loop. They are a benchmark fixture, not trained production weights.
 
 The TinyML fixture currently measures runtime, memory, determinism, and integration behavior. Task-quality claims must wait until trained weights are substituted without changing the inference engine or result schema.
+
+## GEO quaternion representation
+
+The kernel currently exposes `Cl(2,0)`, while the replay task requires a full 3D quaternion. A and B therefore use the standard complex 2 x 2 matrix representation of a quaternion and represent each real 2 x 2 matrix with one `Cl(2,0)` value.
+
+For `q = w + xi + yj + zk`:
+
+```text
+q -> A + iB
+A = w + y e12
+B = x e1 + z e2
+```
+
+Quaternion multiplication is then evaluated as:
+
+```text
+(A + iB)(C + iD) = (AC - BD) + i(AD + BC)
+```
+
+Each quaternion product therefore executes four GEO geometric products plus checked GEO additions/subtractions. The A and B paths do not call a duplicate scalar quaternion-product routine.
 
 ## Input mode
 
@@ -19,6 +41,7 @@ The firmware procedurally regenerates the same 60-second, 12,000-sample, 200 Hz 
 
 ```powershell
 cd benchmarks\esp32_imu_baseline
+idf.py fullclean
 idf.py set-target esp32c6
 idf.py build
 idf.py -p COM5 flash monitor
@@ -42,26 +65,19 @@ Serial output is CSV-compatible and includes:
 Capture the run with:
 
 ```powershell
-idf.py -p COM5 monitor | Tee-Object esp32-imu-baseline-c-d.log
+idf.py -p COM5 monitor | Tee-Object esp32-imu-abcd.log
 ```
 
 Extract result rows with:
 
 ```powershell
-Select-String '^CSV,' esp32-imu-baseline-c-d.log |
+Select-String '^CSV,' esp32-imu-abcd.log |
   ForEach-Object { $_.Line } |
-  Set-Content esp32-imu-baseline-c-d.csv
+  Set-Content esp32-imu-abcd.csv
 ```
 
 ## Fairness controls
 
-Both implementations use the same generated samples, reference trajectory, timer, compiler flags, warm-up count, run count, output structure, and deadline. The timed region contains only one implementation step. Replay generation, reference generation, hashing, accuracy calculation, sorting, heap inspection, and serial printing are outside that timed region.
+All four implementations use the same generated samples, reference trajectory, timer, compiler flags, warm-up count, run count, output structure, and 5 ms deadline. The timed region contains only one implementation step. Replay generation, reference generation, hashing, accuracy calculation, sorting, heap inspection, and serial printing are outside that timed region.
 
-## Next integration
-
-After C and D results are preserved, add:
-
-- `A_geo_float`, using the existing floating GEO backend;
-- `B_geo_fixed`, using the existing Q-format GEO backend.
-
-They should implement the same `benchmark_impl_t` interface and emit the same result rows without changing the replay generator or metric code.
+A and C use the same filter gains and confidence gate. B uses the same topology and gains after Q16 quantization. This isolates the execution representation rather than changing the task or controller policy.
