@@ -25,6 +25,7 @@ class Term:
 @dataclass(frozen=True)
 class Output:
     name: str
+    scale: int
     terms: tuple[Term, ...]
 
 
@@ -56,6 +57,14 @@ def _require_identifier(value: object, context: str) -> str:
 def _require_unique(values: Sequence[str], context: str) -> None:
     if len(values) != len(set(values)):
         raise ScheduleError(f"{context} contains duplicate names: {values}")
+
+
+def _require_nonzero_integer(value: object, context: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ScheduleError(f"{context} must be an integer")
+    if value == 0:
+        raise ScheduleError(f"{context} must be nonzero")
+    return value
 
 
 def load_schedule(path: Path) -> Schedule:
@@ -109,6 +118,9 @@ def load_schedule(path: Path) -> Schedule:
             output_name = _require_identifier(
                 raw_output.get("name"), f"{output_context}.name"
             )
+            scale = _require_nonzero_integer(
+                raw_output.get("scale", 1), f"{output_context}.scale"
+            )
             raw_terms = raw_output.get("terms")
             if not isinstance(raw_terms, list) or not raw_terms:
                 raise ScheduleError(f"{output_context}.terms must be non-empty")
@@ -118,11 +130,10 @@ def load_schedule(path: Path) -> Schedule:
                 term_context = f"{output_context}.terms[{term_index}]"
                 if not isinstance(raw_term, dict):
                     raise ScheduleError(f"{term_context} must be an object")
-                coefficient = raw_term.get("coefficient")
-                if not isinstance(coefficient, int) or isinstance(coefficient, bool):
-                    raise ScheduleError(f"{term_context}.coefficient must be an integer")
-                if coefficient == 0:
-                    raise ScheduleError(f"{term_context}.coefficient must be nonzero")
+                coefficient = _require_nonzero_integer(
+                    raw_term.get("coefficient"),
+                    f"{term_context}.coefficient",
+                )
                 factors = raw_term.get("factors")
                 if not isinstance(factors, list) or len(factors) != 2:
                     raise ScheduleError(
@@ -136,7 +147,7 @@ def load_schedule(path: Path) -> Schedule:
                     )
                 terms.append(Term(coefficient, left, right))
 
-            outputs.append(Output(output_name, tuple(terms)))
+            outputs.append(Output(output_name, scale, tuple(terms)))
 
         output_names = tuple(output.name for output in outputs)
         _require_unique(output_names, f"{context}.outputs")
@@ -167,7 +178,7 @@ def evaluate_function(
             accumulator += (
                 term.coefficient * values[term.left] * values[term.right]
             )
-        result[output.name] = accumulator
+        result[output.name] = output.scale * accumulator
     return result
 
 
@@ -191,6 +202,34 @@ def _q32_term(term: Term, first: bool) -> str:
     if first:
         return f"-{product}" if term.coefficient < 0 else product
     return f" {'-' if term.coefficient < 0 else '+'} {product}"
+
+
+def _scaled_float_expression(output: Output) -> str:
+    inner = "".join(
+        _float_term(term, index == 0)
+        for index, term in enumerate(output.terms)
+    )
+    if output.scale == 1:
+        return inner
+    if output.scale == -1:
+        return f"-({inner})"
+    magnitude = abs(output.scale)
+    scaled = f"{magnitude}.0f * ({inner})"
+    return f"-{scaled}" if output.scale < 0 else scaled
+
+
+def _scaled_q32_expression(output: Output) -> str:
+    inner = "".join(
+        _q32_term(term, index == 0)
+        for index, term in enumerate(output.terms)
+    )
+    if output.scale == 1:
+        return inner
+    if output.scale == -1:
+        return f"-({inner})"
+    magnitude = abs(output.scale)
+    scaled = f"INT64_C({magnitude}) * ({inner})"
+    return f"-{scaled}" if output.scale < 0 else scaled
 
 
 def emit_header(schedule: Schedule, source_path: str) -> str:
@@ -217,11 +256,9 @@ def emit_header(schedule: Schedule, source_path: str) -> str:
             lines.append(f"    {parameter}{suffix}")
         lines.extend([")", "{"])
         for output in function.outputs:
-            expression = "".join(
-                _float_term(term, index == 0)
-                for index, term in enumerate(output.terms)
+            lines.append(
+                f"    *{output.name} = {_scaled_float_expression(output)};"
             )
-            lines.append(f"    *{output.name} = {expression};")
         lines.extend(["}", ""])
 
         q32_parameters = [f"int32_t {name}" for name in function.inputs]
@@ -232,11 +269,9 @@ def emit_header(schedule: Schedule, source_path: str) -> str:
             lines.append(f"    {parameter}{suffix}")
         lines.extend([")", "{"])
         for output in function.outputs:
-            expression = "".join(
-                _q32_term(term, index == 0)
-                for index, term in enumerate(output.terms)
+            lines.append(
+                f"    *{output.name} = {_scaled_q32_expression(output)};"
             )
-            lines.append(f"    *{output.name} = {expression};")
         lines.extend(["}", ""])
 
     lines.extend([f"#endif /* {guard} */", ""])
