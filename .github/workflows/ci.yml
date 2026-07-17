@@ -269,19 +269,27 @@ jobs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             cmake ninja-build g++ python3 ca-certificates
-      - name: Report CUDA compiler
+      - name: Resolve and report CUDA compiler
+        shell: bash
         run: |
           set -o pipefail
-          nvcc --version | tee cuda-version.log
+          python3 tests/test_cuda_compiler_resolution.py 2>&1 | tee cuda-resolver-test.log
+          CUDA_COMPILER="$(python3 tools/resolve_cuda_compiler.py --github-env "$GITHUB_ENV")"
+          echo "$(dirname "$CUDA_COMPILER")" >> "$GITHUB_PATH"
+          "$CUDA_COMPILER" --version 2>&1 | tee cuda-version.log
       - name: Configure CUDA 13 build
+        shell: bash
         run: |
           set -o pipefail
           if [ "${{ matrix.precision }}" = "double" ]; then USE_DOUBLE=ON; else USE_DOUBLE=OFF; fi
           cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DGEO_BUILD_CUDA=ON -DGEO_BUILD_TESTS=ON -DGEO_BUILD_BENCHMARKS=ON \
-            -DGEO_USE_DOUBLE="$USE_DOUBLE" -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
+            -DGEO_USE_DOUBLE="$USE_DOUBLE" \
+            -DCMAKE_CUDA_COMPILER="$CUDACXX" \
+            -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
             2>&1 | tee cuda-configure.log
       - name: Compile CUDA backend, generated schedules, tests, and harness
+        shell: bash
         run: |
           set -o pipefail
           cmake --build build-cuda --parallel 2>&1 | tee cuda-build.log
@@ -289,6 +297,7 @@ jobs:
           test -s build-cuda/cuda-schedules/cuda_schedule_manifest.json
           test "$(find build-cuda/cuda-schedules -name 'geo_cuda_schedule_*.cu' | wc -l)" -eq 5
       - name: Run CUDA build tests without a device
+        shell: bash
         run: |
           set -o pipefail
           ctest --test-dir build-cuda --output-on-failure 2>&1 | tee cuda-test.log
@@ -298,6 +307,7 @@ jobs:
         with:
           name: cuda-13-${{ matrix.precision }}
           path: |
+            cuda-resolver-test.log
             cuda-version.log
             cuda-configure.log
             cuda-build.log
