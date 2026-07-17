@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "name": "vector_wedge_is_antisymmetric",
+  "description": "For vectors a and b, a wedge b = -(b wedge a).",
+  "expected": "identity",
+  "dimension": 5,
+  "signature": [1, 1, 1, -1, -1],
+  "prime": 65521,
+  "coefficient_bound": 4,
+  "seed": 3141592653,
+  "variables": [
+    {"name": "a", "grades": [1]},
+    {"name": "b", "grades": [1]}
+  ],
+  "lhs": {
+    "op": "wedge",
+    "args": [{"var": "a"}, {"var": "b"}]
+  },
+  "rhs": {
+    "op": "neg",
+    "arg": {
+      "op": "wedge",
+      "args": [{"var": "b"}, {"var": "a"}]
+    }
+  }
+}
