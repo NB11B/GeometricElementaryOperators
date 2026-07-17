@@ -27,3 +27,6 @@ Testing/
 /examples/esp32_s3/sdkconfig
 /examples/esp32_s3/sdkconfig.old
 /examples/esp32_s3/*.log
+
+# Local CUDA benchmark evidence.
+/benchmarks/gpu_imu_replay/evidence/
