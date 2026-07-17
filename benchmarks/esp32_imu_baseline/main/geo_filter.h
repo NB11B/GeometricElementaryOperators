@@ -37,4 +37,6 @@ benchmark_output_t geo_fixed_filter_step(void *state,
                                          const imu_sample_t *sample,
                                          float dt);
 
+int geo_filter_self_test(void);
+
 #endif
