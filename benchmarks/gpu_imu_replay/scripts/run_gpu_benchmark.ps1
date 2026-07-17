@@ -147,19 +147,61 @@ function Import-VisualStudioEnvironment {
         throw "VsDevCmd.bat was not found at $VsDevCmd"
     }
 
-    $CommandLine = "`"$VsDevCmd`" -no_logo -arch=x64 -host_arch=x64 >nul && set"
-    $EnvironmentLines = & $env:ComSpec /d /s /c $CommandLine
-    if ($LASTEXITCODE -ne 0) {
-        throw "Visual Studio developer environment initialization failed"
+    $VsDevCmdShort = Resolve-ShortPath $VsDevCmd
+    $TempEnvironment = Join-Path $env:TEMP "geo-vs-env-$PID-$([Guid]::NewGuid().ToString('N')).txt"
+    $TempEnvironmentShort = $TempEnvironment
+
+    $Saved = @{
+        PATH = $env:PATH
+        INCLUDE = $env:INCLUDE
+        LIB = $env:LIB
+        LIBPATH = $env:LIBPATH
+        __VSCMD_PREINIT_PATH = $env:__VSCMD_PREINIT_PATH
     }
 
-    foreach ($Line in $EnvironmentLines) {
-        $Separator = $Line.IndexOf("=")
-        if ($Separator -gt 0) {
-            $Name = $Line.Substring(0, $Separator)
-            $Value = $Line.Substring($Separator + 1)
-            [Environment]::SetEnvironmentVariable($Name, $Value, "Process")
+    try {
+        $MinimalPath = @(
+            (Join-Path $env:SystemRoot "System32")
+            $env:SystemRoot
+            (Join-Path $env:SystemRoot "System32\Wbem")
+        ) -join ";"
+
+        $env:PATH = $MinimalPath
+        Remove-Item Env:INCLUDE -ErrorAction SilentlyContinue
+        Remove-Item Env:LIB -ErrorAction SilentlyContinue
+        Remove-Item Env:LIBPATH -ErrorAction SilentlyContinue
+        Remove-Item Env:__VSCMD_PREINIT_PATH -ErrorAction SilentlyContinue
+
+        $CommandLine = "call $VsDevCmdShort -no_logo -arch=x64 -host_arch=x64 >nul && set > `"$TempEnvironmentShort`""
+        & $env:ComSpec /d /s /c $CommandLine
+        $ExitCode = $LASTEXITCODE
+
+        if ($ExitCode -ne 0 -or -not (Test-Path $TempEnvironment)) {
+            throw "Visual Studio developer environment initialization failed with exit code $ExitCode"
         }
+
+        $EnvironmentLines = Get-Content $TempEnvironment
+        if (-not $EnvironmentLines) {
+            throw "Visual Studio developer environment produced no environment variables"
+        }
+
+        foreach ($Line in $EnvironmentLines) {
+            $Separator = $Line.IndexOf("=")
+            if ($Separator -gt 0) {
+                $Name = $Line.Substring(0, $Separator)
+                $Value = $Line.Substring($Separator + 1)
+                [Environment]::SetEnvironmentVariable($Name, $Value, "Process")
+            }
+        }
+    }
+    catch {
+        foreach ($Name in $Saved.Keys) {
+            [Environment]::SetEnvironmentVariable($Name, $Saved[$Name], "Process")
+        }
+        throw
+    }
+    finally {
+        Remove-Item $TempEnvironment -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -189,6 +231,8 @@ try {
     $NvccPath = Resolve-CommandPath "nvcc.exe"
     $CmakePath = Resolve-CommandPath "cmake.exe"
     $NinjaPath = Resolve-NinjaPath
+    $PythonPath = Resolve-CommandPath "python.exe"
+    $NvidiaSmiPath = Resolve-CommandPath "nvidia-smi.exe"
     $CudaRoot = Split-Path (Split-Path $NvccPath -Parent) -Parent
     $VisualStudioPath = Resolve-VisualStudio2022Path
 
@@ -200,10 +244,13 @@ try {
     $ClShortPath = Resolve-ShortPath $ClPath
 
     $env:CUDAHOSTCXX = $ClShortPath
+    $env:PATH = "$(Join-Path $CudaRoot 'bin');$env:PATH"
 
     @(
         "cmake=$CmakePath"
         "ninja=$NinjaPath"
+        "python=$PythonPath"
+        "nvidia_smi=$NvidiaSmiPath"
         "nvcc=$NvccPath"
         "nvcc_short=$NvccShortPath"
         "cuda_root=$CudaRoot"
@@ -233,13 +280,13 @@ try {
 
     Invoke-LoggedNativeCommand `
         -Command {
-            nvidia-smi --query-gpu=index,name,uuid,driver_version,compute_cap,clocks.current.graphics,clocks.current.memory,power.limit,memory.total --format=csv
+            & $NvidiaSmiPath --query-gpu=index,name,uuid,driver_version,compute_cap,clocks.current.graphics,clocks.current.memory,power.limit,memory.total --format=csv
         } `
         -LogPath (Join-Path $EvidenceDirectory "gpu-identity.csv")
 
     Invoke-LoggedNativeCommand `
         -Command {
-            python .\tools\generate_imu_cuda_schedule.py `
+            & $PythonPath .\tools\generate_imu_cuda_schedule.py `
                 --schedule .\benchmarks\esp32_imu_baseline\schedules\imu_orientation_sparse_v1.json `
                 --output .\benchmarks\gpu_imu_replay\generated\geo_imu_generated_schedule.cuh `
                 --check
@@ -248,7 +295,7 @@ try {
 
     Invoke-LoggedNativeCommand `
         -Command {
-            python -m unittest `
+            & $PythonPath -m unittest `
                 tests.test_imu_sparse_schedule `
                 tests.test_imu_cuda_schedule
         } `
