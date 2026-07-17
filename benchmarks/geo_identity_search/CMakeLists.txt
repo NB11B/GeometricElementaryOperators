@@ -29,7 +29,7 @@ if(MSVC)
         geo_identity_search
         PRIVATE
             $<$<COMPILE_LANGUAGE:CXX>:/O2;/W4;/permissive->
-            $<$<COMPILE_LANGUAGE:CUDA>:-O3;-lineinfo;-diag-suppress=128;-Xcompiler=/O2;-Xcompiler=/W4>
+            $<$<COMPILE_LANGUAGE:CUDA>:-O3;-lineinfo;-diag-suppress=128;-Xcompiler=/O2;-Xcompiler=/W4;-Xcompiler=/wd4127>
     )
 else()
     target_compile_options(
