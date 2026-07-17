@@ -4,6 +4,7 @@
 - [Workload benchmark contract](workload-benchmark-contract.md)
 - [Fixed GEB-36 typed numerical envelope](fixed-geb36-numerical-envelope.md)
 - [ESP32-C6 GEO A/B/C/D IMU replay benchmark](esp32-imu-abcd-benchmark.md)
+- [ESP32-C6 GEO fused IMU schedules](esp32-imu-fused-schedules.md)
 
 ## Provenance
 
@@ -12,3 +13,4 @@
 - `knowledge/wiki/components/workload-benchmark-contract.md`
 - `knowledge/wiki/components/fixed-geb36-numerical-envelope.md`
 - `knowledge/wiki/components/esp32-imu-abcd-benchmark.md`
+- `knowledge/wiki/components/esp32-imu-fused-schedules.md`
