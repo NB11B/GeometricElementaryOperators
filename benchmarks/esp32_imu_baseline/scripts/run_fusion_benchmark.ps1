@@ -31,6 +31,7 @@ function Invoke-LoggedNativeCommand {
     $PreviousErrorActionPreference = $ErrorActionPreference
     $PreviousNativePreference = $null
     $HasNativePreference = Test-Path variable:PSNativeCommandUseErrorActionPreference
+    $ExitCode = 0
 
     if ($HasNativePreference) {
         $PreviousNativePreference = $PSNativeCommandUseErrorActionPreference
@@ -38,10 +39,6 @@ function Invoke-LoggedNativeCommand {
     }
 
     try {
-        # ESP-IDF tools legitimately write warnings and progress messages to
-        # stderr. Windows PowerShell wraps those records as NativeCommandError
-        # objects. Temporarily keep native stderr non-terminating, convert every
-        # stream record to plain text, and rely on the actual process exit code.
         $ErrorActionPreference = "Continue"
         $global:LASTEXITCODE = 0
 
@@ -83,8 +80,6 @@ function Invoke-LoggedMonitor {
     try {
         $ErrorActionPreference = "Continue"
 
-        # Do not treat the monitor's COMx/GDB warning as a failure. The monitor
-        # intentionally remains interactive and is terminated with Ctrl+].
         idf.py -p $SerialPort monitor 2>&1 |
             Convert-NativeOutputToText |
             Tee-Object -FilePath $LogPath
@@ -95,6 +90,18 @@ function Invoke-LoggedMonitor {
             $PSNativeCommandUseErrorActionPreference = $PreviousNativePreference
         }
     }
+}
+
+function Write-Utf8Lines {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+        [Parameter(Mandatory = $true)]
+        [string[]]$Lines
+    )
+
+    $Encoding = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllLines($Path, $Lines, $Encoding)
 }
 
 $ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -187,17 +194,23 @@ try {
             -LogPath $MonitorLog
 
         $CsvPath = Join-Path $EvidenceDirectory "esp32-imu-fusion.csv"
-        Select-String "CSV," $MonitorLog |
-            ForEach-Object {
-                $_.Line -replace "^.*?CSV,", "CSV,"
-            } |
-            Set-Content $CsvPath
+        $CsvLines = @(
+            Select-String "CSV," $MonitorLog |
+                ForEach-Object {
+                    $_.Line -replace "^.*?CSV,", "CSV,"
+                } |
+                Where-Object {
+                    ($_ -split ",").Count -eq 19
+                }
+        )
 
-        if (-not (Test-Path $CsvPath)) {
-            throw "No CSV output was captured. See $MonitorLog"
+        if ($CsvLines.Count -eq 0) {
+            throw "No complete CSV output was captured. See $MonitorLog"
         }
 
-        $RowCount = (Get-Content $CsvPath).Count
+        Write-Utf8Lines -Path $CsvPath -Lines $CsvLines
+
+        $RowCount = $CsvLines.Count
         $RowCount | Set-Content (Join-Path $EvidenceDirectory "csv-row-count.txt")
 
         if ($RowCount -ne $ExpectedRows) {
@@ -209,7 +222,7 @@ try {
 
         Invoke-LoggedNativeCommand `
             -Command {
-                python ".\scripts\summarize_results.py" $MonitorLog `
+                python ".\scripts\summarize_results.py" $CsvPath `
                     --markdown-out $SummaryMarkdown `
                     --csv-out $SummaryCsv
             } `
