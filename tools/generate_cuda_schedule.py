@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-'''Generate batched CUDA kernels and launchers from checked schedule JSON.'''
+"""Generate batched CUDA kernels and launchers from checked schedule JSON."""
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -18,15 +19,23 @@ SUPPORTED_OPCODES = {
 }
 
 
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def is_register(value: object) -> bool:
+    return type(value) is int and int(value) >= 0
+
+
 def validate_schedule(data: dict[str, Any]) -> dict[str, Any]:
     name = data.get("name")
-    if not isinstance(name, str) or not IDENTIFIER_RE.fullmatch(name):
+    if not isinstance(name, str) or IDENTIFIER_RE.fullmatch(name) is None:
         raise ValueError("schedule name must be a C/CUDA identifier")
 
     input_registers = data.get("input_registers")
     if not isinstance(input_registers, list) or not input_registers:
         raise ValueError(f"{name}: input_registers must be non-empty")
-    if any(not isinstance(value, int) or value < 0 for value in input_registers):
+    if any(not is_register(value) for value in input_registers):
         raise ValueError(f"{name}: invalid input register")
     if len(set(input_registers)) != len(input_registers):
         raise ValueError(f"{name}: duplicate input register")
@@ -44,44 +53,45 @@ def validate_schedule(data: dict[str, Any]) -> dict[str, Any]:
         destination = raw.get("destination")
         if opcode not in SUPPORTED_OPCODES:
             raise ValueError(f"{name}: unsupported opcode {opcode!r}")
-        if not isinstance(destination, int) or destination < 0:
+        if not is_register(destination):
             raise ValueError(f"{name}: invalid destination")
+        destination = int(destination)
         if destination in available:
             raise ValueError(f"{name}: destination must be a fresh register")
 
         if opcode == "reverse":
             source = raw.get("source", raw.get("left"))
-            if not isinstance(source, int) or source not in available:
+            if not is_register(source) or int(source) not in available:
                 raise ValueError(f"{name}: unavailable reverse source")
             normalized.append({
                 "opcode": opcode,
                 "destination": destination,
-                "source": source,
+                "source": int(source),
             })
         else:
             left = raw.get("left")
             right = raw.get("right")
-            if not isinstance(left, int) or left not in available:
+            if not is_register(left) or int(left) not in available:
                 raise ValueError(f"{name}: unavailable left register")
-            if not isinstance(right, int) or right not in available:
+            if not is_register(right) or int(right) not in available:
                 raise ValueError(f"{name}: unavailable right register")
             normalized.append({
                 "opcode": opcode,
                 "destination": destination,
-                "left": left,
-                "right": right,
+                "left": int(left),
+                "right": int(right),
             })
         available.add(destination)
 
     root_register = data.get("root_register")
-    if not isinstance(root_register, int) or root_register not in available:
+    if not is_register(root_register) or int(root_register) not in available:
         raise ValueError(f"{name}: invalid root register")
 
     return {
         "name": name,
-        "input_registers": input_registers,
+        "input_registers": [int(value) for value in input_registers],
         "instructions": normalized,
-        "root_register": root_register,
+        "root_register": int(root_register),
     }
 
 
@@ -271,18 +281,41 @@ extern "C" int geo_cuda_schedule_{name}_launch(
     {parameters(schedule)}
 ) {{
     size_t block_count;
+    int device;
+    int max_grid_x;
+    int max_threads_per_block;
+    cudaError_t error;
     cudaStream_t cuda_stream = reinterpret_cast<cudaStream_t>(stream);
 
     if (count == 0u) return (int)cudaSuccess;
-    if ({pointer_checks}output == nullptr ||
-        block_size == 0u || block_size > 1024u) {{
+    if ({pointer_checks}output == nullptr || block_size == 0u) {{
         return (int)cudaErrorInvalidValue;
     }}
     if (count > SIZE_MAX - (size_t)(block_size - 1u)) {{
         return (int)cudaErrorInvalidValue;
     }}
     block_count = (count + (size_t)block_size - 1u) / (size_t)block_size;
-    if (block_count > (size_t)UINT_MAX) {{
+    if (block_count == 0u || block_count > (size_t)UINT_MAX) {{
+        return (int)cudaErrorInvalidConfiguration;
+    }}
+
+    error = cudaGetDevice(&device);
+    if (error != cudaSuccess) return (int)error;
+    error = cudaDeviceGetAttribute(
+        &max_grid_x,
+        cudaDevAttrMaxGridDimX,
+        device
+    );
+    if (error != cudaSuccess) return (int)error;
+    error = cudaDeviceGetAttribute(
+        &max_threads_per_block,
+        cudaDevAttrMaxThreadsPerBlock,
+        device
+    );
+    if (error != cudaSuccess) return (int)error;
+    if (max_grid_x <= 0 || max_threads_per_block <= 0 ||
+        block_count > (size_t)max_grid_x ||
+        block_size > (unsigned int)max_threads_per_block) {{
         return (int)cudaErrorInvalidConfiguration;
     }}
 
@@ -313,8 +346,23 @@ def self_test() -> None:
     assert "geo_cuda_schedule_self_test_kernel" in source
     assert "geo_schedule_product" in source
     assert "geo_schedule_reverse" in source
-    assert "#include <cstdint>" in source
+    assert "cudaDevAttrMaxGridDimX" in source
+    assert "cudaDevAttrMaxThreadsPerBlock" in source
     assert "SIZE_MAX" in source
+
+    try:
+        validate_schedule({
+            "name": "bad",
+            "input_registers": [True],
+            "instructions": [
+                {"opcode": "reverse", "destination": 1, "source": 0},
+            ],
+            "root_register": 1,
+        })
+    except ValueError:
+        pass
+    else:  # pragma: no cover
+        raise AssertionError("boolean register identifiers must be rejected")
 
 
 def main(argv: Iterable[str] | None = None) -> int:
@@ -328,8 +376,12 @@ def main(argv: Iterable[str] | None = None) -> int:
         self_test()
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
+    generator_path = Path(__file__).resolve()
+    generator_sha256 = sha256_file(generator_path)
     manifest: list[dict[str, object]] = []
     for schedule_path in args.schedule_json:
+        if not schedule_path.is_file():
+            parser.error(f"missing schedule JSON: {schedule_path}")
         schedule = validate_schedule(
             json.loads(schedule_path.read_text(encoding="utf-8"))
         )
@@ -339,10 +391,16 @@ def main(argv: Iterable[str] | None = None) -> int:
         header.write_text(header_text(schedule), encoding="utf-8")
         source.write_text(source_text(schedule), encoding="utf-8")
         manifest.append({
+            "schema_version": 1,
             "name": name,
-            "source_schedule": str(schedule_path),
+            "source_schedule": schedule_path.name,
+            "source_schedule_sha256": sha256_file(schedule_path),
+            "generator": generator_path.name,
+            "generator_sha256": generator_sha256,
             "header": header.name,
+            "header_sha256": sha256_file(header),
             "source": source.name,
+            "source_sha256": sha256_file(source),
             "input_registers": schedule["input_registers"],
             "root_register": schedule["root_register"],
             "instruction_count": len(schedule["instructions"]),
