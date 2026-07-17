@@ -68,17 +68,17 @@ try {
 
     Push-Location $BenchmarkDirectory
     try {
-        Invoke-LoggedCommand {
-            idf.py fullclean
-        } (Join-Path $EvidenceDirectory "fullclean.log")
+        Invoke-LoggedCommand `
+            -Command { idf.py fullclean } `
+            -LogPath (Join-Path $EvidenceDirectory "fullclean.log")
 
-        Invoke-LoggedCommand {
-            idf.py set-target esp32c6
-        } (Join-Path $EvidenceDirectory "set-target.log")
+        Invoke-LoggedCommand `
+            -Command { idf.py set-target esp32c6 } `
+            -LogPath (Join-Path $EvidenceDirectory "set-target.log")
 
-        Invoke-LoggedCommand {
-            idf.py build
-        } (Join-Path $EvidenceDirectory "build.log")
+        Invoke-LoggedCommand `
+            -Command { idf.py build } `
+            -LogPath (Join-Path $EvidenceDirectory "build.log")
 
         Copy-Item ".\sdkconfig" `
             (Join-Path $EvidenceDirectory "sdkconfig") -Force
@@ -90,12 +90,13 @@ try {
             } |
             Copy-Item -Destination $EvidenceDirectory -Force
 
-        $MonitorLog = Join-Path $EvidenceDirectory "esp32-imu-fusion.log"
-
         if ($SkipFlash) {
             Write-Warning "Skipping flash and monitor because -SkipFlash was supplied"
+            Write-Host "Build evidence is available at $EvidenceDirectory"
             return
         }
+
+        $MonitorLog = Join-Path $EvidenceDirectory "esp32-imu-fusion.log"
 
         Write-Host ""
         Write-Host "Flashing and starting the monitor on $Port."
