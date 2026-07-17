@@ -6,20 +6,17 @@ Portable C11 reference, embedded, CUDA, and generated RTL kernels for the unifie
 \Omega((s,X),(t,Y))=(\exp(s)-\log(t),XY).
 \]
 
-The portable kernel is designed for microcontrollers and hardware realization:
+The kernel is designed for microcontrollers, GPUs, and hardware realization:
 
 - fixed-size C11 data structures;
-- no heap allocation in the kernel;
+- no heap allocation in the portable execution kernel;
 - no recursion in execution paths;
-- fully unrolled `Cl(2,0)` geometric products;
+- fully unrolled `Cl(2,0)` products;
 - opposite-lane propagation for reversion;
-- unipotent addition encoding;
-- shared ordered products and Hadamard dot/wedge mixing;
+- unipotent addition and shared ordered-product representations;
 - algebraic `M2(R)` routing control;
-- projective scale metadata and deferred normalization;
-- scalar EML lane;
-- flat instruction programs;
-- physically separate scalar, geometric, and unified register banks;
+- projective scale metadata with deferred normalization;
+- flat instruction programs and physically separate register banks;
 - compile-time constant folding, lane pruning, scale propagation, and routing elision.
 
 ## Current status
@@ -44,27 +41,21 @@ The preserved Milestone W package did not contain the original complete per-targ
 7. Deferred projective normalization and vector metric helpers.
 8. Generative control algebra `Gc(X,Y)=XY-X` over `M2(R)`.
 9. Complete GEB-36 reference API and manifest.
-10. Witness-tree validation and lowering.
-11. Reachability pruning and lane-liveness propagation.
-12. Duplicate-subtree elimination and register compaction.
-13. Constant folding.
-14. Typed and physically banked register allocation.
-15. Rational projective-scale propagation.
-16. Routing-state elision.
-17. Complete 36-target reconstructed execution coverage.
-18. Portable cycle/timer abstraction and benchmark API.
-19. Static type-size and bank-memory reporting.
-20. ESP-IDF component and ESP32-S3 timing adapter.
-21. Configurable signed 32-bit Q-format arithmetic.
-22. Fixed scalar/geometric Omega, opposite-lane, banked, program, and `M2(R)` control execution.
-23. Complete flat fixed-point GEB-36 execution with checked projective normalization.
-24. Optional CUDA 13.x batched execution backend with a stable C ABI.
-25. Generated CUDA schedule kernels compiled from checked schedule JSON.
-26. Shared workload timing/error reports across direct, specialized, structured, fused, fixed, banked, and optional CUDA paths.
-27. Deterministic fixed-versus-floating numerical envelopes with overflow and projective-scale reporting.
-28. Generated fixed-point RTL product, controller, and executable schedule datapaths with explicit overflow signaling.
-29. Standalone ESP32-S3 correctness, benchmark, and heap-stability soak application.
-30. Vendor-neutral ARM Cortex-M DWT cycle source for the portable benchmark API.
+10. Witness-tree validation, optimization, folding, and lowering.
+11. Typed and physically banked register allocation.
+12. Rational projective-scale propagation and routing-state elision.
+13. Portable cycle/timer abstraction and benchmark API.
+14. ESP-IDF component and ESP32-S3 timing adapter.
+15. Configurable signed 32-bit Q-format arithmetic.
+16. Fixed scalar/geometric Omega, opposite-lane, banked, program, and `M2(R)` control execution.
+17. Complete flat fixed-point GEB-36 execution with checked projective normalization.
+18. Optional CUDA 13.x batched execution backend with a stable C ABI.
+19. Generated CUDA schedule kernels compiled from checked schedule JSON.
+20. Shared workload timing and error reports across direct, specialized, structured, fused, fixed, banked, and optional CUDA paths.
+21. Deterministic fixed-versus-floating numerical envelopes with overflow and projective-scale reporting.
+22. Generated fixed-point RTL product, controller, and executable schedule datapaths with explicit overflow signaling.
+23. Standalone ESP32-S3 correctness, benchmark, and heap-stability soak application.
+24. Vendor-neutral ARM Cortex-M DWT cycle source for the portable benchmark API.
 
 ## Host build and test
 
@@ -84,7 +75,7 @@ cmake --build build-float --parallel
 ctest --test-dir build-float --output-on-failure
 ```
 
-The public executor symbols `geo_struct_program_execute` and `geo_banked_execute` are emitted out of line for ABI compatibility. The `_impl` entry points remain available to existing source consumers.
+The public executor symbols `geo_struct_program_execute` and `geo_banked_execute` are emitted out of line for ABI compatibility. The `_impl` entry points remain available to existing source consumers. The caller-owned `geo_optimized_witness_t` layout retains the established ABI size and field offsets.
 
 ## Workload benchmarks and numerical reports
 
@@ -119,15 +110,17 @@ Generate the fixed-versus-floating numerical envelope:
 cmake --build build-bench --target numerical_report
 ```
 
-The numerical report records requested and completed samples, checked overflows, componentwise absolute/relative error, angular error, projective-scale error, and mismatches. Reports are written under `build-bench/workload-report/` and `build-bench/numerical-report/`.
+The numerical report records requested and completed samples, checked overflows, componentwise absolute and relative error, angular error, projective-scale error, and mismatches. Reports are written under `build-bench/workload-report/` and `build-bench/numerical-report/`.
 
-Focused benchmark executables remain available:
+Focused benchmark executables remain available under their established names:
 
 ```sh
 ./build-bench/bench_host
 ./build-bench/bench_compare
-./build-bench/bench_selected_backends
+./build-bench/bench_complete
 ```
+
+`bench_complete` describes itself as the selected-path comparison benchmark and prints the exact operation/path matrix it measured. Its JSON and Markdown report carry the same matrix.
 
 ## CUDA 13.x
 
@@ -154,13 +147,13 @@ The handwritten batched CUDA backend supports:
 - vector wedge;
 - rotor action.
 
-The build also generates and compiles CUDA schedule kernels for addition, product, dot, wedge, and rotor action:
+The build also generates and compiles CUDA schedule kernels for addition, geometric product, dot, wedge, and rotor action:
 
 ```sh
 cmake --build build-cuda --target generate_cuda_schedules
 ```
 
-`cuda_equivalence` tests the public batched C ABI. `cuda_schedule_equivalence` executes the generated launchers on the same operation semantics. Both tests return CTest skip code 77 when no CUDA device/driver is available, while the CUDA 13 compile job still builds every source.
+`cuda_equivalence` tests the public batched C ABI. `cuda_schedule_equivalence` executes generated launchers with the same operation semantics. Both return CTest skip code 77 when no compatible CUDA device or driver is available, while the CUDA 13 compile job still builds every source.
 
 Run the CUDA event harness:
 
@@ -174,7 +167,17 @@ Run the CUDA event harness:
   --csv cuda-benchmark.csv
 ```
 
-The harness reports device properties, precision, batch size, upload time, kernel-only time, download time, transfer-inclusive time, throughput, and CPU/GPU error statistics.
+The harness validates batch byte counts and grid dimensions before allocation. It transfers only the inputs required by each operation and reports:
+
+- GPU model, compute capability, runtime, and driver;
+- precision, batch size, block count, and thread count;
+- upload, kernel-only, download, and transfer-inclusive time;
+- items per second;
+- logical kernel bandwidth and measured transfer bandwidth;
+- maximum absolute and relative error;
+- mismatch count.
+
+Canonical operation names in CSV output are `addition`, `geometric_product`, `reverse`, `vector_dot`, `vector_wedge`, and `rotor_action`. The shorter CLI aliases `add`, `product`, `dot`, `wedge`, and `rotor` remain accepted.
 
 Validate memory access and races on a CUDA-capable host:
 
@@ -209,7 +212,7 @@ Supported fractional-bit counts are 1 through 30. The fixed layer includes check
 - `include/geo/fixed_banked.h`: physically banked fixed execution;
 - `include/geo/fixed_control.h`: checked `M2(R)` routing control.
 
-The fixed executors perform no allocation or recursion, propagate overflow and divide-by-zero status, reject invalid register/type/scale inputs, and leave destination values unchanged on failure.
+The fixed executors perform no allocation or recursion, propagate overflow and divide-by-zero status, reject invalid register, type, and scale inputs, and leave destination values unchanged on failure.
 
 ## ESP32-S3 / ESP-IDF
 
@@ -231,11 +234,11 @@ idf.py build
 idf.py -p PORT flash monitor
 ```
 
-It runs deterministic float and fixed checks, reports memory and timing records, and continuously verifies that allocation-free execution does not change free heap or the largest free block.
+It runs deterministic floating-point and fixed-point checks, reports memory and timing records, and continuously verifies that allocation-free execution does not change free heap or the largest free block.
 
 ## ARM Cortex-M DWT timing
 
-`include/geo/cortex_m_dwt.h` adapts the ARM Data Watchpoint and Trace cycle counter to `geo_cycle_source_t` without depending on a vendor SDK. The caller supplies the register addresses and core clock.
+`include/geo/cortex_m_dwt.h` adapts the ARM Data Watchpoint and Trace cycle counter to `geo_cycle_source_t` without depending on a vendor SDK. The caller supplies register addresses and the core clock.
 
 ```c
 geo_cortex_m_dwt_registers_t registers = {
@@ -260,7 +263,7 @@ The adapter extends the 32-bit hardware counter to 64 bits in software. Call it 
 
 ## Generated RTL and equivalence
 
-Generate the fixed product cell and controller:
+Generate the fixed product cell and serialized controller:
 
 ```sh
 cmake --build build --target generate_rtl
@@ -285,7 +288,7 @@ python3 tools/generate_rtl_schedule.py \
   --schedule-json rtl/examples/rotor_action_schedule.json
 ```
 
-CI compiles and runs generated checked-C harnesses, simulates each SystemVerilog datapath with the same nominal and overflow vectors, and synthesizes every generated top. Fixed C and RTL share the same round-half-away-from-zero, overflow, and instruction-order contract.
+CI compiles and runs generated checked-C harnesses, simulates each SystemVerilog datapath with the same nominal and overflow vectors, and synthesizes every generated top. Fixed C and RTL share the same round-half-away-from-zero, rounded-product overflow, final-wide-sum overflow, and instruction-order contract. Cancellation cases accepted by fixed C remain valid in RTL.
 
 ## Flash, map, and stack reporting
 
@@ -304,7 +307,7 @@ This emits compiler `.su` files for per-function static stack estimates and link
 
 Release, ABI, fixed/RTL numerical, benchmark-labeling, generated-artifact, and hardware-evidence requirements are defined in `docs/RELEASE_POLICY.md`. Notable changes are recorded in `CHANGELOG.md`.
 
-A release remains untagged until the exact candidate commit has passing required validation. An empty or unstarted hosted workflow is not treated as a pass.
+Full hosted validation is intentionally gated on a pull request being marked ready for review; draft synchronization runs are skipped and superseded runs are cancelled. A release remains untagged until the exact candidate commit has passing required validation. An empty, skipped, or unstarted hosted workflow is not treated as a pass.
 
 ## Design constraints
 
