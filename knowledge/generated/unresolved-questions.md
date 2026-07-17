@@ -17,6 +17,13 @@ This file is generated deterministically from task-record
 - Is Q16 the best fixed format for the task, or should a later controlled run compare Q8, Q16, Q24, and Q30?
 - When will D receive trained weights so runtime comparison can be separated from task-quality comparison?
 
+## TASK-20260717-003
+
+- How close does A1 come to C on the physical ESP32-C6 after compiler inlining and optimization?
+- Does B1 recover the fixed-point advantage seen in the earlier product/rotor microbenchmark?
+- Which B1 costs remain dominant after fusion: input conversion, 64-bit arithmetic, correction, or normalization?
+- Should the next iteration generate this schedule automatically rather than preserving it manually?
+
 ## Provenance
 
 - `knowledge/wiki/tasks/`
