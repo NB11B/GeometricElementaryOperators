@@ -73,6 +73,35 @@ function Resolve-CommandPath {
     return $Command.Source
 }
 
+function Resolve-GitPath {
+    $Command = Get-Command git.exe -ErrorAction SilentlyContinue
+    if ($Command) {
+        return $Command.Source
+    }
+
+    $Candidates = New-Object System.Collections.Generic.List[string]
+    if ($env:ProgramFiles) {
+        $Candidates.Add((Join-Path $env:ProgramFiles "Git\cmd\git.exe"))
+        $Candidates.Add((Join-Path $env:ProgramFiles "Git\bin\git.exe"))
+    }
+    if (${env:ProgramFiles(x86)}) {
+        $Candidates.Add((Join-Path ${env:ProgramFiles(x86)} "Git\cmd\git.exe"))
+        $Candidates.Add((Join-Path ${env:ProgramFiles(x86)} "Git\bin\git.exe"))
+    }
+    if ($env:LOCALAPPDATA) {
+        $Candidates.Add((Join-Path $env:LOCALAPPDATA "Programs\Git\cmd\git.exe"))
+        $Candidates.Add((Join-Path $env:LOCALAPPDATA "Programs\Git\bin\git.exe"))
+    }
+
+    foreach ($Candidate in $Candidates) {
+        if (Test-Path -LiteralPath $Candidate) {
+            return (Get-Item -LiteralPath $Candidate).FullName
+        }
+    }
+
+    throw "Git for Windows was not found in PATH or a standard installation directory"
+}
+
 function Resolve-ShortPath {
     param(
         [Parameter(Mandatory = $true)]
@@ -205,20 +234,59 @@ function Import-VisualStudioEnvironment {
     }
 }
 
+function Save-ProcessEnvironment {
+    $Saved = @{}
+    foreach ($Name in @(
+        "PATH",
+        "INCLUDE",
+        "LIB",
+        "LIBPATH",
+        "__VSCMD_PREINIT_PATH",
+        "CUDAHOSTCXX"
+    )) {
+        $Saved[$Name] = [Environment]::GetEnvironmentVariable($Name, "Process")
+    }
+    return $Saved
+}
+
+function Restore-ProcessEnvironment {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Saved
+    )
+
+    foreach ($Name in $Saved.Keys) {
+        [Environment]::SetEnvironmentVariable($Name, $Saved[$Name], "Process")
+    }
+}
+
 $ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BenchmarkDirectory = Resolve-Path (Join-Path $ScriptDirectory "..")
 $RepositoryRoot = Resolve-Path (Join-Path $BenchmarkDirectory "..\..")
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $EvidenceDirectory = Join-Path $BenchmarkDirectory "evidence\gpu-$Timestamp"
 $BuildDirectory = Join-Path $EvidenceDirectory "build"
+$OriginalEnvironment = Save-ProcessEnvironment
+$GitPath = Resolve-GitPath
 
 New-Item -ItemType Directory -Force -Path $EvidenceDirectory | Out-Null
 
 Push-Location $RepositoryRoot
 try {
-    $Commit = (git rev-parse HEAD).Trim()
-    $Branch = (git branch --show-current).Trim()
-    $Status = git status --short
+    $Commit = (& $GitPath rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to resolve the current Git commit"
+    }
+
+    $Branch = (& $GitPath branch --show-current).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to resolve the current Git branch"
+    }
+
+    $Status = & $GitPath status --short
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to read Git status"
+    }
 
     $Commit | Set-Content (Join-Path $EvidenceDirectory "commit.txt")
     $Branch | Set-Content (Join-Path $EvidenceDirectory "branch.txt")
@@ -247,6 +315,7 @@ try {
     $env:PATH = "$(Join-Path $CudaRoot 'bin');$env:PATH"
 
     @(
+        "git=$GitPath"
         "cmake=$CmakePath"
         "ninja=$NinjaPath"
         "python=$PythonPath"
@@ -372,14 +441,52 @@ try {
     $Utf8 = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllLines($AggregateCsv, $AllCsvLines, $Utf8)
 
-    Get-ChildItem $EvidenceDirectory -Recurse -File |
-        Sort-Object FullName |
-        Get-FileHash -Algorithm SHA256 |
-        Select-Object Path, Algorithm, Hash |
-        Export-Csv `
-            (Join-Path $EvidenceDirectory "sha256-manifest.csv") `
-            -NoTypeInformation `
-            -Encoding UTF8
+    $SummaryCsv = Join-Path $EvidenceDirectory "gpu-summary.csv"
+    $ParityCsv = Join-Path $EvidenceDirectory "gpu-parity-summary.csv"
+    $SummaryMarkdown = Join-Path $EvidenceDirectory "summary.md"
+
+    Invoke-LoggedNativeCommand `
+        -Command {
+            & $PythonPath .\benchmarks\gpu_imu_replay\scripts\summarize_gpu_results.py `
+                $AggregateCsv `
+                --summary-csv $SummaryCsv `
+                --parity-csv $ParityCsv `
+                --markdown-out $SummaryMarkdown
+        } `
+        -LogPath (Join-Path $EvidenceDirectory "summary-validation.log")
+
+    $Manifest = Join-Path $EvidenceDirectory "sha256-manifest.csv"
+    $ManifestHash = Join-Path $EvidenceDirectory "sha256-manifest.sha256.txt"
+
+    Remove-Item $Manifest -Force -ErrorAction SilentlyContinue
+    Remove-Item $ManifestHash -Force -ErrorAction SilentlyContinue
+
+    $FilesToHash = @(
+        Get-ChildItem $EvidenceDirectory -Recurse -File |
+            Where-Object {
+                $_.FullName -ne $Manifest -and
+                $_.FullName -ne $ManifestHash
+            } |
+            Sort-Object FullName
+    )
+
+    $Hashes = @(
+        $FilesToHash |
+            ForEach-Object {
+                Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256 -ErrorAction Stop
+            } |
+            Select-Object Path, Algorithm, Hash
+    )
+
+    $Hashes | Export-Csv `
+        -LiteralPath $Manifest `
+        -NoTypeInformation `
+        -Encoding UTF8
+
+    Get-FileHash -LiteralPath $Manifest -Algorithm SHA256 |
+        Format-List |
+        Out-String |
+        Set-Content -LiteralPath $ManifestHash -Encoding UTF8
 
     Write-Host ""
     Write-Host "GPU benchmark evidence is complete:"
@@ -387,4 +494,5 @@ try {
 }
 finally {
     Pop-Location
+    Restore-ProcessEnvironment -Saved $OriginalEnvironment
 }
