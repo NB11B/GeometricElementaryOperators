@@ -1,0 +1,99 @@
+name: RTL Multi-Q CI
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rtl-multi-q:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fraction_bits: [1, 8, 16, 24, 30]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install RTL tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iverilog yosys clang
+      - name: Generate representable multi-Q fixtures
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 tools/generate_rtl_multi_q.py \
+            --out-dir "build-rtl-q${{ matrix.fraction_bits }}" \
+            --width 32 \
+            --frac "${{ matrix.fraction_bits }}" \
+            --self-test \
+            2>&1 | tee "rtl-q${{ matrix.fraction_bits }}-generate.log"
+      - name: Validate generated schedules against fixed C
+        shell: bash
+        run: |
+          set -o pipefail
+          out_dir="build-rtl-q${{ matrix.fraction_bits }}"
+          : > "rtl-q${{ matrix.fraction_bits }}-c-equivalence.log"
+          for source in "$out_dir"/test_geo_schedule_*.c; do
+            name="$(basename "$source" .c)"
+            clang -std=c11 -Wall -Wextra -Wpedantic -Wconversion \
+              -DGEO_FIXED_FRACTION_BITS=${{ matrix.fraction_bits }} \
+              -Iinclude "$source" src/fixed.c -lm -o "$out_dir/$name"
+            "$out_dir/$name" 2>&1 | tee -a "rtl-q${{ matrix.fraction_bits }}-c-equivalence.log"
+          done
+      - name: Simulate product and executable schedules
+        shell: bash
+        run: |
+          set -o pipefail
+          out_dir="build-rtl-q${{ matrix.fraction_bits }}"
+          iverilog -g2012 -s tb_geo_cl20_product_q \
+            -o "$out_dir/cl20_tb.vvp" \
+            "$out_dir/geo_cl20_product_q.sv" \
+            "$out_dir/tb_geo_cl20_product_q.sv"
+          vvp "$out_dir/cl20_tb.vvp" 2>&1 | tee "rtl-q${{ matrix.fraction_bits }}-product-simulation.log"
+
+          : > "rtl-q${{ matrix.fraction_bits }}-schedule-simulation.log"
+          for module_file in "$out_dir"/geo_schedule_*.sv; do
+            module="$(basename "$module_file" .sv)"
+            testbench="tb_${module}"
+            iverilog -g2012 -s "$testbench" \
+              -o "$out_dir/${module}.vvp" \
+              "$out_dir/geo_cl20_product_q.sv" \
+              "$module_file" \
+              "$out_dir/${testbench}.sv"
+            vvp "$out_dir/${module}.vvp" 2>&1 | tee -a "rtl-q${{ matrix.fraction_bits }}-schedule-simulation.log"
+          done
+      - name: Synthesize product and executable schedules
+        shell: bash
+        run: |
+          set -o pipefail
+          out_dir="build-rtl-q${{ matrix.fraction_bits }}"
+          yosys -p "read_verilog -sv $out_dir/geo_cl20_product_q.sv; synth -top geo_cl20_product_q; stat" \
+            2>&1 | tee "rtl-q${{ matrix.fraction_bits }}-product-synthesis.log"
+
+          : > "rtl-q${{ matrix.fraction_bits }}-schedule-synthesis.log"
+          for module_file in "$out_dir"/geo_schedule_*.sv; do
+            module="$(basename "$module_file" .sv)"
+            yosys -p "read_verilog -sv $out_dir/geo_cl20_product_q.sv $module_file; synth -top $module; stat" \
+              2>&1 | tee -a "rtl-q${{ matrix.fraction_bits }}-schedule-synthesis.log"
+          done
+      - name: Upload multi-Q RTL evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtl-q${{ matrix.fraction_bits }}
+          path: |
+            build-rtl-q${{ matrix.fraction_bits }}/*.sv
+            build-rtl-q${{ matrix.fraction_bits }}/*.c
+            build-rtl-q${{ matrix.fraction_bits }}/*.json
+            rtl-q${{ matrix.fraction_bits }}-*.log
+          if-no-files-found: error

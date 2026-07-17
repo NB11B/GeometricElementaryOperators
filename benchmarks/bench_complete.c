@@ -33,7 +33,7 @@ static uint64_t now_ticks(void) {
     return (uint64_t)value.QuadPart;
 #else
     struct timespec value;
-    if (clock_gettime(CLOCK_MONOTONIC, &value) != 0) return 0u;
+    if (clock_gettime(CLOCK_MONOTONIC, &value) != 0) return UINT64_C(0);
     return (uint64_t)value.tv_sec * UINT64_C(1000000000) + (uint64_t)value.tv_nsec;
 #endif
 }
@@ -49,7 +49,8 @@ static double tick_ns(void) {
 }
 
 static void report(const char *name, uint64_t begin, uint64_t end) {
-    const double value = (double)(end - begin) * tick_ns() / (double)benchmark_iterations;
+    const double value = (double)(end - begin) * tick_ns() /
+        (double)benchmark_iterations;
     printf("%-40s %.3f ns/op\n", name, value);
 }
 
@@ -57,12 +58,14 @@ static void consume_fixed(geo_fixed_t value) {
     const uint64_t current = sink_fixed;
     const uint64_t word = (uint64_t)(uint32_t)value;
     sink_fixed = current ^
-        (word + UINT64_C(0x9e3779b97f4a7c15) + (current << 6) + (current >> 2));
+        (word + UINT64_C(0x9e3779b97f4a7c15) +
+            (current << 6u) + (current >> 2u));
 }
 
 static int parse_iterations(const char *text, uint64_t *output) {
     char *end = NULL;
     unsigned long long parsed;
+
     if (text == NULL || output == NULL || text[0] == '\0') return 0;
     errno = 0;
     parsed = strtoull(text, &end, 10);
@@ -91,13 +94,17 @@ static int fixed_mv(
     geo_fixed_cl20_t *output
 ) {
     if (output == NULL) return 0;
-    if (!require_fixed_status(geo_fixed_from_double(scalar, &output->scalar),
+    if (!require_fixed_status(
+            geo_fixed_from_double(scalar, &output->scalar),
             "fixed scalar conversion")) return 0;
-    if (!require_fixed_status(geo_fixed_from_double(e1, &output->e1),
+    if (!require_fixed_status(
+            geo_fixed_from_double(e1, &output->e1),
             "fixed e1 conversion")) return 0;
-    if (!require_fixed_status(geo_fixed_from_double(e2, &output->e2),
+    if (!require_fixed_status(
+            geo_fixed_from_double(e2, &output->e2),
             "fixed e2 conversion")) return 0;
-    if (!require_fixed_status(geo_fixed_from_double(e12, &output->e12),
+    if (!require_fixed_status(
+            geo_fixed_from_double(e12, &output->e12),
             "fixed e12 conversion")) return 0;
     return 1;
 }
@@ -124,8 +131,8 @@ static void print_operation_path_matrix(void) {
 static int benchmark_addition(void) {
     const geo_cl20_t a = geo_cl20_make(1, 2, -3, (geo_real_t)0.5);
     const geo_cl20_t b = geo_cl20_make(-2, 4, 1, (geo_real_t)-0.25);
-    geo_fixed_cl20_t fa;
-    geo_fixed_cl20_t fb;
+    geo_fixed_cl20_t fixed_a;
+    geo_fixed_cl20_t fixed_b;
     const geo_struct_instruction_t structured_code[] = {
         {GEO_STRUCT_OP_UNIPOTENT_ENCODE, 2u, 0u, 0u},
         {GEO_STRUCT_OP_UNIPOTENT_ENCODE, 3u, 1u, 1u},
@@ -137,51 +144,72 @@ static int benchmark_addition(void) {
     geo_fused_program_t fused;
     geo_struct_value_t registers[6];
     geo_fixed_geb_result_t fixed_result;
-    uint64_t i;
+    uint64_t index;
     uint64_t begin;
     uint64_t end;
 
-    if (!fixed_mv(1, 2, -3, 0.5, &fa) || !fixed_mv(-2, 4, 1, -0.25, &fb)) return 0;
+    if (!fixed_mv(1, 2, -3, 0.5, &fixed_a) ||
+        !fixed_mv(-2, 4, 1, -0.25, &fixed_b)) return 0;
     if (!require_geo_status(
             geo_fused_program_for_target(GEO_GEB_ADDITION, &fused_code, &fused),
             "addition fused program construction")) return 0;
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) sink_real += geo_geb_addition(a, b).e1;
+    for (index = 0u; index < benchmark_iterations; ++index) {
+        sink_real += geo_geb_addition(a, b).e1;
+    }
     end = now_ticks();
     report("addition direct C", begin, end);
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) sink_real += geo_native_add(a, b).e1;
+    for (index = 0u; index < benchmark_iterations; ++index) {
+        sink_real += geo_native_add(a, b).e1;
+    }
     end = now_ticks();
     report("addition specialized native C", begin, end);
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) {
+    for (index = 0u; index < benchmark_iterations; ++index) {
         registers[0] = geo_struct_value_from_cl20(a);
         registers[1] = geo_struct_value_from_cl20(b);
-        if (!require_geo_status(geo_fused_execute(&fused, registers, 6u),
+        if (!require_geo_status(
+                geo_fused_execute(&fused, registers, 6u),
                 "addition fused execution")) return 0;
+        if (registers[fused.root_register].kind != (uint8_t)GEO_STRUCT_VALUE_CL20) {
+            fputs("addition fused execution returned the wrong result kind\n", stderr);
+            return 0;
+        }
         sink_real += registers[fused.root_register].as.cl20.e1;
     }
     end = now_ticks();
     report("addition fused IR", begin, end);
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) {
+    for (index = 0u; index < benchmark_iterations; ++index) {
         registers[0] = geo_struct_value_from_cl20(a);
         registers[1] = geo_struct_value_from_cl20(b);
-        if (!require_geo_status(geo_struct_program_execute(&structured, registers, 6u),
+        if (!require_geo_status(
+                geo_struct_program_execute(&structured, registers, 6u),
                 "addition structured execution")) return 0;
+        if (registers[5].kind != (uint8_t)GEO_STRUCT_VALUE_CL20) {
+            fputs("addition structured execution returned the wrong result kind\n", stderr);
+            return 0;
+        }
         sink_real += registers[5].as.cl20.e1;
     }
     end = now_ticks();
     report("addition structured IR", begin, end);
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) {
+    for (index = 0u; index < benchmark_iterations; ++index) {
         if (!require_fixed_status(
-                geo_fixed_geb36_execute(GEO_GEB_ADDITION, fa, fb, fa, &fixed_result),
+                geo_fixed_geb36_execute(
+                    GEO_GEB_ADDITION,
+                    fixed_a,
+                    fixed_b,
+                    fixed_a,
+                    &fixed_result
+                ),
                 "addition fixed execution")) return 0;
         if (fixed_result.kind != (uint8_t)GEO_FIXED_RESULT_CL20) {
             fputs("addition fixed execution returned the wrong result kind\n", stderr);
@@ -197,8 +225,8 @@ static int benchmark_addition(void) {
 static int benchmark_dot(void) {
     const geo_cl20_t a = geo_cl20_make(0, 2, -3, 0);
     const geo_cl20_t b = geo_cl20_make(0, 5, 7, 0);
-    geo_fixed_cl20_t fa;
-    geo_fixed_cl20_t fb;
+    geo_fixed_cl20_t fixed_a;
+    geo_fixed_cl20_t fixed_b;
     const geo_struct_instruction_t structured_code[] = {
         {GEO_STRUCT_OP_ORDERED_PRODUCTS, 2u, 0u, 1u},
         {GEO_STRUCT_OP_HADAMARD_EXACT, 3u, 2u, 2u},
@@ -209,51 +237,72 @@ static int benchmark_dot(void) {
     geo_fused_program_t fused;
     geo_struct_value_t registers[5];
     geo_fixed_geb_result_t fixed_result;
-    uint64_t i;
+    uint64_t index;
     uint64_t begin;
     uint64_t end;
 
-    if (!fixed_mv(0, 2, -3, 0, &fa) || !fixed_mv(0, 5, 7, 0, &fb)) return 0;
+    if (!fixed_mv(0, 2, -3, 0, &fixed_a) ||
+        !fixed_mv(0, 5, 7, 0, &fixed_b)) return 0;
     if (!require_geo_status(
             geo_fused_program_for_target(GEO_GEB_VECTOR_DOT, &fused_code, &fused),
             "vector-dot fused program construction")) return 0;
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) sink_real += geo_geb_vector_dot(a, b);
+    for (index = 0u; index < benchmark_iterations; ++index) {
+        sink_real += geo_geb_vector_dot(a, b);
+    }
     end = now_ticks();
     report("vector dot direct C", begin, end);
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) sink_real += geo_native_vector_dot(a, b);
+    for (index = 0u; index < benchmark_iterations; ++index) {
+        sink_real += geo_native_vector_dot(a, b);
+    }
     end = now_ticks();
     report("vector dot specialized native C", begin, end);
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) {
+    for (index = 0u; index < benchmark_iterations; ++index) {
         registers[0] = geo_struct_value_from_cl20(a);
         registers[1] = geo_struct_value_from_cl20(b);
-        if (!require_geo_status(geo_fused_execute(&fused, registers, 5u),
+        if (!require_geo_status(
+                geo_fused_execute(&fused, registers, 5u),
                 "vector-dot fused execution")) return 0;
+        if (registers[fused.root_register].kind != (uint8_t)GEO_STRUCT_VALUE_SCALAR) {
+            fputs("vector-dot fused execution returned the wrong result kind\n", stderr);
+            return 0;
+        }
         sink_real += registers[fused.root_register].as.scalar;
     }
     end = now_ticks();
     report("vector dot fused IR", begin, end);
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) {
+    for (index = 0u; index < benchmark_iterations; ++index) {
         registers[0] = geo_struct_value_from_cl20(a);
         registers[1] = geo_struct_value_from_cl20(b);
-        if (!require_geo_status(geo_struct_program_execute(&structured, registers, 5u),
+        if (!require_geo_status(
+                geo_struct_program_execute(&structured, registers, 5u),
                 "vector-dot structured execution")) return 0;
+        if (registers[4].kind != (uint8_t)GEO_STRUCT_VALUE_CL20) {
+            fputs("vector-dot structured execution returned the wrong result kind\n", stderr);
+            return 0;
+        }
         sink_real += registers[4].as.cl20.scalar;
     }
     end = now_ticks();
     report("vector dot structured IR", begin, end);
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) {
+    for (index = 0u; index < benchmark_iterations; ++index) {
         if (!require_fixed_status(
-                geo_fixed_geb36_execute(GEO_GEB_VECTOR_DOT, fa, fb, fa, &fixed_result),
+                geo_fixed_geb36_execute(
+                    GEO_GEB_VECTOR_DOT,
+                    fixed_a,
+                    fixed_b,
+                    fixed_a,
+                    &fixed_result
+                ),
                 "vector-dot fixed execution")) return 0;
         if (fixed_result.kind != (uint8_t)GEO_FIXED_RESULT_SCALAR) {
             fputs("vector-dot fixed execution returned the wrong result kind\n", stderr);
@@ -269,29 +318,40 @@ static int benchmark_dot(void) {
 static int benchmark_product(void) {
     const geo_cl20_t a = geo_cl20_make(1, 2, -3, (geo_real_t)0.5);
     const geo_cl20_t b = geo_cl20_make(-2, 4, 1, (geo_real_t)-0.25);
-    geo_fixed_cl20_t fa;
-    geo_fixed_cl20_t fb;
+    geo_fixed_cl20_t fixed_a;
+    geo_fixed_cl20_t fixed_b;
     geo_fixed_geb_result_t fixed_result;
-    uint64_t i;
+    uint64_t index;
     uint64_t begin;
     uint64_t end;
 
-    if (!fixed_mv(1, 2, -3, 0.5, &fa) || !fixed_mv(-2, 4, 1, -0.25, &fb)) return 0;
+    if (!fixed_mv(1, 2, -3, 0.5, &fixed_a) ||
+        !fixed_mv(-2, 4, 1, -0.25, &fixed_b)) return 0;
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) sink_real += geo_geb_geometric_product(a, b).e12;
+    for (index = 0u; index < benchmark_iterations; ++index) {
+        sink_real += geo_geb_geometric_product(a, b).e12;
+    }
     end = now_ticks();
     report("geometric product direct C", begin, end);
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) sink_real += geo_native_cl20_product(a, b).e12;
+    for (index = 0u; index < benchmark_iterations; ++index) {
+        sink_real += geo_native_cl20_product(a, b).e12;
+    }
     end = now_ticks();
     report("geometric product specialized native C", begin, end);
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) {
+    for (index = 0u; index < benchmark_iterations; ++index) {
         if (!require_fixed_status(
-                geo_fixed_geb36_execute(GEO_GEB_GEOMETRIC_PRODUCT, fa, fb, fa, &fixed_result),
+                geo_fixed_geb36_execute(
+                    GEO_GEB_GEOMETRIC_PRODUCT,
+                    fixed_a,
+                    fixed_b,
+                    fixed_a,
+                    &fixed_result
+                ),
                 "geometric-product fixed execution")) return 0;
         if (fixed_result.kind != (uint8_t)GEO_FIXED_RESULT_CL20) {
             fputs("geometric-product fixed execution returned the wrong result kind\n", stderr);
@@ -315,7 +375,7 @@ static int benchmark_rotor(void) {
     geo_fixed_cl20_t fixed_rotor;
     geo_fixed_cl20_t fixed_value;
     geo_fixed_geb_result_t fixed_result;
-    uint64_t i;
+    uint64_t index;
     uint64_t begin;
     uint64_t end;
 
@@ -323,17 +383,21 @@ static int benchmark_rotor(void) {
         !fixed_mv(0, 1, 2, 0, &fixed_value)) return 0;
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) sink_real += geo_geb_rotor_action(rotor, value).e1;
+    for (index = 0u; index < benchmark_iterations; ++index) {
+        sink_real += geo_geb_rotor_action(rotor, value).e1;
+    }
     end = now_ticks();
     report("rotor action direct C", begin, end);
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) sink_real += geo_native_rotor_action(rotor, value).e1;
+    for (index = 0u; index < benchmark_iterations; ++index) {
+        sink_real += geo_native_rotor_action(rotor, value).e1;
+    }
     end = now_ticks();
     report("rotor action specialized native C", begin, end);
 
     begin = now_ticks();
-    for (i = 0; i < benchmark_iterations; ++i) {
+    for (index = 0u; index < benchmark_iterations; ++index) {
         if (!require_fixed_status(
                 geo_fixed_geb36_execute(
                     GEO_GEB_ROTOR_ACTION,

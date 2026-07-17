@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "node": {
+    "required": [
+      "id",
+      "type",
+      "name",
+      "status",
+      "confidence",
+      "summary",
+      "provenance",
+      "updated"
+    ]
+  },
+  "edge": {
+    "required": [
+      "id",
+      "source",
+      "relation",
+      "target",
+      "confidence",
+      "provenance",
+      "updated"
+    ]
+  },
+  "node_types": [
+    "Project",
+    "Task",
+    "Component",
+    "Module",
+    "File",
+    "Symbol",
+    "Interface",
+    "Dataset",
+    "Metric",
+    "Requirement",
+    "Constraint",
+    "Decision",
+    "Hypothesis",
+    "Experiment",
+    "Evidence",
+    "Failure",
+    "Risk",
+    "Test",
+    "Artifact",
+    "Person",
+    "ExternalSystem"
+  ],
+  "relations": [
+    "CONTAINS",
+    "DEPENDS_ON",
+    "IMPLEMENTS",
+    "CALLS",
+    "PRODUCES",
+    "CONSUMES",
+    "TESTED_BY",
+    "VALIDATED_BY",
+    "DERIVED_FROM",
+    "AFFECTS",
+    "RELATED_TO",
+    "SUPERSEDES",
+    "CONTRADICTS",
+    "FAILED_BECAUSE",
+    "MITIGATES",
+    "INTRODUCED_BY",
+    "RESOLVED_BY",
+    "DOCUMENTED_BY",
+    "REQUESTED_BY"
+  ],
+  "confidence_values": [
+    "verified",
+    "documented",
+    "inferred",
+    "hypothesis",
+    "unverified",
+    "disputed"
+  ],
+  "record_statuses": [
+    "active",
+    "accepted",
+    "completed",
+    "planned",
+    "historical",
+    "superseded",
+    "failed",
+    "unresolved",
+    "completed_with_limitations",
+    "partially_completed",
+    "blocked",
+    "abandoned"
+  ],
+  "task_statuses": [
+    "active",
+    "completed",
+    "completed_with_limitations",
+    "partially_completed",
+    "blocked",
+    "abandoned"
+  ]
+}

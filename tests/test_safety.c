@@ -73,7 +73,6 @@ static void test_missing_terminal_image(void) {
     optimized.program.instruction_count = 1u;
     optimized.program.register_count = 3u;
     optimized.root_register = 2u;
-    optimized.terminal_count = 2u;
     optimized.original_instruction_count = 1u;
     optimized.optimized_instruction_count = 1u;
     optimized.eliminated_dead_nodes = 0u;

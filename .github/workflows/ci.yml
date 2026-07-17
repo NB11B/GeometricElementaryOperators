@@ -42,24 +42,26 @@ jobs:
         run: |
           set -o pipefail
           cmake --build build --parallel 2>&1 | tee build.log
-      - name: Verify exported ABI symbols
+      - name: Verify stable public executor symbols
         shell: bash
         run: |
           set -o pipefail
           nm -g --defined-only build/libgeo_kernel.a | tee symbols.log
-          grep -Eq '[[:space:]]T[[:space:]]geo_struct_program_execute$' symbols.log
-          grep -Eq '[[:space:]]T[[:space:]]geo_banked_execute$' symbols.log
+          grep -Eq '[[:space:]]T[[:space:]]+geo_struct_program_execute$' symbols.log
+          grep -Eq '[[:space:]]T[[:space:]]+geo_banked_execute$' symbols.log
       - name: Test
         shell: bash
         run: |
           set -o pipefail
           ctest --test-dir build --output-on-failure 2>&1 | tee test.log
-      - name: Generate benchmark report
+      - name: Generate benchmark and error reports
         if: matrix.compiler == 'gcc' && matrix.precision == 'float'
         shell: bash
         run: |
           set -o pipefail
           cmake --build build --target benchmark_report 2>&1 | tee benchmark.log
+          cmake --build build --target workload_report 2>&1 | tee workload.log
+          cmake --build build --target numerical_report 2>&1 | tee numerical.log
       - name: Upload diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -71,9 +73,18 @@ jobs:
             symbols.log
             test.log
             benchmark.log
+            workload.log
+            numerical.log
             build/benchmark-report/benchmark_report.csv
             build/benchmark-report/benchmark_report.json
             build/benchmark-report/benchmark_report.md
+            build/workload-report/workload_report.csv
+            build/workload-report/workload_report.json
+            build/workload-report/workload_report.md
+            build/numerical-report/numerical_error.csv
+            build/numerical-report/numerical_error.json
+            build/numerical-report/numerical_error.md
+            build/numerical-report/numerical_error.log
           if-no-files-found: ignore
 
   sanitizers:
@@ -117,6 +128,8 @@ jobs:
           set -o pipefail
           ctest --test-dir build-sanitize --output-on-failure \
             -R '^selected_path_benchmark$' 2>&1 | tee sanitizer-benchmark.log
+          ./build-sanitize/bench_numerical --samples 1024 --seed 1779033703 \
+            2>&1 | tee sanitizer-numerical.log
       - name: Upload sanitizer logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -127,6 +140,7 @@ jobs:
             sanitizer-build.log
             sanitizer-test.log
             sanitizer-benchmark.log
+            sanitizer-numerical.log
           if-no-files-found: ignore
 
   q-format-validation:
@@ -138,18 +152,39 @@ jobs:
         fraction_bits: [1, 8, 16, 24, 30]
     steps:
       - uses: actions/checkout@v4
-      - name: Compile Q-format harness
+      - name: Compile Q-format harnesses
         run: |
-          clang -std=c11 -Wall -Wextra -Wpedantic -Wconversion \
-            -fsanitize=address,undefined -fno-omit-frame-pointer \
-            -DGEO_FIXED_FRACTION_BITS=${{ matrix.fraction_bits }} \
-            -Iinclude tests/test_qformat.c src/fixed.c src/fixed_geb36.c \
+          COMMON_FLAGS="-std=c11 -Wall -Wextra -Wpedantic -Wconversion -fsanitize=address,undefined -fno-omit-frame-pointer -DGEO_REAL_IS_DOUBLE=1 -DGEO_FIXED_FRACTION_BITS=${{ matrix.fraction_bits }} -Iinclude"
+          clang $COMMON_FLAGS tests/test_qformat.c src/fixed.c src/fixed_geb36.c \
             -lm -o test-qformat
-      - name: Run Q-format harness
+          clang $COMMON_FLAGS tests/test_fixed_geb36.c src/fixed.c src/fixed_geb36.c \
+            src/cl20.c src/opposite.c src/omega.c src/structured.c src/geb36.c \
+            -lm -o test-fixed-geb36
+          clang $COMMON_FLAGS benchmarks/bench_numerical.c src/fixed.c src/fixed_geb36.c \
+            src/cl20.c src/opposite.c src/omega.c src/structured.c src/geb36.c \
+            -lm -o bench-numerical
+          clang $COMMON_FLAGS tests/test_fixed_omega.c src/fixed.c src/fixed_omega.c \
+            -lm -o test-fixed-omega
+          clang $COMMON_FLAGS tests/test_fixed_control.c src/fixed.c src/fixed_control.c \
+            -lm -o test-fixed-control
+      - name: Run Q-format harnesses
         env:
           ASAN_OPTIONS: halt_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: ./test-qformat
+          PYTHONDONTWRITEBYTECODE: 1
+        run: |
+          ./test-qformat
+          ./test-fixed-geb36
+          ./test-fixed-omega
+          ./test-fixed-control
+          python3 tests/test_numerical_report.py
+          python3 tools/numerical_report.py \
+            --executable ./bench-numerical \
+            --samples 1024 \
+            --seed 1779033703 \
+            --precision double \
+            --q-fraction-bits ${{ matrix.fraction_bits }} \
+            --out-dir numerical-q${{ matrix.fraction_bits }}
 
   esp32-component-validation:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
@@ -161,6 +196,47 @@ jobs:
       - name: Build standalone component validation
         run: cmake --build build-esp32-component --parallel
 
+  esp32-s3-application:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    container: espressif/idf:v6.0.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Report ESP-IDF version
+        shell: bash
+        run: |
+          set -o pipefail
+          . "$IDF_PATH/export.sh"
+          idf.py --version | tee esp-idf-version.log
+      - name: Configure ESP32-S3 target
+        shell: bash
+        run: |
+          set -o pipefail
+          . "$IDF_PATH/export.sh"
+          cd examples/esp32_s3
+          idf.py set-target esp32s3 2>&1 | tee ../../esp32-configure.log
+      - name: Build ESP32-S3 application
+        shell: bash
+        run: |
+          set -o pipefail
+          . "$IDF_PATH/export.sh"
+          cd examples/esp32_s3
+          idf.py build 2>&1 | tee ../../esp32-build.log
+      - name: Upload ESP32-S3 build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-s3-idf-6.0.1
+          path: |
+            esp-idf-version.log
+            esp32-configure.log
+            esp32-build.log
+            examples/esp32_s3/build/*.bin
+            examples/esp32_s3/build/*.elf
+            examples/esp32_s3/build/*.map
+            examples/esp32_s3/build/flasher_args.json
+          if-no-files-found: ignore
+
   windows-abi-consumer:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: windows-latest
@@ -171,11 +247,76 @@ jobs:
           cmake -S . -B build
           -DGEO_BUILD_TESTS=ON
           -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_CUDA=OFF
           -DGEO_USE_DOUBLE=ON
       - name: Build MSVC consumer
         run: cmake --build build --config Release --target test_abi_consumer --parallel
       - name: Run mandatory ABI consumer test
         run: ctest --test-dir build -C Release -R "^abi_consumer$" --output-on-failure
+
+  cuda-13-compile:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    container: nvidia/cuda:13.0.2-devel-ubuntu24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        precision: [double, float]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ python3 ca-certificates
+      - name: Resolve and report CUDA compiler
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 tests/test_cuda_compiler_resolution.py 2>&1 | tee cuda-resolver-test.log
+          CUDA_COMPILER="$(python3 tools/resolve_cuda_compiler.py --github-env "$GITHUB_ENV")"
+          echo "$(dirname "$CUDA_COMPILER")" >> "$GITHUB_PATH"
+          "$CUDA_COMPILER" --version 2>&1 | tee cuda-version.log
+      - name: Configure CUDA 13 build
+        shell: bash
+        run: |
+          set -o pipefail
+          if [ "${{ matrix.precision }}" = "double" ]; then USE_DOUBLE=ON; else USE_DOUBLE=OFF; fi
+          cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DGEO_BUILD_CUDA=ON -DGEO_BUILD_TESTS=ON -DGEO_BUILD_BENCHMARKS=ON \
+            -DGEO_USE_DOUBLE="$USE_DOUBLE" \
+            -DCMAKE_CUDA_COMPILER="$CUDACXX" \
+            -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
+            2>&1 | tee cuda-configure.log
+      - name: Compile CUDA backend, generated schedules, tests, and harness
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build build-cuda --parallel 2>&1 | tee cuda-build.log
+          cmake --build build-cuda --target generate_cuda_schedules 2>&1 | tee cuda-schedules.log
+          test -s build-cuda/cuda-schedules/cuda_schedule_manifest.json
+          test "$(find build-cuda/cuda-schedules -name 'geo_cuda_schedule_*.cu' | wc -l)" -eq 5
+      - name: Run CUDA build tests without a device
+        shell: bash
+        run: |
+          set -o pipefail
+          ctest --test-dir build-cuda --output-on-failure 2>&1 | tee cuda-test.log
+      - name: Upload CUDA compile artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cuda-13-${{ matrix.precision }}
+          path: |
+            cuda-resolver-test.log
+            cuda-version.log
+            cuda-configure.log
+            cuda-build.log
+            cuda-schedules.log
+            cuda-test.log
+            build-cuda/cuda-schedules/*.h
+            build-cuda/cuda-schedules/*.cu
+            build-cuda/cuda-schedules/cuda_schedule_manifest.json
+          if-no-files-found: ignore
 
   rtl-validation:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
@@ -186,27 +327,60 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y iverilog yosys
-      - name: Generate RTL and schedule
+      - name: Generate product, controller, and executable schedules
         run: |
           python3 tools/generate_rtl.py --out-dir build-rtl \
             --schedule-json rtl/examples/rotor_action_schedule.json --self-test
+          python3 tools/generate_rtl_schedule.py --out-dir build-rtl --self-test \
+            --schedule-json rtl/examples/addition_schedule.json \
+            --schedule-json rtl/examples/geometric_product_schedule.json \
+            --schedule-json rtl/examples/vector_dot_schedule.json \
+            --schedule-json rtl/examples/vector_wedge_schedule.json \
+            --schedule-json rtl/examples/rotor_action_schedule.json
+      - name: Validate generated schedule vectors against fixed C
+        run: |
+          set -o pipefail
+          : > c-schedule-equivalence.log
+          for source in build-rtl/test_geo_schedule_*.c; do
+            name="$(basename "$source" .c)"
+            clang -std=c11 -Wall -Wextra -Wpedantic -Wconversion \
+              -Iinclude "$source" src/fixed.c -lm -o "build-rtl/$name"
+            "build-rtl/$name" | tee -a c-schedule-equivalence.log
+          done
       - name: Simulate fixed-point Cl(2,0) product
         run: |
           set -o pipefail
           iverilog -g2012 -s tb_geo_cl20_product_q -o build-rtl/cl20_tb.vvp \
             build-rtl/geo_cl20_product_q.sv build-rtl/tb_geo_cl20_product_q.sv
           vvp build-rtl/cl20_tb.vvp | tee rtl-simulation.log
+      - name: Simulate executable schedules
+        run: |
+          set -o pipefail
+          : > schedule-simulation.log
+          for module_file in build-rtl/geo_schedule_*.sv; do
+            module="$(basename "$module_file" .sv)"
+            testbench="tb_${module}"
+            iverilog -g2012 -s "$testbench" -o "build-rtl/${module}.vvp" \
+              build-rtl/geo_cl20_product_q.sv "$module_file" "build-rtl/${testbench}.sv"
+            vvp "build-rtl/${module}.vvp" | tee -a schedule-simulation.log
+          done
       - name: Compile and simulate generated controller
         run: |
           set -o pipefail
           iverilog -g2012 -s tb_geo_program_controller -o build-rtl/controller_tb.vvp \
             build-rtl/geo_program_controller.sv build-rtl/tb_geo_program_controller.sv
           vvp build-rtl/controller_tb.vvp | tee controller-simulation.log
-      - name: Synthesize product cell and controller
+      - name: Synthesize product cell, schedules, and controller
         run: |
           set -o pipefail
           yosys -p 'read_verilog -sv build-rtl/geo_cl20_product_q.sv; synth -top geo_cl20_product_q; stat' \
             2>&1 | tee rtl-synthesis.log
+          : > schedule-synthesis.log
+          for module_file in build-rtl/geo_schedule_*.sv; do
+            module="$(basename "$module_file" .sv)"
+            yosys -p "read_verilog -sv build-rtl/geo_cl20_product_q.sv $module_file; synth -top $module; stat" \
+              2>&1 | tee -a schedule-synthesis.log
+          done
           yosys -p 'read_verilog -sv build-rtl/geo_program_controller.sv; synth -top geo_program_controller; stat' \
             2>&1 | tee controller-synthesis.log
       - name: Upload RTL artifacts
@@ -216,10 +390,14 @@ jobs:
           name: rtl-validation
           path: |
             build-rtl/*.sv
+            build-rtl/*.c
             build-rtl/*.json
+            c-schedule-equivalence.log
             rtl-simulation.log
+            schedule-simulation.log
             controller-simulation.log
             rtl-synthesis.log
+            schedule-synthesis.log
             controller-synthesis.log
           if-no-files-found: error
 
@@ -230,7 +408,9 @@ jobs:
       - sanitizers
       - q-format-validation
       - esp32-component-validation
+      - esp32-s3-application
       - windows-abi-consumer
+      - cuda-13-compile
       - rtl-validation
     runs-on: ubuntu-latest
     permissions:
@@ -238,13 +418,13 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - name: Publish exact hotfix gate summary
+      - name: Publish exact v0.19 gate summary
         uses: actions/github-script@v7
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
         with:
           script: |
-            const marker = '<!-- geo-v0182-ci-summary -->';
+            const marker = '<!-- geo-v019-ci-summary -->';
             const needs = JSON.parse(process.env.NEEDS_JSON);
             const gates = Object.entries(needs)
               .map(([gate, data]) => [gate, data.result]);
@@ -254,7 +434,7 @@ jobs:
               .join('\n');
             const body = [
               marker,
-              '## v0.18.2 CI gate summary',
+              '## v0.19 CI gate summary',
               '',
               `Candidate: \`${context.payload.pull_request.head.sha}\``,
               '',
@@ -284,5 +464,5 @@ jobs:
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
             if (!passed) {
-              core.setFailed('One or more required v0.18.2 CI gates did not pass.');
+              core.setFailed('One or more required v0.19 CI gates did not pass.');
             }
