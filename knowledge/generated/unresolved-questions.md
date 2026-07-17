@@ -7,7 +7,7 @@ This file is generated deterministically from task-record
 
 - Can Compute Sanitizer attach successfully in another supported local or CI environment, and does that run remain clean?
 - When will GitHub billing/spending state allow exact-head jobs to start and execute repository code?
-- How will the v0.19 branch be reconciled with the final accepted v0.18.2 head after exact-head CI passes and v0.18.2 is actually merged and tagged?
+- What additional reconciliation, if any, is needed after hosted exact-head validation can run and the already-merged v0.18.2 code is release-tagged?
 - What physical ESP32-S3 and target-FPGA hardware will be available for hardware-specific evidence?
 
 ## Provenance

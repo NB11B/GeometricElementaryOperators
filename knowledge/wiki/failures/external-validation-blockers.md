@@ -22,8 +22,10 @@ checkout. GitHub returned empty step lists and reported that jobs were not
 started because of account payment or spending-limit state. Repository code did
 not execute, so the run cannot be used as negative or positive code evidence.
 
-v0.18.2 therefore remains unmerged and untagged, and hosted validation for the
-current checkpoints must wait until the account gate is cleared.
+PR #13 was later merged into `origin/main` as `0280f0d`, but its merge message
+explicitly defers release tagging because hosted validation never executed.
+The code is merged; hosted validation and a v0.18.2 release tag remain
+outstanding until the account gate is cleared.
 
 ## Provenance
 

@@ -26,11 +26,12 @@ the distinction explicit.
 
 Status: active constraint.
 
-The v0.19 integration branch contains PR #13 code through `0280f0d`, but its
-base does not contain the later v0.18.2 provenance commit `4469433`. Therefore
-v0.19 work must not be used as evidence that v0.18.2 was accepted, merged, or
-tagged. The branch will need reconciliation with the eventual accepted v0.18.2
-head after exact-head hosted CI executes successfully.
+`origin/main` now contains the PR #13 merge `0280f0d`, and the v0.19 branch is
+based on that merged code. Neither branch contains the later local validation-
+provenance commit `4469433`. The merge explicitly deferred release tagging
+because hosted jobs never executed. Therefore v0.19 work must not be used as
+evidence that v0.18.2 passed hosted validation or was release-tagged; the code
+merge and release acceptance remain distinct states.
 
 ## Provenance
 
