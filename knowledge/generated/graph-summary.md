@@ -3,29 +3,29 @@
 This file is generated deterministically from `nodes.jsonl` and
 `edges.jsonl`. Do not edit it by hand.
 
-- Nodes: 19
-- Edges: 24
+- Nodes: 23
+- Edges: 29
 
 ## Node types
 
-- Component: 4
-- Decision: 5
-- Evidence: 3
+- Component: 5
+- Decision: 6
+- Evidence: 4
 - Failure: 3
 - Risk: 1
-- Task: 2
+- Task: 3
 - Test: 1
 
 ## Relations
 
-- AFFECTS: 8
-- DEPENDS_ON: 2
-- IMPLEMENTS: 4
+- AFFECTS: 9
+- DEPENDS_ON: 3
+- IMPLEMENTS: 5
 - MITIGATES: 1
-- RELATED_TO: 1
+- RELATED_TO: 2
 - RESOLVED_BY: 1
 - TESTED_BY: 1
-- VALIDATED_BY: 6
+- VALIDATED_BY: 7
 
 ## Provenance
 
