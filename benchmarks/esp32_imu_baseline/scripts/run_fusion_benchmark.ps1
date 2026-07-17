@@ -9,7 +9,18 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-function Invoke-LoggedCommand {
+function Convert-NativeOutputToText {
+    process {
+        if ($_ -is [System.Management.Automation.ErrorRecord]) {
+            $_.Exception.Message
+        }
+        else {
+            $_.ToString()
+        }
+    }
+}
+
+function Invoke-LoggedNativeCommand {
     param(
         [Parameter(Mandatory = $true)]
         [scriptblock]$Command,
@@ -17,9 +28,72 @@ function Invoke-LoggedCommand {
         [string]$LogPath
     )
 
-    & $Command 2>&1 | Tee-Object -FilePath $LogPath
-    if ($LASTEXITCODE -ne 0) {
-        throw "Command failed with exit code $LASTEXITCODE. See $LogPath"
+    $PreviousErrorActionPreference = $ErrorActionPreference
+    $PreviousNativePreference = $null
+    $HasNativePreference = Test-Path variable:PSNativeCommandUseErrorActionPreference
+
+    if ($HasNativePreference) {
+        $PreviousNativePreference = $PSNativeCommandUseErrorActionPreference
+        $PSNativeCommandUseErrorActionPreference = $false
+    }
+
+    try {
+        # ESP-IDF tools legitimately write warnings and progress messages to
+        # stderr. Windows PowerShell wraps those records as NativeCommandError
+        # objects. Temporarily keep native stderr non-terminating, convert every
+        # stream record to plain text, and rely on the actual process exit code.
+        $ErrorActionPreference = "Continue"
+        $global:LASTEXITCODE = 0
+
+        & $Command 2>&1 |
+            Convert-NativeOutputToText |
+            Tee-Object -FilePath $LogPath
+
+        $ExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $PreviousErrorActionPreference
+        if ($HasNativePreference) {
+            $PSNativeCommandUseErrorActionPreference = $PreviousNativePreference
+        }
+    }
+
+    if ($ExitCode -ne 0) {
+        throw "Command failed with exit code $ExitCode. See $LogPath"
+    }
+}
+
+function Invoke-LoggedMonitor {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SerialPort,
+        [Parameter(Mandatory = $true)]
+        [string]$LogPath
+    )
+
+    $PreviousErrorActionPreference = $ErrorActionPreference
+    $PreviousNativePreference = $null
+    $HasNativePreference = Test-Path variable:PSNativeCommandUseErrorActionPreference
+
+    if ($HasNativePreference) {
+        $PreviousNativePreference = $PSNativeCommandUseErrorActionPreference
+        $PSNativeCommandUseErrorActionPreference = $false
+    }
+
+    try {
+        $ErrorActionPreference = "Continue"
+
+        # Do not treat the monitor's COMx/GDB warning as a failure. The monitor
+        # intentionally remains interactive and is terminated with Ctrl+].
+        idf.py -p $SerialPort monitor 2>&1 |
+            Convert-NativeOutputToText |
+            Tee-Object -FilePath $LogPath
+    }
+    finally {
+        $ErrorActionPreference = $PreviousErrorActionPreference
+        if ($HasNativePreference) {
+            $PSNativeCommandUseErrorActionPreference = $PreviousNativePreference
+        }
     }
 }
 
@@ -60,23 +134,21 @@ try {
 
     . $IdfExport
 
-    idf.py --version 2>&1 |
-        Tee-Object -FilePath (Join-Path $EvidenceDirectory "idf-version.txt")
-    if ($LASTEXITCODE -ne 0) {
-        throw "idf.py is unavailable after exporting ESP-IDF"
-    }
+    Invoke-LoggedNativeCommand `
+        -Command { idf.py --version } `
+        -LogPath (Join-Path $EvidenceDirectory "idf-version.txt")
 
     Push-Location $BenchmarkDirectory
     try {
-        Invoke-LoggedCommand `
+        Invoke-LoggedNativeCommand `
             -Command { idf.py fullclean } `
             -LogPath (Join-Path $EvidenceDirectory "fullclean.log")
 
-        Invoke-LoggedCommand `
+        Invoke-LoggedNativeCommand `
             -Command { idf.py set-target esp32c6 } `
             -LogPath (Join-Path $EvidenceDirectory "set-target.log")
 
-        Invoke-LoggedCommand `
+        Invoke-LoggedNativeCommand `
             -Command { idf.py build } `
             -LogPath (Join-Path $EvidenceDirectory "build.log")
 
@@ -90,21 +162,29 @@ try {
             } |
             Copy-Item -Destination $EvidenceDirectory -Force
 
-        if ($SkipFlash) {
-            Write-Warning "Skipping flash and monitor because -SkipFlash was supplied"
-            Write-Host "Build evidence is available at $EvidenceDirectory"
-            return
+        if (-not $SkipFlash) {
+            Write-Host ""
+            Write-Host "Flashing firmware on $Port."
+
+            Invoke-LoggedNativeCommand `
+                -Command { idf.py -p $Port flash } `
+                -LogPath (Join-Path $EvidenceDirectory "flash.log")
+        }
+        else {
+            Write-Warning "Skipping flash because -SkipFlash was supplied"
         }
 
         $MonitorLog = Join-Path $EvidenceDirectory "esp32-imu-fusion.log"
 
         Write-Host ""
-        Write-Host "Flashing and starting the monitor on $Port."
+        Write-Host "Starting the monitor on $Port."
+        Write-Host "The COMx/GDB warning is expected and will not stop this script."
         Write-Host "Wait for GEO_ESP32_IMU_BENCHMARK,status=complete, then press Ctrl+]."
         Write-Host ""
 
-        idf.py -p $Port flash monitor 2>&1 |
-            Tee-Object -FilePath $MonitorLog
+        Invoke-LoggedMonitor `
+            -SerialPort $Port `
+            -LogPath $MonitorLog
 
         $CsvPath = Join-Path $EvidenceDirectory "esp32-imu-fusion.csv"
         Select-String "CSV," $MonitorLog |
@@ -112,6 +192,10 @@ try {
                 $_.Line -replace "^.*?CSV,", "CSV,"
             } |
             Set-Content $CsvPath
+
+        if (-not (Test-Path $CsvPath)) {
+            throw "No CSV output was captured. See $MonitorLog"
+        }
 
         $RowCount = (Get-Content $CsvPath).Count
         $RowCount | Set-Content (Join-Path $EvidenceDirectory "csv-row-count.txt")
@@ -123,12 +207,13 @@ try {
         $SummaryMarkdown = Join-Path $EvidenceDirectory "summary.md"
         $SummaryCsv = Join-Path $EvidenceDirectory "summary.csv"
 
-        python ".\scripts\summarize_results.py" $MonitorLog `
-            --markdown-out $SummaryMarkdown `
-            --csv-out $SummaryCsv
-        if ($LASTEXITCODE -ne 0) {
-            throw "Result validation failed. See $SummaryMarkdown"
-        }
+        Invoke-LoggedNativeCommand `
+            -Command {
+                python ".\scripts\summarize_results.py" $MonitorLog `
+                    --markdown-out $SummaryMarkdown `
+                    --csv-out $SummaryCsv
+            } `
+            -LogPath (Join-Path $EvidenceDirectory "summary-validation.log")
 
         $CompleteMarker = Select-String `
             "GEO_ESP32_IMU_BENCHMARK,status=complete" `
