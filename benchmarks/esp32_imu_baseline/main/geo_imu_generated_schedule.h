@@ -18,8 +18,8 @@ static inline void geo_generated_float_gravity(
     float *gz
 )
 {
-    *gx = 2.0f * (qx * qz) - 2.0f * (qw * qy);
-    *gy = 2.0f * (qw * qx) + 2.0f * (qy * qz);
+    *gx = 2.0f * (qx * qz - qw * qy);
+    *gy = 2.0f * (qw * qx + qy * qz);
     *gz = qw * qw - qx * qx - qy * qy + qz * qz;
 }
 
@@ -33,8 +33,8 @@ static inline void geo_generated_q32_gravity(
     int64_t *gz
 )
 {
-    *gx = INT64_C(2) * ((int64_t)qx * (int64_t)qz) - INT64_C(2) * ((int64_t)qw * (int64_t)qy);
-    *gy = INT64_C(2) * ((int64_t)qw * (int64_t)qx) + INT64_C(2) * ((int64_t)qy * (int64_t)qz);
+    *gx = INT64_C(2) * ((int64_t)qx * (int64_t)qz - (int64_t)qw * (int64_t)qy);
+    *gy = INT64_C(2) * ((int64_t)qw * (int64_t)qx + (int64_t)qy * (int64_t)qz);
     *gz = (int64_t)qw * (int64_t)qw - (int64_t)qx * (int64_t)qx - (int64_t)qy * (int64_t)qy + (int64_t)qz * (int64_t)qz;
 }
 
