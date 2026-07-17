@@ -36,6 +36,11 @@ def valid_rows(samples: int = 4) -> list[dict[str, str]]:
 
 
 class NumericalReportContractTests(unittest.TestCase):
+    def test_relative_executable_is_made_absolute(self) -> None:
+        command = numerical_report.executable_command(Path("bench-numerical"))
+        self.assertTrue(Path(command).is_absolute())
+        self.assertEqual(Path(command).name, "bench-numerical")
+
     def test_exact_manifest_is_accepted(self) -> None:
         rows = numerical_report.validate_rows(valid_rows(), 4, "double", 16)
         self.assertEqual(len(rows), 36)

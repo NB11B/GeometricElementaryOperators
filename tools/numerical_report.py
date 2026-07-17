@@ -80,6 +80,11 @@ def validate_configuration(
     return reported
 
 
+def executable_command(path: Path) -> str:
+    """Return an absolute command path that never relies on PATH lookup."""
+    return str(path.resolve())
+
+
 def finite_nonnegative(value: str, field: str, operation: str) -> float:
     parsed = float(value)
     if not math.isfinite(parsed) or parsed < 0.0:
@@ -212,7 +217,7 @@ def main() -> int:
     args.out_dir.mkdir(parents=True, exist_ok=True)
     raw_csv = args.out_dir / "numerical_error.csv"
     completed = subprocess.run(
-        [str(args.executable), "--samples", str(args.samples), "--seed",
+        [executable_command(args.executable), "--samples", str(args.samples), "--seed",
          str(args.seed), "--csv", str(raw_csv)],
         text=True,
         capture_output=True,
