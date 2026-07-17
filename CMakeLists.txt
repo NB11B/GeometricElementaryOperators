@@ -16,6 +16,12 @@ option(GEO_USE_DOUBLE "Use double precision instead of float" ON)
 option(GEO_ENABLE_STACK_USAGE "Emit compiler stack-usage reports" OFF)
 option(GEO_ENABLE_LINK_MAP "Emit linker map for benchmark executable" OFF)
 option(GEO_ENABLE_SANITIZERS "Enable address and undefined-behavior sanitizers" OFF)
+set(GEO_FIXED_FRACTION_BITS 16 CACHE STRING
+    "Fractional bits for signed 32-bit fixed-point arithmetic (1..30)"
+)
+if(GEO_FIXED_FRACTION_BITS LESS 1 OR GEO_FIXED_FRACTION_BITS GREATER 30)
+    message(FATAL_ERROR "GEO_FIXED_FRACTION_BITS must be in the range 1..30")
+endif()
 
 if(GEO_USE_DOUBLE)
     set(GEO_PRECISION_NAME double)
@@ -54,6 +60,9 @@ add_library(geo_kernel STATIC
 )
 
 target_include_directories(geo_kernel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_compile_definitions(geo_kernel PUBLIC
+    GEO_FIXED_FRACTION_BITS=${GEO_FIXED_FRACTION_BITS}
+)
 
 set_source_files_properties(src/structured_program.c PROPERTIES
     COMPILE_DEFINITIONS GEO_STRUCTURED_PROGRAM_IMPLEMENTATION=1
@@ -256,8 +265,16 @@ if(GEO_BUILD_TESTS)
             NAME workload_report_contract
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_workload_report.py
         )
+        add_test(
+            NAME numerical_report_contract
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_numerical_report.py
+        )
         set_tests_properties(generators PROPERTIES
-            ENVIRONMENT "CC=${CMAKE_C_COMPILER}"
+            ENVIRONMENT "CC=${CMAKE_C_COMPILER};PYTHONDONTWRITEBYTECODE=1"
+        )
+        set_tests_properties(
+            workload_report_contract numerical_report_contract
+            PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1"
         )
     endif()
 endif()
@@ -379,6 +396,7 @@ if(GEO_BUILD_BENCHMARKS)
                 ${CMAKE_CURRENT_SOURCE_DIR}/tools/numerical_report.py
                 --executable $<TARGET_FILE:bench_numerical>
                 --precision ${GEO_PRECISION_NAME}
+                --q-fraction-bits ${GEO_FIXED_FRACTION_BITS}
                 --out-dir ${CMAKE_CURRENT_BINARY_DIR}/numerical-report
             DEPENDS bench_numerical
             VERBATIM

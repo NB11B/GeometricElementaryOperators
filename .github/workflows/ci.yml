@@ -154,9 +154,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Compile Q-format harnesses
         run: |
-          COMMON_FLAGS="-std=c11 -Wall -Wextra -Wpedantic -Wconversion -fsanitize=address,undefined -fno-omit-frame-pointer -DGEO_FIXED_FRACTION_BITS=${{ matrix.fraction_bits }} -Iinclude"
+          COMMON_FLAGS="-std=c11 -Wall -Wextra -Wpedantic -Wconversion -fsanitize=address,undefined -fno-omit-frame-pointer -DGEO_REAL_IS_DOUBLE=1 -DGEO_FIXED_FRACTION_BITS=${{ matrix.fraction_bits }} -Iinclude"
           clang $COMMON_FLAGS tests/test_qformat.c src/fixed.c src/fixed_geb36.c \
             -lm -o test-qformat
+          clang $COMMON_FLAGS tests/test_fixed_geb36.c src/fixed.c src/fixed_geb36.c \
+            src/cl20.c src/opposite.c src/omega.c src/structured.c src/geb36.c \
+            -lm -o test-fixed-geb36
+          clang $COMMON_FLAGS benchmarks/bench_numerical.c src/fixed.c src/fixed_geb36.c \
+            src/cl20.c src/opposite.c src/omega.c src/structured.c src/geb36.c \
+            -lm -o bench-numerical
           clang $COMMON_FLAGS tests/test_fixed_omega.c src/fixed.c src/fixed_omega.c \
             -lm -o test-fixed-omega
           clang $COMMON_FLAGS tests/test_fixed_control.c src/fixed.c src/fixed_control.c \
@@ -165,10 +171,20 @@ jobs:
         env:
           ASAN_OPTIONS: halt_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+          PYTHONDONTWRITEBYTECODE: 1
         run: |
           ./test-qformat
+          ./test-fixed-geb36
           ./test-fixed-omega
           ./test-fixed-control
+          python3 tests/test_numerical_report.py
+          python3 tools/numerical_report.py \
+            --executable ./bench-numerical \
+            --samples 1024 \
+            --seed 1779033703 \
+            --precision double \
+            --q-fraction-bits ${{ matrix.fraction_bits }} \
+            --out-dir numerical-q${{ matrix.fraction_bits }}
 
   esp32-component-validation:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}

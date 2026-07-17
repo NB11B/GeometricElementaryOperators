@@ -146,8 +146,9 @@ geo_fixed_status_t geo_fixed_geb36_execute(
     geo_fixed_cl20_t transform,
     geo_fixed_geb_result_t *output
 ) {
-    geo_fixed_cl20_t r, t;
-    geo_fixed_t s;
+    geo_fixed_cl20_t r = zero_mv();
+    geo_fixed_cl20_t t = zero_mv();
+    geo_fixed_t s = 0;
     geo_fixed_status_t st = GEO_FIXED_OK;
     if (output == NULL) return GEO_FIXED_OVERFLOW;
 

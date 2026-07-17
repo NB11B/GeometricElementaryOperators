@@ -110,7 +110,14 @@ Generate the fixed-versus-floating numerical envelope:
 cmake --build build-bench --target numerical_report
 ```
 
-The numerical report records requested and completed samples, checked overflows, componentwise absolute and relative error, angular error, projective-scale error, and mismatches. Reports are written under `build-bench/workload-report/` and `build-bench/numerical-report/`.
+The numerical report freezes all 36 target names and their expected typed result
+kinds. Every bounded deterministic sample must complete with the expected kind;
+missing, extra, duplicate, overflowing, or mismatching rows are rejected. The
+floating reference receives the values decoded from the quantized fixtures, and
+the report records componentwise, angular, and projective-scale error. This is a
+typed floating-reference envelope over quantized fixtures, not an independently
+implemented oracle. Reports are written under `build-bench/workload-report/`
+and `build-bench/numerical-report/`.
 
 Focused benchmark executables remain available under their established names:
 
