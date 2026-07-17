@@ -8,7 +8,7 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence
+from typing import Mapping, Sequence
 
 
 class ScheduleError(ValueError):
@@ -193,25 +193,6 @@ def _q32_term(term: Term, first: bool) -> str:
     return f" {'-' if term.coefficient < 0 else '+'} {product}"
 
 
-def _wrap_expression(parts: Iterable[str], indent: str) -> list[str]:
-    expression = "".join(parts)
-    if len(indent) + len(expression) <= 92:
-        return [indent + expression]
-
-    lines: list[str] = []
-    current = indent
-    tokens = expression.split(" ")
-    for token in tokens:
-        candidate = token if current == indent else f" {token}"
-        if len(current) + len(candidate) > 92 and current != indent:
-            lines.append(current)
-            current = indent + token
-        else:
-            current += candidate
-    lines.append(current)
-    return lines
-
-
 def emit_header(schedule: Schedule, source_path: str) -> str:
     guard = f"GEO_GENERATED_{schedule.name.upper()}_H"
     lines: list[str] = [
@@ -230,40 +211,32 @@ def emit_header(schedule: Schedule, source_path: str) -> str:
     for function in schedule.functions:
         float_parameters = [f"float {name}" for name in function.inputs]
         float_parameters.extend(f"float *{output.name}" for output in function.outputs)
-        lines.append(
-            f"static inline void geo_generated_float_{function.name}("
-        )
+        lines.append(f"static inline void geo_generated_float_{function.name}(")
         for index, parameter in enumerate(float_parameters):
             suffix = "," if index + 1 < len(float_parameters) else ""
             lines.append(f"    {parameter}{suffix}")
         lines.extend([")", "{"])
         for output in function.outputs:
-            expression = [
+            expression = "".join(
                 _float_term(term, index == 0)
                 for index, term in enumerate(output.terms)
-            ]
-            wrapped = _wrap_expression(expression, f"    *{output.name} = ")
-            wrapped[-1] += ";"
-            lines.extend(wrapped)
+            )
+            lines.append(f"    *{output.name} = {expression};")
         lines.extend(["}", ""])
 
         q32_parameters = [f"int32_t {name}" for name in function.inputs]
         q32_parameters.extend(f"int64_t *{output.name}" for output in function.outputs)
-        lines.append(
-            f"static inline void geo_generated_q32_{function.name}("
-        )
+        lines.append(f"static inline void geo_generated_q32_{function.name}(")
         for index, parameter in enumerate(q32_parameters):
             suffix = "," if index + 1 < len(q32_parameters) else ""
             lines.append(f"    {parameter}{suffix}")
         lines.extend([")", "{"])
         for output in function.outputs:
-            expression = [
+            expression = "".join(
                 _q32_term(term, index == 0)
                 for index, term in enumerate(output.terms)
-            ]
-            wrapped = _wrap_expression(expression, f"    *{output.name} = ")
-            wrapped[-1] += ";"
-            lines.extend(wrapped)
+            )
+            lines.append(f"    *{output.name} = {expression};")
         lines.extend(["}", ""])
 
     lines.extend([f"#endif /* {guard} */", ""])
