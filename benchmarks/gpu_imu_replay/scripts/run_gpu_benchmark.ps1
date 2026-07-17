@@ -194,7 +194,7 @@ try {
         -LogPath (Join-Path $EvidenceDirectory "ninja-version.txt")
 
     Invoke-LoggedNativeCommand `
-        -Command { & $ClPath 2>&1 } `
+        -Command { & $ClPath /Bv /? } `
         -LogPath (Join-Path $EvidenceDirectory "msvc-version.txt")
 
     Invoke-LoggedNativeCommand `
