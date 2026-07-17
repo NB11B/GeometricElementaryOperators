@@ -66,12 +66,16 @@ geo_status_t geo_banked_initialize(
     geo_banked_storage_t *storage
 );
 
-geo_status_t geo_banked_execute_impl(
+/*
+ * Stable public executor symbol. The implementation entry point remains
+ * available for source compatibility, but callers should use this function.
+ */
+geo_status_t geo_banked_execute(
     const geo_banked_program_t *program,
     geo_banked_storage_t *storage
 );
 
-geo_status_t geo_banked_execute(
+geo_status_t geo_banked_execute_impl(
     const geo_banked_program_t *program,
     geo_banked_storage_t *storage
 );

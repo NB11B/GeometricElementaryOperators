@@ -18,6 +18,20 @@ def run(*args: str, cwd: Path | None = None) -> None:
     subprocess.run(args, cwd=cwd, check=True)
 
 
+def compiler_command() -> list[str]:
+    return shlex.split(os.environ.get("CC", "cc"))
+
+
+def schedule_paths() -> list[Path]:
+    return [
+        ROOT / "rtl" / "examples" / "addition_schedule.json",
+        ROOT / "rtl" / "examples" / "geometric_product_schedule.json",
+        ROOT / "rtl" / "examples" / "vector_dot_schedule.json",
+        ROOT / "rtl" / "examples" / "vector_wedge_schedule.json",
+        ROOT / "rtl" / "examples" / "rotor_action_schedule.json",
+    ]
+
+
 def test_clpq(temp: Path) -> None:
     out = temp / "clpq"
     run(
@@ -44,10 +58,9 @@ def test_clpq(temp: Path) -> None:
         '}\n',
         encoding="utf-8",
     )
-    compiler = shlex.split(os.environ.get("CC", "cc"))
     executable = out / ("test_generated.exe" if os.name == "nt" else "test_generated")
     command = [
-        *compiler,
+        *compiler_command(),
         "-std=c11",
         "-I", str(ROOT / "include"),
         "-I", str(out),
@@ -118,12 +131,150 @@ def test_rtl(temp: Path) -> None:
         run(vvp, str(controller_simulation))
 
 
+def test_rtl_schedules(temp: Path) -> None:
+    out = temp / "rtl-schedules"
+    paths = schedule_paths()
+
+    invalid_product = subprocess.run(
+        [
+            PYTHON,
+            str(ROOT / "tools" / "generate_rtl_schedule.py"),
+            "--out-dir", str(out),
+            "--schedule-json", str(paths[0]),
+            "--product-module", "geo_cl20_product_q\ntrailing_junk",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert invalid_product.returncode != 0
+    assert "invalid product module name" in invalid_product.stderr
+
+    run(
+        PYTHON,
+        str(ROOT / "tools" / "generate_rtl.py"),
+        "--out-dir", str(out),
+        "--schedule-json", str(paths[-1]),
+        "--self-test",
+    )
+    command = [
+        PYTHON,
+        str(ROOT / "tools" / "generate_rtl_schedule.py"),
+        "--out-dir", str(out),
+        "--self-test",
+    ]
+    for schedule_path in paths:
+        command.extend(["--schedule-json", str(schedule_path)])
+    run(*command)
+
+    manifest = json.loads(
+        (out / "schedule_equivalence_manifest.json").read_text(encoding="utf-8")
+    )
+    assert len(manifest) == len(paths)
+    assert {entry["name"] for entry in manifest} == {
+        "addition",
+        "geometric_product",
+        "vector_dot",
+        "vector_wedge",
+        "rotor_action",
+    }
+
+    for entry in manifest:
+        c_source = out / entry["c_harness"]
+        executable = out / (
+            f"test_{entry['name']}.exe" if os.name == "nt" else f"test_{entry['name']}"
+        )
+        compile_command = [
+            *compiler_command(),
+            "-std=c11",
+            "-Wall",
+            "-Wextra",
+            "-Wpedantic",
+            "-Wconversion",
+            "-I", str(ROOT / "include"),
+            str(c_source),
+            str(ROOT / "src" / "fixed.c"),
+        ]
+        if os.name != "nt":
+            compile_command.append("-lm")
+        compile_command.extend(["-o", str(executable)])
+        run(*compile_command)
+        run(str(executable))
+
+        module_text = (out / entry["sv"]).read_text(encoding="utf-8")
+        assert "output logic overflow" in module_text
+        assert "overflow ? '0" in module_text
+
+    iverilog = shutil.which("iverilog")
+    vvp = shutil.which("vvp")
+    if iverilog and vvp:
+        for entry in manifest:
+            module = entry["module"]
+            simulation = out / f"{module}.vvp"
+            run(
+                iverilog,
+                "-g2012",
+                "-s", f"tb_{module}",
+                "-o", str(simulation),
+                str(out / "geo_cl20_product_q.sv"),
+                str(out / entry["sv"]),
+                str(out / entry["testbench"]),
+            )
+            run(vvp, str(simulation))
+
+
+def test_cuda_schedules(temp: Path) -> None:
+    out = temp / "cuda-schedules"
+    paths = schedule_paths()
+    command = [
+        PYTHON,
+        str(ROOT / "tools" / "generate_cuda_schedule.py"),
+        "--out-dir", str(out),
+        "--self-test",
+    ]
+    for schedule_path in paths:
+        command.extend(["--schedule-json", str(schedule_path)])
+    run(*command)
+
+    manifest = json.loads(
+        (out / "cuda_schedule_manifest.json").read_text(encoding="utf-8")
+    )
+    assert len(manifest) == len(paths)
+    assert {entry["name"] for entry in manifest} == {
+        "addition",
+        "geometric_product",
+        "vector_dot",
+        "vector_wedge",
+        "rotor_action",
+    }
+    for entry in manifest:
+        header = (out / entry["header"]).read_text(encoding="utf-8")
+        source = (out / entry["source"]).read_text(encoding="utf-8")
+        assert f"geo_cuda_schedule_{entry['name']}_launch" in header
+        assert f"geo_cuda_schedule_{entry['name']}_kernel" in source
+        assert "cudaGetLastError" in source
+        assert "SIZE_MAX" in source
+        assert "cudaGetDevice(&device)" in source
+        assert "cudaDevAttrMaxGridDimX" in source
+        assert "cudaDevAttrMaxThreadsPerBlock" in source
+        assert "block_size > (unsigned int)max_threads_per_block" in source
+        assert "block_count > (size_t)max_grid_x" in source
+
+        if entry["name"] == "vector_wedge":
+            assert "complete" in header
+            assert "(0, 0, 0, e12_coefficient)" in header
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="geo-generators-") as directory:
         temp = Path(directory)
         test_clpq(temp)
         test_rtl(temp)
-    print("Cl(p,q) and RTL generator tests passed.")
+        test_rtl_schedules(temp)
+        test_cuda_schedules(temp)
+    print(
+        "Cl(p,q), RTL product/controller, executable RTL schedules, and CUDA schedule generator tests passed."
+    )
     return 0
 
 

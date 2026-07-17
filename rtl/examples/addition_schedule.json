@@ -1,0 +1,13 @@
+{
+  "name": "addition",
+  "input_registers": [0, 1],
+  "instructions": [
+    {
+      "opcode": "cl20_add",
+      "destination": 2,
+      "left": 0,
+      "right": 1
+    }
+  ],
+  "root_register": 2
+}

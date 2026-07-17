@@ -1,8 +1,10 @@
 #include "geo/fixed_geb36.h"
 
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static int failures = 0;
 
@@ -33,11 +35,76 @@ static void fail_id(uint8_t id, const char *message) {
 }
 
 static int near_scalar(geo_fixed_t actual, geo_real_t expected) {
-    return fabs(geo_fixed_to_double(actual) - (double)expected) <= 5e-3;
+    const double tolerance =
+        32.0 / (double)(INT64_C(1) << GEO_FIXED_FRACTION_BITS);
+    return fabs(geo_fixed_to_double(actual) - (double)expected) <= tolerance;
 }
 
 static int near_mv(geo_fixed_cl20_t actual, geo_cl20_t expected) {
-    return geo_cl20_near(decode(actual), expected, (geo_real_t)5e-3);
+    const geo_real_t tolerance = (geo_real_t)(
+        32.0 / (double)(INT64_C(1) << GEO_FIXED_FRACTION_BITS)
+    );
+    return geo_cl20_near(decode(actual), expected, tolerance);
+}
+
+static geo_fixed_result_kind_t expected_kind(uint8_t id) {
+    switch ((geo_geb_target_id_t)id) {
+        case GEO_GEB_VECTOR_DOT:
+        case GEO_GEB_VECTOR_NORM_SQUARED:
+        case GEO_GEB_DISTANCE_SQUARED:
+        case GEO_GEB_ROTOR_NORM_SQUARED:
+        case GEO_GEB_ANGLE_COSINE_NUMERATOR:
+            return GEO_FIXED_RESULT_SCALAR;
+        case GEO_GEB_PROJECTION_NUMERATOR:
+        case GEO_GEB_REJECTION_NUMERATOR:
+        case GEO_GEB_REFLECTION_NUMERATOR:
+        case GEO_GEB_VECTOR_INVERSE_PROJECTIVE:
+            return GEO_FIXED_RESULT_PROJECTIVE;
+        case GEO_GEB_TRANSLATION_UNIPOTENT:
+            return GEO_FIXED_RESULT_UNIPOTENT;
+        default:
+            return GEO_FIXED_RESULT_CL20;
+    }
+}
+
+static void expect_unchanged_failure(
+    uint8_t id,
+    geo_fixed_cl20_t a,
+    geo_fixed_cl20_t b,
+    geo_fixed_cl20_t transform,
+    const char *message
+) {
+    geo_fixed_geb_result_t result;
+    geo_fixed_geb_result_t before;
+    memset(&result, 0x5a, sizeof(result));
+    before = result;
+    if (geo_fixed_geb36_execute(id, a, b, transform, &result) == GEO_FIXED_OK) {
+        fail_id(id, message);
+    } else if (memcmp(&result, &before, sizeof(result)) != 0) {
+        fail_id(id, "failure mutated destination");
+    }
+}
+
+static void test_failure_safety(geo_fixed_cl20_t valid) {
+    geo_fixed_cl20_t overflow = {INT32_MAX, INT32_MAX, INT32_MAX, INT32_MAX};
+    geo_fixed_cl20_t reverse_overflow = {0, 0, 0, INT32_MIN};
+
+    expect_unchanged_failure(0u, valid, valid, valid, "target zero accepted");
+    expect_unchanged_failure(37u, valid, valid, valid, "target 37 accepted");
+    expect_unchanged_failure(
+        GEO_GEB_ADDITION, overflow, overflow, valid, "addition overflow accepted"
+    );
+    expect_unchanged_failure(
+        GEO_GEB_REVERSION,
+        reverse_overflow,
+        valid,
+        valid,
+        "reversion overflow accepted"
+    );
+    if (geo_fixed_geb36_execute(
+            GEO_GEB_ZERO, valid, valid, valid, NULL) != GEO_FIXED_OVERFLOW) {
+        fail_id(GEO_GEB_ZERO, "null output accepted");
+    }
 }
 
 static geo_cl20_t expected_cl20(
@@ -93,19 +160,34 @@ static geo_real_t expected_scalar(uint8_t id, geo_cl20_t a, geo_cl20_t b) {
 }
 
 int main(void) {
-    const geo_cl20_t a = geo_cl20_make((geo_real_t)0.25, (geo_real_t)0.5, (geo_real_t)-0.375, (geo_real_t)0.125);
-    const geo_cl20_t b = geo_cl20_make((geo_real_t)-0.125, (geo_real_t)0.25, (geo_real_t)0.625, (geo_real_t)-0.25);
-    const geo_cl20_t transform = geo_cl20_make((geo_real_t)0.9238795, (geo_real_t)0, (geo_real_t)0, (geo_real_t)-0.3826834);
-    const geo_fixed_cl20_t fa = encode(a);
-    const geo_fixed_cl20_t fb = encode(b);
-    const geo_fixed_cl20_t ft = encode(transform);
+    const geo_cl20_t requested_a = geo_cl20_make(
+        (geo_real_t)0.5, (geo_real_t)0.5, (geo_real_t)-0.5, (geo_real_t)0.5
+    );
+    const geo_cl20_t requested_b = geo_cl20_make(
+        (geo_real_t)-0.5, (geo_real_t)0.5, (geo_real_t)0.5, (geo_real_t)-0.5
+    );
+    const geo_cl20_t requested_transform = geo_cl20_make(
+        (geo_real_t)0.5, (geo_real_t)0, (geo_real_t)0, (geo_real_t)-0.5
+    );
+    const geo_fixed_cl20_t fa = encode(requested_a);
+    const geo_fixed_cl20_t fb = encode(requested_b);
+    const geo_fixed_cl20_t ft = encode(requested_transform);
+    const geo_cl20_t a = decode(fa);
+    const geo_cl20_t b = decode(fb);
+    const geo_cl20_t transform = decode(ft);
     uint8_t id;
+
+    test_failure_safety(fa);
 
     for (id = 1u; id <= 36u; ++id) {
         geo_fixed_geb_result_t result;
         const geo_fixed_status_t status = geo_fixed_geb36_execute(id, fa, fb, ft, &result);
         if (status != GEO_FIXED_OK) {
             fail_id(id, "execution status");
+            continue;
+        }
+        if (result.kind != (uint8_t)expected_kind(id)) {
+            fail_id(id, "result kind mismatch");
             continue;
         }
 
