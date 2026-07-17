@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "imu_orientation_sparse_v1",
-  "description": "Sparse polynomial schedules lowered from the paired-Cl(2,0) quaternion representation used by the ESP32 IMU benchmark.",
+  "description": "Sparse polynomial schedules lowered from the paired-Cl(2,0) quaternion representation used by the ESP32 IMU benchmark. Output scale preserves source grouping and floating operation order.",
   "functions": [
     {
       "name": "gravity",
@@ -9,20 +9,23 @@
       "outputs": [
         {
           "name": "gx",
+          "scale": 2,
           "terms": [
-            {"coefficient": 2, "factors": ["qx", "qz"]},
-            {"coefficient": -2, "factors": ["qw", "qy"]}
+            {"coefficient": 1, "factors": ["qx", "qz"]},
+            {"coefficient": -1, "factors": ["qw", "qy"]}
           ]
         },
         {
           "name": "gy",
+          "scale": 2,
           "terms": [
-            {"coefficient": 2, "factors": ["qw", "qx"]},
-            {"coefficient": 2, "factors": ["qy", "qz"]}
+            {"coefficient": 1, "factors": ["qw", "qx"]},
+            {"coefficient": 1, "factors": ["qy", "qz"]}
           ]
         },
         {
           "name": "gz",
+          "scale": 1,
           "terms": [
             {"coefficient": 1, "factors": ["qw", "qw"]},
             {"coefficient": -1, "factors": ["qx", "qx"]},
@@ -38,6 +41,7 @@
       "outputs": [
         {
           "name": "dw",
+          "scale": 1,
           "terms": [
             {"coefficient": -1, "factors": ["qx", "wx"]},
             {"coefficient": -1, "factors": ["qy", "wy"]},
@@ -46,6 +50,7 @@
         },
         {
           "name": "dx",
+          "scale": 1,
           "terms": [
             {"coefficient": 1, "factors": ["qw", "wx"]},
             {"coefficient": 1, "factors": ["qy", "wz"]},
@@ -54,6 +59,7 @@
         },
         {
           "name": "dy",
+          "scale": 1,
           "terms": [
             {"coefficient": 1, "factors": ["qw", "wy"]},
             {"coefficient": -1, "factors": ["qx", "wz"]},
@@ -62,6 +68,7 @@
         },
         {
           "name": "dz",
+          "scale": 1,
           "terms": [
             {"coefficient": 1, "factors": ["qw", "wz"]},
             {"coefficient": 1, "factors": ["qx", "wy"]},
