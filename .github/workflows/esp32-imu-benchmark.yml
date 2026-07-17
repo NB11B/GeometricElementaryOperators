@@ -1,0 +1,71 @@
+name: ESP32-C6 IMU Benchmark CI
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "benchmarks/esp32_imu_baseline/**"
+      - "ports/esp32/**"
+      - "include/geo/**"
+      - "src/**"
+      - ".github/workflows/esp32-imu-benchmark.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  esp32-c6-imu-benchmark:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.3.4
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Report evidence identity
+        shell: bash
+        run: |
+          set -o pipefail
+          git rev-parse HEAD | tee esp32-imu-commit.log
+          . "$IDF_PATH/export.sh"
+          idf.py --version | tee esp32-imu-idf-version.log
+
+      - name: Configure ESP32-C6 target
+        shell: bash
+        run: |
+          set -o pipefail
+          . "$IDF_PATH/export.sh"
+          cd benchmarks/esp32_imu_baseline
+          idf.py fullclean 2>&1 | tee ../../esp32-imu-fullclean.log
+          idf.py set-target esp32c6 2>&1 | tee ../../esp32-imu-configure.log
+
+      - name: Build A/B/C/D replay firmware
+        shell: bash
+        run: |
+          set -o pipefail
+          . "$IDF_PATH/export.sh"
+          cd benchmarks/esp32_imu_baseline
+          idf.py build 2>&1 | tee ../../esp32-imu-build.log
+
+      - name: Upload build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-c6-imu-abcd-idf-5.3.4
+          path: |
+            esp32-imu-commit.log
+            esp32-imu-idf-version.log
+            esp32-imu-fullclean.log
+            esp32-imu-configure.log
+            esp32-imu-build.log
+            benchmarks/esp32_imu_baseline/sdkconfig
+            benchmarks/esp32_imu_baseline/build/*.bin
+            benchmarks/esp32_imu_baseline/build/*.elf
+            benchmarks/esp32_imu_baseline/build/*.map
+            benchmarks/esp32_imu_baseline/build/flasher_args.json
+          if-no-files-found: ignore
