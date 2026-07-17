@@ -73,6 +73,30 @@ function Resolve-CommandPath {
     return $Command.Source
 }
 
+function Resolve-ShortPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path $Path)) {
+        throw "Cannot resolve a short path for missing path: $Path"
+    }
+
+    $CommandLine = "for %I in (`"$Path`") do @echo %~sI"
+    $ShortPath = & $env:ComSpec /d /s /c $CommandLine
+    if ($LASTEXITCODE -ne 0 -or -not $ShortPath) {
+        throw "Unable to resolve DOS short path for: $Path"
+    }
+
+    $Resolved = ($ShortPath | Select-Object -First 1).Trim()
+    if (-not $Resolved -or -not (Test-Path $Resolved)) {
+        throw "Resolved short path is invalid for '$Path': '$Resolved'"
+    }
+
+    return $Resolved
+}
+
 function Resolve-NinjaPath {
     $Command = Get-Command ninja.exe -ErrorAction SilentlyContinue
     if ($Command) {
@@ -171,18 +195,28 @@ try {
     Import-VisualStudioEnvironment -InstallationPath $VisualStudioPath
     $ClPath = Resolve-CommandPath "cl.exe"
 
+    $NvccShortPath = Resolve-ShortPath $NvccPath
+    $CudaRootShortPath = Resolve-ShortPath $CudaRoot
+    $ClShortPath = Resolve-ShortPath $ClPath
+
+    $env:CUDAHOSTCXX = $ClShortPath
+
     @(
         "cmake=$CmakePath"
         "ninja=$NinjaPath"
         "nvcc=$NvccPath"
+        "nvcc_short=$NvccShortPath"
         "cuda_root=$CudaRoot"
+        "cuda_root_short=$CudaRootShortPath"
         "cuda_architectures=$CudaArchitectures"
         "visual_studio=$VisualStudioPath"
         "cl=$ClPath"
+        "cl_short=$ClShortPath"
+        "CUDAHOSTCXX=$env:CUDAHOSTCXX"
     ) | Set-Content (Join-Path $EvidenceDirectory "toolchain-paths.txt")
 
     Invoke-LoggedNativeCommand `
-        -Command { & $NvccPath --version } `
+        -Command { & $NvccShortPath --version } `
         -LogPath (Join-Path $EvidenceDirectory "nvcc-version.txt")
 
     Invoke-LoggedNativeCommand `
@@ -194,7 +228,7 @@ try {
         -LogPath (Join-Path $EvidenceDirectory "ninja-version.txt")
 
     Invoke-LoggedNativeCommand `
-        -Command { & $ClPath /Bv /? } `
+        -Command { & $ClShortPath /Bv /? } `
         -LogPath (Join-Path $EvidenceDirectory "msvc-version.txt")
 
     Invoke-LoggedNativeCommand `
@@ -229,10 +263,10 @@ try {
                 "-DCMAKE_MAKE_PROGRAM=$NinjaPath" `
                 -DCMAKE_BUILD_TYPE=Release `
                 "-DCMAKE_CUDA_ARCHITECTURES=$CudaArchitectures" `
-                "-DCMAKE_CUDA_COMPILER=$NvccPath" `
-                "-DCMAKE_CUDA_HOST_COMPILER=$ClPath" `
-                "-DCMAKE_CXX_COMPILER=$ClPath" `
-                "-DCUDAToolkit_ROOT=$CudaRoot"
+                "-DCMAKE_CUDA_COMPILER=$NvccShortPath" `
+                "-DCMAKE_CUDA_HOST_COMPILER=$ClShortPath" `
+                "-DCMAKE_CXX_COMPILER=$ClShortPath" `
+                "-DCUDAToolkit_ROOT=$CudaRootShortPath"
         } `
         -LogPath (Join-Path $EvidenceDirectory "configure.log")
 
