@@ -50,8 +50,10 @@ static int geo_scale_is_unit(geo_scale_t scale) {
 }
 
 static uint8_t geo_scale_flag(uint8_t lanes, int known) {
-    return (uint8_t)((lanes << GEO_SCALE_LANE_SHIFT) |
-        (known ? GEO_SCALE_KNOWN_FLAG : 0u));
+    const uint8_t shifted_lanes =
+        (uint8_t)((uint8_t)lanes << GEO_SCALE_LANE_SHIFT);
+    const uint8_t known_flag = known ? GEO_SCALE_KNOWN_FLAG : UINT8_C(0);
+    return (uint8_t)(shifted_lanes | known_flag);
 }
 
 static uint8_t geo_scale_lanes(uint8_t flag) {
