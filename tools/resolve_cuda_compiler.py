@@ -34,13 +34,14 @@ def _candidate_paths(env: Mapping[str, str]) -> Iterable[Path]:
         if root:
             yield from emit(str(Path(root) / "bin" / "nvcc"))
 
-    for value in (
-        "/usr/local/cuda/bin/nvcc",
-        "/usr/local/cuda-13.0/bin/nvcc",
-        "/opt/cuda/bin/nvcc",
-        "/usr/bin/nvcc",
-    ):
-        yield from emit(value)
+    if env.get("GEO_CUDA_RESOLVER_DISABLE_DEFAULTS") != "1":
+        for value in (
+            "/usr/local/cuda/bin/nvcc",
+            "/usr/local/cuda-13.0/bin/nvcc",
+            "/opt/cuda/bin/nvcc",
+            "/usr/bin/nvcc",
+        ):
+            yield from emit(value)
 
 
 def resolve_cuda_compiler(env: Mapping[str, str] | None = None) -> Path:
