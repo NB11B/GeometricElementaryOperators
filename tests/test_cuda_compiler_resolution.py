@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import os
 import stat
+import sys
 import tempfile
 from pathlib import Path
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from tools.resolve_cuda_compiler import resolve_cuda_compiler
 
