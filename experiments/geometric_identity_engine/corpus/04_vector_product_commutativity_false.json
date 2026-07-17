@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "name": "vector_product_is_not_commutative",
+  "description": "Mutation: claims a*b=b*a for vectors; the search must find a counterexample.",
+  "expected": "counterexample",
+  "dimension": 4,
+  "signature": [1, 1, 1, 1],
+  "prime": 65521,
+  "coefficient_bound": 3,
+  "seed": 1618033988,
+  "variables": [
+    {"name": "a", "grades": [1]},
+    {"name": "b", "grades": [1]}
+  ],
+  "lhs": {
+    "op": "gp",
+    "args": [{"var": "a"}, {"var": "b"}]
+  },
+  "rhs": {
+    "op": "gp",
+    "args": [{"var": "b"}, {"var": "a"}]
+  }
+}
