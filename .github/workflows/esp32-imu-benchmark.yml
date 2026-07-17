@@ -38,21 +38,16 @@ jobs:
           . "$IDF_PATH/export.sh"
           idf.py --version | tee esp32-imu-idf-version.log
 
-      - name: Validate generated sparse schedule when present
+      - name: Validate generated sparse schedule
         shell: bash
         run: |
           set -o pipefail
-          if [ -f tools/generate_imu_sparse_schedule.py ]; then
-            python tools/generate_imu_sparse_schedule.py \
-              --schedule benchmarks/esp32_imu_baseline/schedules/imu_orientation_sparse_v1.json \
-              --output benchmarks/esp32_imu_baseline/main/geo_imu_generated_schedule.h \
-              --check 2>&1 | tee esp32-imu-schedule-check.log
-            python -m unittest tests.test_imu_sparse_schedule \
-              2>&1 | tee esp32-imu-schedule-test.log
-          else
-            printf 'Sparse schedule generator not present on this head; skipping.\n' \
-              | tee esp32-imu-schedule-check.log
-          fi
+          python tools/generate_imu_sparse_schedule.py \
+            --schedule benchmarks/esp32_imu_baseline/schedules/imu_orientation_sparse_v1.json \
+            --output benchmarks/esp32_imu_baseline/main/geo_imu_generated_schedule.h \
+            --check 2>&1 | tee esp32-imu-schedule-check.log
+          python -m unittest tests.test_imu_sparse_schedule \
+            2>&1 | tee esp32-imu-schedule-test.log
 
       - name: Configure ESP32-C6 target
         shell: bash

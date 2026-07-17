@@ -11,6 +11,7 @@
 ## Tasks
 
 - [TASK-20260717-004 — Clean and reproduce the ESP32-C6 GEO benchmark](tasks/TASK-20260717-004.md)
+- [TASK-20260717-005 — Generate ESP32 IMU sparse schedules automatically](tasks/TASK-20260717-005.md)
 
 ## Provenance
 

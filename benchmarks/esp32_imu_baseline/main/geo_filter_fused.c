@@ -1,4 +1,5 @@
 #include "geo_filter_fused.h"
+#include "geo_imu_generated_schedule.h"
 
 #include <limits.h>
 #include <math.h>
@@ -20,10 +21,9 @@
  *
  * (A+iB)(C+iD) = (AC-BD) + i(AD+BC)
  *
- * The generic A0/B0 path evaluates four complete Cl(2,0) products per
- * quaternion product.  This file emits only the nonzero products surviving
- * the known sparse grades.  It is the manually frozen target schedule for the
- * compiler/lowering stage, not a change in filter policy or task semantics.
+ * The polynomial helper bodies are generated deterministically from
+ * schedules/imu_orientation_sparse_v1.json.  This file retains the filter
+ * policy, checked Q16 boundaries, normalization boundary, and state updates.
  */
 
 #define Q16_SCALE_I64 INT64_C(65536)
@@ -34,44 +34,7 @@
 #define Q16_HALF_DT ((geo_fixed_t)164)
 #define Q16_KP ((geo_fixed_t)144179)
 #define Q16_KI ((geo_fixed_t)2294)
-#define Q16_ZERO ((geo_fixed_t)0)
 #define Q16_ONE ((geo_fixed_t)65536)
-
-static inline void fused_float_gravity(
-    float qw,
-    float qx,
-    float qy,
-    float qz,
-    float *gx,
-    float *gy,
-    float *gz
-)
-{
-    *gx = 2.0f * (qx * qz - qw * qy);
-    *gy = 2.0f * (qw * qx + qy * qz);
-    *gz = qw * qw - qx * qx - qy * qy + qz * qz;
-}
-
-static inline void fused_float_q_times_vector_quaternion(
-    float qw,
-    float qx,
-    float qy,
-    float qz,
-    float wx,
-    float wy,
-    float wz,
-    float *dw,
-    float *dx,
-    float *dy,
-    float *dz
-)
-{
-    /* Sparse lowering of q * (0 + wx i + wy j + wz k). */
-    *dw = -qx * wx - qy * wy - qz * wz;
-    *dx = qw * wx + qy * wz - qz * wy;
-    *dy = qw * wy - qx * wz + qz * wx;
-    *dz = qw * wz + qx * wy - qy * wx;
-}
 
 void geo_float_fused_filter_reset(void *opaque)
 {
@@ -117,7 +80,7 @@ benchmark_output_t geo_float_fused_filter_step(
             1.0f
         );
 
-        fused_float_gravity(
+        geo_generated_float_gravity(
             state->qw,
             state->qx,
             state->qy,
@@ -150,7 +113,7 @@ benchmark_output_t geo_float_fused_filter_step(
         float dy;
         float dz;
 
-        fused_float_q_times_vector_quaternion(
+        geo_generated_float_q_times_vector_quaternion(
             qw,
             qx,
             qy,
@@ -182,7 +145,7 @@ benchmark_output_t geo_float_fused_filter_step(
         output.qx = state->qx;
         output.qy = state->qy;
         output.qz = state->qz;
-        fused_float_gravity(
+        geo_generated_float_gravity(
             state->qw,
             state->qx,
             state->qy,
@@ -319,19 +282,19 @@ static int q16_fused_gravity(
     geo_fixed_t *gz
 )
 {
-    const int64_t gx_accumulator = INT64_C(2) * (
-        (int64_t)qx * (int64_t)qz -
-        (int64_t)qw * (int64_t)qy
+    int64_t gx_accumulator;
+    int64_t gy_accumulator;
+    int64_t gz_accumulator;
+
+    geo_generated_q32_gravity(
+        qw,
+        qx,
+        qy,
+        qz,
+        &gx_accumulator,
+        &gy_accumulator,
+        &gz_accumulator
     );
-    const int64_t gy_accumulator = INT64_C(2) * (
-        (int64_t)qw * (int64_t)qx +
-        (int64_t)qy * (int64_t)qz
-    );
-    const int64_t gz_accumulator =
-        (int64_t)qw * (int64_t)qw -
-        (int64_t)qx * (int64_t)qx -
-        (int64_t)qy * (int64_t)qy +
-        (int64_t)qz * (int64_t)qz;
 
     return q16_round_accumulator(gx_accumulator, gx) &&
         q16_round_accumulator(gy_accumulator, gy) &&
@@ -352,22 +315,24 @@ static int q16_fused_q_times_vector_quaternion(
     geo_fixed_t *dz
 )
 {
-    const int64_t dw_accumulator =
-        -(int64_t)qx * (int64_t)wx -
-        (int64_t)qy * (int64_t)wy -
-        (int64_t)qz * (int64_t)wz;
-    const int64_t dx_accumulator =
-        (int64_t)qw * (int64_t)wx +
-        (int64_t)qy * (int64_t)wz -
-        (int64_t)qz * (int64_t)wy;
-    const int64_t dy_accumulator =
-        (int64_t)qw * (int64_t)wy -
-        (int64_t)qx * (int64_t)wz +
-        (int64_t)qz * (int64_t)wx;
-    const int64_t dz_accumulator =
-        (int64_t)qw * (int64_t)wz +
-        (int64_t)qx * (int64_t)wy -
-        (int64_t)qy * (int64_t)wx;
+    int64_t dw_accumulator;
+    int64_t dx_accumulator;
+    int64_t dy_accumulator;
+    int64_t dz_accumulator;
+
+    geo_generated_q32_q_times_vector_quaternion(
+        qw,
+        qx,
+        qy,
+        qz,
+        wx,
+        wy,
+        wz,
+        &dw_accumulator,
+        &dx_accumulator,
+        &dy_accumulator,
+        &dz_accumulator
+    );
 
     return q16_round_accumulator(dw_accumulator, dw) &&
         q16_round_accumulator(dx_accumulator, dx) &&
