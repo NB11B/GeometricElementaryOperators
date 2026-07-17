@@ -16,20 +16,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATOR_PATH = ROOT / "tools" / "generate_imu_sparse_schedule.py"
-SCHEDULE_PATH = (
-    ROOT
-    / "benchmarks"
-    / "esp32_imu_baseline"
-    / "schedules"
-    / "imu_orientation_sparse_v1.json"
+SCHEDULE_RELATIVE = Path(
+    "benchmarks/esp32_imu_baseline/schedules/imu_orientation_sparse_v1.json"
 )
-GENERATED_HEADER_PATH = (
-    ROOT
-    / "benchmarks"
-    / "esp32_imu_baseline"
-    / "main"
-    / "geo_imu_generated_schedule.h"
+GENERATED_HEADER_RELATIVE = Path(
+    "benchmarks/esp32_imu_baseline/main/geo_imu_generated_schedule.h"
 )
+SCHEDULE_PATH = ROOT / SCHEDULE_RELATIVE
+GENERATED_HEADER_PATH = ROOT / GENERATED_HEADER_RELATIVE
 
 
 def load_generator_module():
@@ -95,7 +89,7 @@ class SparseScheduleTests(unittest.TestCase):
     def test_checked_in_header_matches_deterministic_generation(self) -> None:
         generated = GENERATOR.emit_header(
             self.schedule,
-            SCHEDULE_PATH.relative_to(ROOT).as_posix(),
+            SCHEDULE_RELATIVE.as_posix(),
         )
         checked_in = GENERATED_HEADER_PATH.read_text(encoding="utf-8")
         self.assertEqual(checked_in, generated)
@@ -106,9 +100,9 @@ class SparseScheduleTests(unittest.TestCase):
                 sys.executable,
                 str(GENERATOR_PATH),
                 "--schedule",
-                str(SCHEDULE_PATH),
+                SCHEDULE_RELATIVE.as_posix(),
                 "--output",
-                str(GENERATED_HEADER_PATH),
+                GENERATED_HEADER_RELATIVE.as_posix(),
                 "--check",
             ],
             cwd=ROOT,
