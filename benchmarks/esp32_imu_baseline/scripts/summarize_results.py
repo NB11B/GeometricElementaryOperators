@@ -10,7 +10,7 @@ import math
 import statistics
 import sys
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
@@ -23,7 +23,8 @@ EXPECTED_IMPLEMENTATIONS = (
     "D_quantized_tinyml",
 )
 
-NUMERIC_FIELDS = (
+CSV_COLUMNS = (
+    "implementation",
     "run",
     "state_bytes",
     "mean_us",
@@ -38,8 +39,13 @@ NUMERIC_FIELDS = (
     "p95_error_deg",
     "max_error_deg",
     "nan_count",
+    "output_hash",
     "min_free_heap",
     "largest_free_block",
+)
+
+NUMERIC_FIELDS = tuple(
+    field for field in CSV_COLUMNS if field not in {"implementation", "output_hash"}
 )
 
 
@@ -66,27 +72,71 @@ class Summary:
     largest_free_block: int
 
 
+def read_text_auto(path: Path) -> str:
+    """Read UTF-8 or Windows PowerShell UTF-16 output without data loss."""
+    raw = path.read_bytes()
+    if not raw:
+        return ""
+
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16")
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return raw.decode("utf-8-sig")
+
+    sample = raw[:1024]
+    if b"\x00" in sample:
+        try:
+            return raw.decode("utf-16-le")
+        except UnicodeDecodeError:
+            return raw.decode("utf-16", errors="replace")
+
+    return raw.decode("utf-8", errors="replace")
+
+
 def extract_csv_lines(path: Path) -> list[str]:
-    lines: list[str] = []
-    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        marker = raw.find("CSV,")
-        if marker >= 0:
-            lines.append(raw[marker:])
-    if not lines:
-        raise ValueError(f"no CSV records found in {path}")
-    return lines
+    """Extract only complete benchmark CSV records from a log or CSV file."""
+    records: list[str] = []
+    expected_fields = len(CSV_COLUMNS) + 1  # leading CSV marker
+
+    for raw_line in read_text_auto(path).splitlines():
+        marker = raw_line.find("CSV,")
+        if marker < 0:
+            continue
+
+        candidate = raw_line[marker:]
+        try:
+            values = next(csv.reader([candidate]))
+        except csv.Error:
+            continue
+
+        if len(values) == expected_fields and values[0] == "CSV":
+            records.append(candidate)
+
+    if not records:
+        raise ValueError(f"no complete CSV records found in {path}")
+    return records
 
 
 def parse_rows(lines: Iterable[str]) -> list[dict[str, str]]:
     normalized = [line[4:] if line.startswith("CSV,") else line for line in lines]
     reader = csv.DictReader(io.StringIO("\n".join(normalized)))
     rows = list(reader)
-    if reader.fieldnames is None or "implementation" not in reader.fieldnames:
-        raise ValueError("CSV header is missing the implementation column")
+
+    if tuple(reader.fieldnames or ()) != CSV_COLUMNS:
+        raise ValueError(
+            "CSV header mismatch: expected "
+            f"{','.join(CSV_COLUMNS)}, found {','.join(reader.fieldnames or [])}"
+        )
+
     for row in rows:
+        for field in CSV_COLUMNS:
+            if row.get(field) in (None, ""):
+                raise ValueError(f"missing field {field!r} in row {row}")
         for field in NUMERIC_FIELDS:
-            if field not in row or row[field] in (None, ""):
-                raise ValueError(f"missing numeric field {field!r} in row {row}")
+            value = float(row[field])
+            if not math.isfinite(value):
+                raise ValueError(f"non-finite {field!r} in row {row}")
+
     return rows
 
 
@@ -114,15 +164,19 @@ def summarize_group(name: str, rows: list[dict[str, str]]) -> Summary:
         runs=len(rows),
         state_bytes=next(iter(state_sizes)),
         mean_us=statistics.fmean(mean_values),
-        run_mean_stddev_us=(statistics.pstdev(mean_values) if len(rows) > 1 else 0.0),
+        run_mean_stddev_us=statistics.pstdev(mean_values) if len(rows) > 1 else 0.0,
         min_us=min(as_int(row, "min_us") for row in rows),
         p50_us=statistics.median(as_float(row, "p50_us") for row in rows),
         p95_us=statistics.median(as_float(row, "p95_us") for row in rows),
         p99_us=statistics.median(as_float(row, "p99_us") for row in rows),
         max_us=max(as_int(row, "max_us") for row in rows),
         deadline_misses=sum(as_int(row, "deadline_misses") for row in rows),
-        mean_error_deg=statistics.fmean(as_float(row, "mean_error_deg") for row in rows),
-        p95_error_deg=statistics.fmean(as_float(row, "p95_error_deg") for row in rows),
+        mean_error_deg=statistics.fmean(
+            as_float(row, "mean_error_deg") for row in rows
+        ),
+        p95_error_deg=statistics.fmean(
+            as_float(row, "p95_error_deg") for row in rows
+        ),
         max_error_deg=max(as_float(row, "max_error_deg") for row in rows),
         nan_count=sum(as_int(row, "nan_count") for row in rows),
         stable_hash=len(hashes) == 1,
@@ -139,7 +193,8 @@ def build_summaries(rows: list[dict[str, str]]) -> dict[str, Summary]:
     return {name: summarize_group(name, group) for name, group in grouped.items()}
 
 
-def validate(
+def validate_rows(
+    rows: list[dict[str, str]],
     summaries: dict[str, Summary],
     expected_runs: int,
     require_all: bool,
@@ -154,15 +209,21 @@ def validate(
         if extra:
             failures.append(f"unexpected implementations: {', '.join(extra)}")
 
+    grouped: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for row in rows:
+        grouped[row["implementation"]].append(row)
+
+    expected_run_ids = set(range(expected_runs))
     for name, summary in summaries.items():
+        run_ids = {as_int(row, "run") for row in grouped[name]}
         if summary.runs != expected_runs:
+            failures.append(f"{name}: expected {expected_runs} rows, found {summary.runs}")
+        if run_ids != expected_run_ids:
             failures.append(
-                f"{name}: expected {expected_runs} runs, found {summary.runs}"
+                f"{name}: run IDs are incomplete or duplicated; found {sorted(run_ids)}"
             )
         if summary.deadline_misses != 0:
-            failures.append(
-                f"{name}: deadline_misses={summary.deadline_misses}"
-            )
+            failures.append(f"{name}: deadline_misses={summary.deadline_misses}")
         if summary.nan_count != 0:
             failures.append(f"{name}: nan_count={summary.nan_count}")
         if not summary.stable_hash:
@@ -178,7 +239,11 @@ def speedup(reference_us: float, candidate_us: float) -> float:
     return reference_us / candidate_us
 
 
-def markdown_table(summaries: dict[str, Summary]) -> str:
+def reduction(reference_us: float, candidate_us: float) -> float:
+    return (1.0 - candidate_us / reference_us) * 100.0
+
+
+def markdown_report(summaries: dict[str, Summary]) -> str:
     ordered = [name for name in EXPECTED_IMPLEMENTATIONS if name in summaries]
     ordered.extend(sorted(name for name in summaries if name not in ordered))
 
@@ -186,43 +251,54 @@ def markdown_table(summaries: dict[str, Summary]) -> str:
         "| implementation | runs | state B | mean us | run-mean sd | p50 | p95 | p99 | max | mean error deg | p95 error | max error | misses | NaNs | stable hash |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|:---:|",
     ]
+
     for name in ordered:
-        s = summaries[name]
+        summary = summaries[name]
         lines.append(
-            f"| {name} | {s.runs} | {s.state_bytes} | {s.mean_us:.6f} | "
-            f"{s.run_mean_stddev_us:.6f} | {s.p50_us:.1f} | {s.p95_us:.1f} | "
-            f"{s.p99_us:.1f} | {s.max_us} | {s.mean_error_deg:.6f} | "
-            f"{s.p95_error_deg:.6f} | {s.max_error_deg:.6f} | "
-            f"{s.deadline_misses} | {s.nan_count} | "
-            f"{'yes' if s.stable_hash else 'no'} |"
+            f"| {name} | {summary.runs} | {summary.state_bytes} | "
+            f"{summary.mean_us:.6f} | {summary.run_mean_stddev_us:.6f} | "
+            f"{summary.p50_us:.1f} | {summary.p95_us:.1f} | "
+            f"{summary.p99_us:.1f} | {summary.max_us} | "
+            f"{summary.mean_error_deg:.6f} | {summary.p95_error_deg:.6f} | "
+            f"{summary.max_error_deg:.6f} | {summary.deadline_misses} | "
+            f"{summary.nan_count} | {'yes' if summary.stable_hash else 'no'} |"
         )
 
     comparisons: list[str] = []
-    c = summaries.get("C_conventional_quaternion")
     a0 = summaries.get("A0_geo_float_generic")
     b0 = summaries.get("B0_geo_fixed_q16_generic")
     a1 = summaries.get("A1_geo_float_fused")
     b1 = summaries.get("B1_geo_fixed_q16_fused")
+    conventional = summaries.get("C_conventional_quaternion")
+    tinyml = summaries.get("D_quantized_tinyml")
 
     if a0 and a1:
         comparisons.append(
             f"- A1 versus A0: {speedup(a0.mean_us, a1.mean_us):.3f}x throughput; "
-            f"{(1.0 - a1.mean_us / a0.mean_us) * 100.0:.2f}% lower mean latency."
+            f"{reduction(a0.mean_us, a1.mean_us):.2f}% lower mean latency."
         )
     if b0 and b1:
         comparisons.append(
             f"- B1 versus B0: {speedup(b0.mean_us, b1.mean_us):.3f}x throughput; "
-            f"{(1.0 - b1.mean_us / b0.mean_us) * 100.0:.2f}% lower mean latency."
+            f"{reduction(b0.mean_us, b1.mean_us):.2f}% lower mean latency."
         )
-    if c and a1:
+    if conventional and a1:
         comparisons.append(
-            f"- A1 versus C: {speedup(c.mean_us, a1.mean_us):.3f}x relative throughput "
-            f"(values above 1 mean A1 is faster)."
+            f"- A1 versus C: {speedup(conventional.mean_us, a1.mean_us):.3f}x "
+            "relative throughput; values above 1 mean A1 is faster."
         )
-    if c and b1:
+    if conventional and b1:
         comparisons.append(
-            f"- B1 versus C: {speedup(c.mean_us, b1.mean_us):.3f}x relative throughput "
-            f"(values above 1 mean B1 is faster)."
+            f"- B1 versus C: {speedup(conventional.mean_us, b1.mean_us):.3f}x "
+            "relative throughput; values above 1 mean B1 is faster."
+        )
+    if tinyml and a1:
+        comparisons.append(
+            f"- A1 versus D: {speedup(tinyml.mean_us, a1.mean_us):.3f}x throughput."
+        )
+    if tinyml and b1:
+        comparisons.append(
+            f"- B1 versus D: {speedup(tinyml.mean_us, b1.mean_us):.3f}x throughput."
         )
 
     if comparisons:
@@ -235,11 +311,12 @@ def write_summary_csv(path: Path, summaries: dict[str, Summary]) -> None:
     ordered = [name for name in EXPECTED_IMPLEMENTATIONS if name in summaries]
     ordered.extend(sorted(name for name in summaries if name not in ordered))
     fieldnames = list(Summary.__dataclass_fields__.keys())
+
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for name in ordered:
-            writer.writerow(summaries[name].__dict__)
+            writer.writerow(asdict(summaries[name]))
 
 
 def parse_args() -> argparse.Namespace:
@@ -277,12 +354,13 @@ def main() -> int:
         lines = extract_csv_lines(args.input)
         rows = parse_rows(lines)
         summaries = build_summaries(rows)
-        failures = validate(
+        failures = validate_rows(
+            rows,
             summaries,
             expected_runs=args.expected_runs,
             require_all=not args.allow_partial,
         )
-        report = markdown_table(summaries)
+        report = markdown_report(summaries)
     except (OSError, ValueError, csv.Error) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
