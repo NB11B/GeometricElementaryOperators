@@ -4,6 +4,7 @@ param(
     [int[]]$Batches = @(1, 32, 256, 1024, 4096),
     [int]$Runs = 30,
     [int]$Warmup = 5,
+    [string]$CudaArchitectures = "120",
     [string]$ExpectedBranch = "benchmark/gpu-imu-replay-v1"
 )
 
@@ -59,6 +60,85 @@ function Invoke-LoggedNativeCommand {
     }
 }
 
+function Resolve-CommandPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    $Command = Get-Command $Name -ErrorAction SilentlyContinue
+    if (-not $Command) {
+        throw "Required command was not found: $Name"
+    }
+    return $Command.Source
+}
+
+function Resolve-NinjaPath {
+    $Command = Get-Command ninja.exe -ErrorAction SilentlyContinue
+    if ($Command) {
+        return $Command.Source
+    }
+
+    $EspressifNinjaRoot = Join-Path $env:USERPROFILE ".espressif\tools\ninja"
+    if (Test-Path $EspressifNinjaRoot) {
+        $Candidate = Get-ChildItem $EspressifNinjaRoot -Filter ninja.exe -Recurse -File |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+        if ($Candidate) {
+            return $Candidate.FullName
+        }
+    }
+
+    throw "Ninja was not found in PATH or under $EspressifNinjaRoot"
+}
+
+function Resolve-VisualStudio2022Path {
+    $VsWhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (-not (Test-Path $VsWhere)) {
+        throw "vswhere.exe was not found at $VsWhere"
+    }
+
+    $InstallationPath = & $VsWhere `
+        -latest `
+        -products * `
+        -version "[17.0,18.0)" `
+        -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+        -property installationPath
+
+    if ($LASTEXITCODE -ne 0 -or -not $InstallationPath) {
+        throw "A Visual Studio 2022 installation with the x64 C++ toolchain was not found"
+    }
+
+    return ($InstallationPath | Select-Object -First 1).Trim()
+}
+
+function Import-VisualStudioEnvironment {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$InstallationPath
+    )
+
+    $VsDevCmd = Join-Path $InstallationPath "Common7\Tools\VsDevCmd.bat"
+    if (-not (Test-Path $VsDevCmd)) {
+        throw "VsDevCmd.bat was not found at $VsDevCmd"
+    }
+
+    $CommandLine = "`"$VsDevCmd`" -no_logo -arch=x64 -host_arch=x64 >nul && set"
+    $EnvironmentLines = & $env:ComSpec /d /s /c $CommandLine
+    if ($LASTEXITCODE -ne 0) {
+        throw "Visual Studio developer environment initialization failed"
+    }
+
+    foreach ($Line in $EnvironmentLines) {
+        $Separator = $Line.IndexOf("=")
+        if ($Separator -gt 0) {
+            $Name = $Line.Substring(0, $Separator)
+            $Value = $Line.Substring($Separator + 1)
+            [Environment]::SetEnvironmentVariable($Name, $Value, "Process")
+        }
+    }
+}
+
 $ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BenchmarkDirectory = Resolve-Path (Join-Path $ScriptDirectory "..")
 $RepositoryRoot = Resolve-Path (Join-Path $BenchmarkDirectory "..\..")
@@ -82,9 +162,40 @@ try {
         throw "Current branch is '$Branch'; expected '$ExpectedBranch'"
     }
 
+    $NvccPath = Resolve-CommandPath "nvcc.exe"
+    $CmakePath = Resolve-CommandPath "cmake.exe"
+    $NinjaPath = Resolve-NinjaPath
+    $CudaRoot = Split-Path (Split-Path $NvccPath -Parent) -Parent
+    $VisualStudioPath = Resolve-VisualStudio2022Path
+
+    Import-VisualStudioEnvironment -InstallationPath $VisualStudioPath
+    $ClPath = Resolve-CommandPath "cl.exe"
+
+    @(
+        "cmake=$CmakePath"
+        "ninja=$NinjaPath"
+        "nvcc=$NvccPath"
+        "cuda_root=$CudaRoot"
+        "cuda_architectures=$CudaArchitectures"
+        "visual_studio=$VisualStudioPath"
+        "cl=$ClPath"
+    ) | Set-Content (Join-Path $EvidenceDirectory "toolchain-paths.txt")
+
     Invoke-LoggedNativeCommand `
-        -Command { nvcc --version } `
+        -Command { & $NvccPath --version } `
         -LogPath (Join-Path $EvidenceDirectory "nvcc-version.txt")
+
+    Invoke-LoggedNativeCommand `
+        -Command { & $CmakePath --version } `
+        -LogPath (Join-Path $EvidenceDirectory "cmake-version.txt")
+
+    Invoke-LoggedNativeCommand `
+        -Command { & $NinjaPath --version } `
+        -LogPath (Join-Path $EvidenceDirectory "ninja-version.txt")
+
+    Invoke-LoggedNativeCommand `
+        -Command { & $ClPath 2>&1 } `
+        -LogPath (Join-Path $EvidenceDirectory "msvc-version.txt")
 
     Invoke-LoggedNativeCommand `
         -Command {
@@ -111,15 +222,23 @@ try {
 
     Invoke-LoggedNativeCommand `
         -Command {
-            cmake -S .\benchmarks\gpu_imu_replay `
+            & $CmakePath `
+                -S .\benchmarks\gpu_imu_replay `
                 -B $BuildDirectory `
-                -DCMAKE_BUILD_TYPE=Release
+                -G Ninja `
+                "-DCMAKE_MAKE_PROGRAM=$NinjaPath" `
+                -DCMAKE_BUILD_TYPE=Release `
+                "-DCMAKE_CUDA_ARCHITECTURES=$CudaArchitectures" `
+                "-DCMAKE_CUDA_COMPILER=$NvccPath" `
+                "-DCMAKE_CUDA_HOST_COMPILER=$ClPath" `
+                "-DCMAKE_CXX_COMPILER=$ClPath" `
+                "-DCUDAToolkit_ROOT=$CudaRoot"
         } `
         -LogPath (Join-Path $EvidenceDirectory "configure.log")
 
     Invoke-LoggedNativeCommand `
         -Command {
-            cmake --build $BuildDirectory --config Release --parallel
+            & $CmakePath --build $BuildDirectory --parallel
         } `
         -LogPath (Join-Path $EvidenceDirectory "build.log")
 
