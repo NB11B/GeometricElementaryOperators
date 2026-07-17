@@ -1,11 +1,14 @@
+#include "geo/banked.h"
 #include "geo/cl20.h"
 #include "geo/cl30.h"
 #include "geo/control.h"
+#include "geo/eml_embedded.h"
 #include "geo/fixed.h"
 #include "geo/fixed_geb36.h"
 #include "geo/fused.h"
 #include "geo/optimizer.h"
 #include "geo/report.h"
+#include "geo/structured_program.h"
 
 #include <limits.h>
 #include <math.h>
@@ -13,6 +16,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+typedef struct {
+    geo_program_t program;
+    uint8_t root_register;
+    size_t original_instruction_count;
+    size_t optimized_instruction_count;
+    size_t eliminated_dead_nodes;
+    size_t eliminated_duplicate_nodes;
+} geo_optimized_witness_legacy_layout_t;
+
+_Static_assert(
+    sizeof(geo_optimized_witness_t) == sizeof(geo_optimized_witness_legacy_layout_t),
+    "optimized witness ABI size changed"
+);
 
 static int failures = 0;
 
@@ -25,19 +42,30 @@ static void expect(int condition, const char *message) {
 
 static void test_malformed_programs(void) {
     geo_struct_value_t registers[1];
+    geo_struct_program_t structured = {NULL, 1u, 1u, 0u};
     geo_fused_program_t fused = {NULL, 1u, 1u, 0u};
     geo_banked_program_t banked;
+    geo_banked_storage_t storage;
     char buffer[512];
 
     registers[0] = geo_struct_value_from_cl20(geo_cl20_zero());
+    expect(
+        geo_struct_program_execute(&structured, registers, 1u) == GEO_STATUS_NULL_ARGUMENT,
+        "public structured executor rejects null instruction stream"
+    );
     expect(
         geo_fused_execute(&fused, registers, 1u) == GEO_STATUS_NULL_ARGUMENT,
         "fused executor rejects null instruction stream"
     );
 
     memset(&banked, 0, sizeof(banked));
+    memset(&storage, 0, sizeof(storage));
     banked.instruction_count = 1u;
     banked.root.kind = GEO_REGISTER_SCALAR;
+    expect(
+        geo_banked_execute(&banked, &storage) == GEO_STATUS_NULL_ARGUMENT,
+        "public banked executor rejects null instruction stream"
+    );
     expect(
         geo_emit_banked_program_c(&banked, "bad", buffer, sizeof(buffer)) == -1,
         "static emitter rejects null instruction stream"
@@ -66,6 +94,52 @@ static void test_nan_rejection(void) {
         "near rejects NaN tolerance");
 }
 
+static void test_eml_nonfinite_rejection(void) {
+    const geo_real_t sentinel = (geo_real_t)123.25;
+    geo_real_t output = sentinel;
+
+    expect(
+        geo_eml_log((geo_real_t)NAN, GEO_EML_BALANCED, &output) == GEO_EML_DOMAIN,
+        "embedded log rejects NaN"
+    );
+    expect(output == sentinel, "embedded log leaves output unchanged for NaN");
+
+    output = sentinel;
+    expect(
+        geo_eml_log((geo_real_t)INFINITY, GEO_EML_BALANCED, &output) == GEO_EML_DOMAIN,
+        "embedded log rejects positive infinity"
+    );
+    expect(output == sentinel, "embedded log leaves output unchanged for positive infinity");
+
+    output = sentinel;
+    expect(
+        geo_eml_log((geo_real_t)-INFINITY, GEO_EML_BALANCED, &output) == GEO_EML_DOMAIN,
+        "embedded log rejects negative infinity"
+    );
+    expect(output == sentinel, "embedded log leaves output unchanged for negative infinity");
+
+    output = sentinel;
+    expect(
+        geo_eml_exp((geo_real_t)NAN, GEO_EML_BALANCED, &output) == GEO_EML_DOMAIN,
+        "embedded exp rejects NaN"
+    );
+    expect(output == sentinel, "embedded exp leaves output unchanged for NaN");
+
+    output = sentinel;
+    expect(
+        geo_eml_exp((geo_real_t)INFINITY, GEO_EML_BALANCED, &output) == GEO_EML_OVERFLOW,
+        "embedded exp rejects positive infinity"
+    );
+    expect(output == sentinel, "embedded exp leaves output unchanged for positive infinity");
+
+    output = sentinel;
+    expect(
+        geo_eml_exp((geo_real_t)-INFINITY, GEO_EML_BALANCED, &output) == GEO_EML_OVERFLOW,
+        "embedded exp rejects negative infinity"
+    );
+    expect(output == sentinel, "embedded exp leaves output unchanged for negative infinity");
+}
+
 static void test_checked_involutions(void) {
     geo_fixed_cl20_t value = {0, 0, 0, INT32_MIN};
     geo_fixed_cl20_t output;
@@ -81,19 +155,24 @@ static void test_checked_involutions(void) {
     );
 }
 
-static void test_abi_prefix(void) {
+static void test_optimizer_abi_layout(void) {
     expect(
-        offsetof(geo_optimized_witness_t, terminal_count) >
-            offsetof(geo_optimized_witness_t, eliminated_duplicate_nodes),
-        "terminal count is appended after the stable v0.15 ABI prefix"
+        sizeof(geo_optimized_witness_t) == sizeof(geo_optimized_witness_legacy_layout_t),
+        "optimized witness retains legacy caller-owned size"
+    );
+    expect(
+        offsetof(geo_optimized_witness_t, eliminated_duplicate_nodes) ==
+            offsetof(geo_optimized_witness_legacy_layout_t, eliminated_duplicate_nodes),
+        "optimized witness final legacy field offset is unchanged"
     );
 }
 
 int main(void) {
     test_malformed_programs();
     test_nan_rejection();
+    test_eml_nonfinite_rejection();
     test_checked_involutions();
-    test_abi_prefix();
+    test_optimizer_abi_layout();
     if (failures != 0) {
         fprintf(stderr, "%d release-hardening assertion(s) failed.\n", failures);
         return EXIT_FAILURE;

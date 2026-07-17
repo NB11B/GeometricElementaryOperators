@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.18.1
+    VERSION 0.18.2
     LANGUAGES C
 )
 
@@ -24,6 +24,7 @@ add_library(geo_kernel STATIC
     src/eml_embedded.c
     src/structured.c
     src/structured_program.c
+    src/executor_api.c
     src/fused.c
     src/control.c
     src/geb36.c
@@ -104,6 +105,7 @@ if(GEO_BUILD_TESTS)
         fixed_geb36
         native_generated
         release_hardening
+        abi_consumer
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})
@@ -130,6 +132,13 @@ if(GEO_BUILD_BENCHMARKS)
 
     add_executable(bench_complete benchmarks/bench_complete.c)
     geo_link_target(bench_complete)
+
+    if(GEO_BUILD_TESTS)
+        add_test(
+            NAME selected_path_benchmark
+            COMMAND bench_complete --iterations 1000
+        )
+    endif()
 
     if(GEO_ENABLE_LINK_MAP AND NOT MSVC)
         target_link_options(bench_host PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_host.map")

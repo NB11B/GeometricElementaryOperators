@@ -73,26 +73,49 @@ def test_rtl(temp: Path) -> None:
     schedule = json.loads((out / "rtl_schedule.json").read_text(encoding="utf-8"))
     assert schedule["total_cycles"] == 4
     assert len(schedule["operations"]) == 2
+
     sv = (out / "geo_cl20_product_q.sv").read_text(encoding="utf-8")
-    assert "always_comb" in sv
-    assert "sum_s   = q00" in sv
-    assert "sum_e12" in sv
+    assert "output logic overflow" in sv
+    assert "rounded_overflow" in sv
+    assert "final_overflow" in sv
+    assert "assign sum_s" in sv
+
+    product_testbench = (out / "tb_geo_cl20_product_q.sv").read_text(encoding="utf-8")
+    assert "rounded multiplication overflow" in product_testbench
+    assert "final wide-sum overflow" in product_testbench
+    assert "wide cancellation" in product_testbench
+
     controller = (out / "geo_program_controller.sv").read_text(encoding="utf-8")
-    assert "TOTAL_CYCLES = 4" in controller
+    assert "TOTAL_OPERATIONS = 2" in controller
+    assert "operation_done" in controller
+    assert "operation_overflow" in controller
+    assert "result_valid" in controller
+    assert "overflow remains asserted" in controller
 
     iverilog = shutil.which("iverilog")
     vvp = shutil.which("vvp")
     if iverilog and vvp:
-        simulation = out / "cl20_tb.vvp"
+        product_simulation = out / "cl20_tb.vvp"
         run(
             iverilog,
             "-g2012",
             "-s", "tb_geo_cl20_product_q",
-            "-o", str(simulation),
+            "-o", str(product_simulation),
             str(out / "geo_cl20_product_q.sv"),
             str(out / "tb_geo_cl20_product_q.sv"),
         )
-        run(vvp, str(simulation))
+        run(vvp, str(product_simulation))
+
+        controller_simulation = out / "controller_tb.vvp"
+        run(
+            iverilog,
+            "-g2012",
+            "-s", "tb_geo_program_controller",
+            "-o", str(controller_simulation),
+            str(out / "geo_program_controller.sv"),
+            str(out / "tb_geo_program_controller.sv"),
+        )
+        run(vvp, str(controller_simulation))
 
 
 def main() -> int:

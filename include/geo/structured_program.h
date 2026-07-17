@@ -90,19 +90,13 @@ geo_status_t geo_struct_program_execute_impl(
     size_t register_capacity
 );
 
-#ifndef GEO_STRUCTURED_PROGRAM_IMPLEMENTATION
-static inline geo_status_t geo_struct_program_execute(
+geo_status_t geo_struct_program_execute(
     const geo_struct_program_t *program,
     geo_struct_value_t *registers,
     size_t register_capacity
-) {
-    if (program == NULL || registers == NULL) return GEO_STATUS_NULL_ARGUMENT;
-    if (program->instruction_count != 0u && program->instructions == NULL) {
-        return GEO_STATUS_NULL_ARGUMENT;
-    }
-    return geo_struct_program_execute_impl(program, registers, register_capacity);
-}
-#else
+);
+
+#if defined(GEO_STRUCTURED_PROGRAM_IMPLEMENTATION)
 #define geo_struct_program_execute geo_struct_program_execute_impl
 #endif
 

@@ -28,14 +28,13 @@ typedef struct {
     size_t optimized_instruction_count;
     size_t eliminated_dead_nodes;
     size_t eliminated_duplicate_nodes;
-    /* Appended in v0.16 to preserve the v0.15 prefix ABI. */
-    size_t terminal_count;
 } geo_optimized_witness_t;
 
 /*
  * Compiles only the subgraph reachable from the selected root, propagates
  * lane liveness backward, merges duplicate Omega nodes, and compacts result
- * registers. The authoritative terminal_count is preserved for later passes.
+ * registers. The caller supplies terminal_count explicitly to later passes;
+ * it is intentionally not stored in this caller-owned ABI type.
  */
 geo_status_t geo_witness_compile_optimized(
     const geo_witness_tree_t *tree,
