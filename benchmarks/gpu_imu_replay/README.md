@@ -1,14 +1,14 @@
 # GPU IMU Replay Benchmark
 
-Status: design and first implementation scaffold.
+Status: G0 resident-replay validation complete; G1 fixed-point path next.
 
 This benchmark carries the ESP32-C6 IMU replay contract onto CUDA without pretending that one sequential 200 Hz sensor stream is naturally a GPU workload.
 
-The temporal recurrence remains sequential within each trajectory. GPU parallelism is introduced across independent trajectories, agents, sensors, particles, or simulation members. The benchmark therefore reports both single-stream latency and batched throughput.
+The temporal recurrence remains sequential within each trajectory. GPU parallelism is introduced across independent trajectories, agents, sensors, particles, or simulation members. The benchmark therefore reports both single-stream latency controls and batched throughput.
 
 ## Required implementations
 
-The final comparison will preserve the six CPU/ESP32 paths:
+The final comparison preserves the six CPU/ESP32 paths:
 
 - `A0_geo_float_generic_gpu`
 - `B0_geo_fixed_q16_generic_gpu`
@@ -17,14 +17,13 @@ The final comparison will preserve the six CPU/ESP32 paths:
 - `C_conventional_quaternion_gpu`
 - `D_quantized_tinyml_gpu`
 
-The first executable stage implements A1 and C. B1 follows immediately because the generated schedule already emits Q32 accumulator helpers. A0/B0 and D are retained as controlled expansion stages rather than being simulated by labels.
+G0 implements A1 and C. G1 adds B1 because the generated schedule already emits Q32 accumulator helpers. A0/B0 and D remain controlled expansion stages rather than simulated labels.
 
 ## Replay contract
 
 - 200 Hz logical sample rate;
 - 12,000 samples per trajectory;
 - identical procedural IMU trace and analytic reference trajectory;
-- 256 warm-up samples for streaming mode;
 - 30 measured runs;
 - identical gains, confidence gate, normalization boundary, output fields, quaternion error metric, NaN accounting, and named-field hashing.
 
@@ -53,7 +52,7 @@ One kernel launch advances a batch of independent states by one sample. The benc
 
 This measures the cost of using CUDA in a real-time streaming topology and separates launch overhead from arithmetic cost.
 
-Future variants will include CUDA Graph replay and a persistent kernel.
+Future variants include CUDA Graph replay and a persistent kernel.
 
 ### End-to-end
 
@@ -63,13 +62,13 @@ This mode is required before any system-level speed claim. Kernel-only throughpu
 
 ## Batch matrix
 
-The initial matrix is:
+The validated G0 matrix is:
 
 ```text
-1, 32, 256, 1024, 4096, 16384 trajectories
+1, 32, 256, 1024, 4096 trajectories
 ```
 
-The runner may reduce the maximum batch when device memory is insufficient. Batch 1 is reported as a latency control, not as the expected GPU optimum.
+Batch 1 is reported as a latency control, not as the expected GPU optimum.
 
 ## Accuracy and hashing
 
@@ -80,14 +79,13 @@ Two hash classes are distinguished:
 - exact device hash: bitwise determinism on the same CUDA build and device;
 - semantic hash: quantized canonical output for cross-architecture comparison.
 
-Exact ESP32 and GPU hashes are not assumed to match because CUDA FMA, square root, and division behavior may differ. A1 and C on the same CUDA build are expected to match when operation order and compiler flags are aligned.
+Exact ESP32 and GPU hashes are not assumed to match because CUDA FMA, square root, and division behavior may differ. A1 and C on the same CUDA parity build are required to match.
 
 ## Timing controls
 
 - CUDA events provide kernel-only timing;
-- a steady host clock provides end-to-end timing;
 - warm-up runs precede measurement;
-- implementation order is rotated across runs;
+- implementation order rotates across runs;
 - `--fmad=false`, precise division, and precise square root are used for parity experiments;
 - a second performance build may enable FMA, but its results are reported separately;
 - device name, compute capability, clocks, CUDA runtime, driver, compiler, commit, and build flags are preserved.
@@ -100,23 +98,68 @@ The report distinguishes:
 - shared model bytes;
 - replay input bytes;
 - output capture bytes;
-- total allocated device bytes;
-- peak device memory delta.
+- total allocated device bytes.
 
 For TinyML, weights are shared across trajectories on GPU. They must not be falsely reported as mutable per-trajectory state.
 
+## Physical G0 result
+
+Environment:
+
+- NVIDIA GeForce RTX 5070 Laptop GPU;
+- compute capability 12.0;
+- CUDA compiler 13.1.80;
+- FMA disabled;
+- 30 runs per path per batch;
+- 12,000 samples per trajectory.
+
+Validation:
+
+- A1 and C produced trace hash `71a80f19` at every tested batch;
+- their batch hashes matched at every batch;
+- hashes remained stable over all 30 runs;
+- displayed mean, p95, and maximum error matched;
+- zero NaNs;
+- validator result: `VALIDATION: PASS`.
+
+Aggregate resident-kernel timing:
+
+| batch | A1 mean us | C mean us | A1 vs C | A1 samples/s | C samples/s |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 3603.513 | 3595.253 | 0.230% slower | 3.332 M | 3.339 M |
+| 32 | 3594.077 | 3604.855 | 0.299% faster | 106.888 M | 106.586 M |
+| 256 | 4086.034 | 4097.414 | 0.278% faster | 752.068 M | 750.047 M |
+| 1024 | 4108.816 | 4091.673 | 0.419% slower | 2.992 B | 3.004 B |
+| 4096 | 4111.061 | 4108.627 | 0.059% slower | 11.960 B | 11.969 B |
+
+Interpretation:
+
+- generated A1 reached measurement-level parity with conventional C across the complete batch matrix;
+- the maximum aggregate timing separation was 0.419%;
+- batch 4,096 produced about 0.08364 ns per sample-trajectory for A1;
+- A1 throughput increased approximately 3,589x between batch 1 and batch 4,096 while kernel duration increased approximately 14.1%;
+- this is approximately 87.6% scaling efficiency relative to ideal linear throughput scaling;
+- resident kernel throughput is not an end-to-end or live-stream latency result.
+
+Local evidence directory:
+
+```text
+benchmarks/gpu_imu_replay/evidence/gpu-20260717-184259
+```
+
 ## Acceptance stages
 
-### G0: generated float parity
+### G0: generated float parity — complete
 
 - A1 generated CUDA helper compiles and runs;
 - C conventional CUDA path runs the same replay;
 - A1 and C have equal displayed accuracy;
-- A1 and C have equal exact device hashes in the parity build;
+- A1 and C have equal exact device hashes;
 - zero NaNs;
-- stable hashes across 30 runs.
+- stable hashes across 30 runs;
+- measurement-level timing parity across the full batch matrix.
 
-### G1: generated fixed path
+### G1: generated fixed path — next
 
 - B1 uses generated Q32 accumulators and checked Q16 boundaries;
 - zero arithmetic failures;
@@ -131,8 +174,8 @@ For TinyML, weights are shared across trajectories on GPU. They must not be fals
 
 ### G3: generated backend equivalence
 
-The same schedule IR must emit both ESP32 scalar C and CUDA device helpers. Generated CUDA A1/B1 should remain within 1% of manually specialized CUDA reference kernels at useful batch sizes.
+The same schedule IR emits both ESP32 scalar C and CUDA device helpers. Generated CUDA A1/B1 must remain within 1% of manually specialized CUDA reference kernels at useful batch sizes.
 
 ## Build target
 
-The initial target environment is the existing CUDA 13.1 workstation with the RTX 5070 Laptop GPU. Results remain device-specific and will identify the exact GPU and software stack.
+The validated G0 target is CUDA 13.1 on the RTX 5070 Laptop GPU. Results remain device-specific and identify the exact GPU and software stack.
