@@ -8,6 +8,7 @@
 ## Experiments
 
 - [ESP32-C6 IMU fusion benchmark — 2026-07-17](experiments/esp32-imu-fusion-20260717.md)
+- [Geometric identity engine CUDA validation — 2026-07-17](experiments/geometric-identity-engine-20260717.md)
 
 ## Tasks
 
