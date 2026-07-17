@@ -24,19 +24,30 @@ def expect_equal(actual: Path, expected: Path, message: str) -> None:
         raise AssertionError(f"{message}: actual={actual} expected={expected.resolve()}")
 
 
+def isolated_env(**values: str) -> dict[str, str]:
+    environment = {
+        "PATH": "",
+        "GEO_CUDA_RESOLVER_DISABLE_DEFAULTS": "1",
+    }
+    environment.update(values)
+    return environment
+
+
 def test_cudacxx_precedes_path(root: Path) -> None:
     explicit = root / "explicit" / "nvcc"
     path_nvcc = root / "path" / "nvcc"
     make_executable(explicit)
     make_executable(path_nvcc)
-    result = resolve_cuda_compiler({"CUDACXX": str(explicit), "PATH": str(path_nvcc.parent)})
+    result = resolve_cuda_compiler(
+        isolated_env(CUDACXX=str(explicit), PATH=str(path_nvcc.parent))
+    )
     expect_equal(result, explicit, "CUDACXX must take precedence")
 
 
 def test_path_resolution(root: Path) -> None:
     path_nvcc = root / "path-only" / "nvcc"
     make_executable(path_nvcc)
-    result = resolve_cuda_compiler({"PATH": str(path_nvcc.parent)})
+    result = resolve_cuda_compiler(isolated_env(PATH=str(path_nvcc.parent)))
     expect_equal(result, path_nvcc, "PATH nvcc must resolve")
 
 
@@ -44,7 +55,7 @@ def test_cuda_home_resolution(root: Path) -> None:
     cuda_home = root / "cuda-home"
     nvcc = cuda_home / "bin" / "nvcc"
     make_executable(nvcc)
-    result = resolve_cuda_compiler({"PATH": "", "CUDA_HOME": str(cuda_home)})
+    result = resolve_cuda_compiler(isolated_env(CUDA_HOME=str(cuda_home)))
     expect_equal(result, nvcc, "CUDA_HOME/bin/nvcc must resolve")
 
 
@@ -53,7 +64,7 @@ def test_non_executable_is_rejected(root: Path) -> None:
     candidate.parent.mkdir(parents=True, exist_ok=True)
     candidate.write_text("not executable\n", encoding="utf-8")
     try:
-        resolve_cuda_compiler({"CUDACXX": str(candidate), "PATH": ""})
+        resolve_cuda_compiler(isolated_env(CUDACXX=str(candidate)))
     except FileNotFoundError:
         return
     raise AssertionError("non-executable CUDA compiler candidate was accepted")
@@ -61,7 +72,7 @@ def test_non_executable_is_rejected(root: Path) -> None:
 
 def test_missing_compiler_fails() -> None:
     try:
-        resolve_cuda_compiler({"PATH": ""})
+        resolve_cuda_compiler(isolated_env())
     except FileNotFoundError as error:
         if "unable to locate an executable nvcc" not in str(error):
             raise AssertionError(f"unexpected missing-compiler error: {error}") from error
