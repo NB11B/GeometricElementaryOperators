@@ -34,3 +34,7 @@ __pycache__/
 
 # Local CUDA benchmark evidence.
 /benchmarks/gpu_imu_replay/evidence/
+
+# Generated exact identity evaluator and physical search evidence.
+/benchmarks/geo_identity_search/generated/
+/benchmarks/geo_identity_search/evidence/
