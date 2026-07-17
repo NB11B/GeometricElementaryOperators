@@ -293,6 +293,17 @@ if(GEO_BUILD_BENCHMARKS)
             NAME numerical_smoke
             COMMAND bench_numerical --samples 256 --seed 1779033703
         )
+        if(GEO_BUILD_CUDA)
+            add_test(
+                NAME cuda_benchmark_smoke
+                COMMAND bench_cuda
+                    --batch 257
+                    --iterations 2
+                    --warmup 1
+                    --operation all
+            )
+            set_tests_properties(cuda_benchmark_smoke PROPERTIES SKIP_RETURN_CODE 77)
+        endif()
     endif()
 
     if(GEO_ENABLE_LINK_MAP AND NOT MSVC)
