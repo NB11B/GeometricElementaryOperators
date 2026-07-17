@@ -132,7 +132,6 @@ if(GEO_BUILD_BENCHMARKS)
 
     add_executable(bench_complete benchmarks/bench_complete.c)
     geo_link_target(bench_complete)
-    set_target_properties(bench_complete PROPERTIES OUTPUT_NAME bench_selected_paths)
 
     if(GEO_BUILD_TESTS)
         add_test(
@@ -144,7 +143,7 @@ if(GEO_BUILD_BENCHMARKS)
     if(GEO_ENABLE_LINK_MAP AND NOT MSVC)
         target_link_options(bench_host PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_host.map")
         target_link_options(bench_compare PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_compare.map")
-        target_link_options(bench_complete PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_selected_paths.map")
+        target_link_options(bench_complete PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_complete.map")
     endif()
 
     if(Python3_Interpreter_FOUND)
