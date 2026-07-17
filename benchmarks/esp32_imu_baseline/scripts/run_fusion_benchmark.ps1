@@ -3,6 +3,7 @@ param(
     [string]$Port = "COM5",
     [string]$IdfExport = "C:\Users\nateb\esp\esp-idf\export.ps1",
     [int]$ExpectedRows = 181,
+    [string]$ExpectedBranch = "benchmark/esp32-imu-clean-v1",
     [switch]$SkipFlash
 )
 
@@ -135,8 +136,23 @@ try {
     Write-Host "Commit:     $Commit"
     Write-Host "Evidence:   $EvidenceDirectory"
 
-    if ($Branch -ne "benchmark/esp32-imu-fused-a1-b1") {
-        Write-Warning "Current branch is '$Branch', not benchmark/esp32-imu-fused-a1-b1"
+    if ($ExpectedBranch -and $Branch -ne $ExpectedBranch) {
+        Write-Warning "Current branch is '$Branch', not expected branch '$ExpectedBranch'"
+    }
+
+    if (Test-Path ".\tools\generate_imu_sparse_schedule.py") {
+        Invoke-LoggedNativeCommand `
+            -Command {
+                python .\tools\generate_imu_sparse_schedule.py `
+                    --schedule .\benchmarks\esp32_imu_baseline\schedules\imu_orientation_sparse_v1.json `
+                    --output .\benchmarks\esp32_imu_baseline\main\geo_imu_generated_schedule.h `
+                    --check
+            } `
+            -LogPath (Join-Path $EvidenceDirectory "schedule-check.log")
+
+        Invoke-LoggedNativeCommand `
+            -Command { python -m unittest tests.test_imu_sparse_schedule } `
+            -LogPath (Join-Path $EvidenceDirectory "schedule-tests.log")
     }
 
     . $IdfExport
