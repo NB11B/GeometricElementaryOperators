@@ -79,27 +79,20 @@ function Resolve-GitPath {
         return $Command.Source
     }
 
-    $Candidates = New-Object System.Collections.Generic.List[string]
-    if ($env:ProgramFiles) {
-        $Candidates.Add((Join-Path $env:ProgramFiles "Git\cmd\git.exe"))
-        $Candidates.Add((Join-Path $env:ProgramFiles "Git\bin\git.exe"))
-    }
-    if (${env:ProgramFiles(x86)}) {
-        $Candidates.Add((Join-Path ${env:ProgramFiles(x86)} "Git\cmd\git.exe"))
-        $Candidates.Add((Join-Path ${env:ProgramFiles(x86)} "Git\bin\git.exe"))
-    }
-    if ($env:LOCALAPPDATA) {
-        $Candidates.Add((Join-Path $env:LOCALAPPDATA "Programs\Git\cmd\git.exe"))
-        $Candidates.Add((Join-Path $env:LOCALAPPDATA "Programs\Git\bin\git.exe"))
-    }
+    $Candidates = @(
+        (Join-Path $env:ProgramFiles "Git\cmd\git.exe")
+        (Join-Path $env:ProgramFiles "Git\bin\git.exe")
+        (Join-Path ${env:ProgramFiles(x86)} "Git\cmd\git.exe")
+        (Join-Path $env:LOCALAPPDATA "Programs\Git\cmd\git.exe")
+    )
 
     foreach ($Candidate in $Candidates) {
-        if (Test-Path -LiteralPath $Candidate) {
-            return (Get-Item -LiteralPath $Candidate).FullName
+        if (Test-Path $Candidate) {
+            return $Candidate
         }
     }
 
-    throw "Git for Windows was not found in PATH or a standard installation directory"
+    throw "Git for Windows was not found"
 }
 
 function Resolve-ShortPath {
@@ -178,7 +171,6 @@ function Import-VisualStudioEnvironment {
 
     $VsDevCmdShort = Resolve-ShortPath $VsDevCmd
     $TempEnvironment = Join-Path $env:TEMP "geo-vs-env-$PID-$([Guid]::NewGuid().ToString('N')).txt"
-    $TempEnvironmentShort = $TempEnvironment
 
     $Saved = @{
         PATH = $env:PATH
@@ -201,7 +193,7 @@ function Import-VisualStudioEnvironment {
         Remove-Item Env:LIBPATH -ErrorAction SilentlyContinue
         Remove-Item Env:__VSCMD_PREINIT_PATH -ErrorAction SilentlyContinue
 
-        $CommandLine = "call $VsDevCmdShort -no_logo -arch=x64 -host_arch=x64 >nul && set > `"$TempEnvironmentShort`""
+        $CommandLine = "call $VsDevCmdShort -no_logo -arch=x64 -host_arch=x64 >nul && set > `"$TempEnvironment`""
         & $env:ComSpec /d /s /c $CommandLine
         $ExitCode = $LASTEXITCODE
 
@@ -234,59 +226,30 @@ function Import-VisualStudioEnvironment {
     }
 }
 
-function Save-ProcessEnvironment {
-    $Saved = @{}
-    foreach ($Name in @(
-        "PATH",
-        "INCLUDE",
-        "LIB",
-        "LIBPATH",
-        "__VSCMD_PREINIT_PATH",
-        "CUDAHOSTCXX"
-    )) {
-        $Saved[$Name] = [Environment]::GetEnvironmentVariable($Name, "Process")
-    }
-    return $Saved
-}
-
-function Restore-ProcessEnvironment {
-    param(
-        [Parameter(Mandatory = $true)]
-        [hashtable]$Saved
-    )
-
-    foreach ($Name in $Saved.Keys) {
-        [Environment]::SetEnvironmentVariable($Name, $Saved[$Name], "Process")
-    }
-}
-
 $ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BenchmarkDirectory = Resolve-Path (Join-Path $ScriptDirectory "..")
 $RepositoryRoot = Resolve-Path (Join-Path $BenchmarkDirectory "..\..")
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $EvidenceDirectory = Join-Path $BenchmarkDirectory "evidence\gpu-$Timestamp"
 $BuildDirectory = Join-Path $EvidenceDirectory "build"
-$OriginalEnvironment = Save-ProcessEnvironment
-$GitPath = Resolve-GitPath
 
 New-Item -ItemType Directory -Force -Path $EvidenceDirectory | Out-Null
 
+$OriginalEnvironment = @{
+    PATH = $env:PATH
+    INCLUDE = $env:INCLUDE
+    LIB = $env:LIB
+    LIBPATH = $env:LIBPATH
+    CUDAHOSTCXX = $env:CUDAHOSTCXX
+    __VSCMD_PREINIT_PATH = $env:__VSCMD_PREINIT_PATH
+}
+
 Push-Location $RepositoryRoot
 try {
+    $GitPath = Resolve-GitPath
     $Commit = (& $GitPath rev-parse HEAD).Trim()
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to resolve the current Git commit"
-    }
-
     $Branch = (& $GitPath branch --show-current).Trim()
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to resolve the current Git branch"
-    }
-
     $Status = & $GitPath status --short
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to read Git status"
-    }
 
     $Commit | Set-Content (Join-Path $EvidenceDirectory "commit.txt")
     $Branch | Set-Content (Join-Path $EvidenceDirectory "branch.txt")
@@ -382,6 +345,7 @@ try {
                 "-DCMAKE_CUDA_COMPILER=$NvccShortPath" `
                 "-DCMAKE_CUDA_HOST_COMPILER=$ClShortPath" `
                 "-DCMAKE_CXX_COMPILER=$ClShortPath" `
+                "-DCMAKE_CUDA_FLAGS=-diag-suppress=128" `
                 "-DCUDAToolkit_ROOT=$CudaRootShortPath"
         } `
         -LogPath (Join-Path $EvidenceDirectory "configure.log")
@@ -444,6 +408,7 @@ try {
     $SummaryCsv = Join-Path $EvidenceDirectory "gpu-summary.csv"
     $ParityCsv = Join-Path $EvidenceDirectory "gpu-parity-summary.csv"
     $SummaryMarkdown = Join-Path $EvidenceDirectory "summary.md"
+    $ValidationLog = Join-Path $EvidenceDirectory "summary-validation.log"
 
     Invoke-LoggedNativeCommand `
         -Command {
@@ -453,11 +418,10 @@ try {
                 --parity-csv $ParityCsv `
                 --markdown-out $SummaryMarkdown
         } `
-        -LogPath (Join-Path $EvidenceDirectory "summary-validation.log")
+        -LogPath $ValidationLog
 
     $Manifest = Join-Path $EvidenceDirectory "sha256-manifest.csv"
     $ManifestHash = Join-Path $EvidenceDirectory "sha256-manifest.sha256.txt"
-
     Remove-Item $Manifest -Force -ErrorAction SilentlyContinue
     Remove-Item $ManifestHash -Force -ErrorAction SilentlyContinue
 
@@ -494,5 +458,7 @@ try {
 }
 finally {
     Pop-Location
-    Restore-ProcessEnvironment -Saved $OriginalEnvironment
+    foreach ($Name in $OriginalEnvironment.Keys) {
+        [Environment]::SetEnvironmentVariable($Name, $OriginalEnvironment[$Name], "Process")
+    }
 }
