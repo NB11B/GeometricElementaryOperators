@@ -5,9 +5,19 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -67,6 +77,7 @@ jobs:
           if-no-files-found: ignore
 
   sanitizers:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -119,6 +130,7 @@ jobs:
           if-no-files-found: ignore
 
   q-format-validation:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -140,6 +152,7 @@ jobs:
         run: ./test-qformat
 
   esp32-component-validation:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -149,6 +162,7 @@ jobs:
         run: cmake --build build-esp32-component --parallel
 
   windows-abi-consumer:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -164,6 +178,7 @@ jobs:
         run: ctest --test-dir build -C Release -R "^abi_consumer$" --output-on-failure
 
   rtl-validation:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -209,7 +224,7 @@ jobs:
           if-no-files-found: error
 
   ci-summary:
-    if: ${{ always() && github.event_name == 'pull_request' }}
+    if: ${{ always() && github.event_name == 'pull_request' && !github.event.pull_request.draft }}
     needs:
       - build-and-test
       - sanitizers
