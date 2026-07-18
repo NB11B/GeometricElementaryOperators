@@ -134,8 +134,8 @@ class FixedBladeTests(unittest.TestCase):
             path = self.write_spec(self.base_spec(), directory, "emission.json")
             identity = ir.load_identity(path)
             header = ir.emit_header([identity], ["emission.json"])
-        self.assertIn(".c[15] = 1;", header)
-        self.assertNotIn("fixed_blade", header)
+        self.assertEqual(header.count("nodes[0].c[15] = 1;"), 1)
+        self.assertNotIn("nodes[0].c[0] = 1;", header)
 
     def test_compiler_rejects_zero_modulo_prime_coefficient(self) -> None:
         spec = self.base_spec()
