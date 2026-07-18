@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import copy
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-import tools.geo_identity_v4_1_ir as ir
+ROOT = Path(__file__).resolve().parents[1]
+TOOLS = ROOT / "tools"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
+
+import geo_identity_v4_1_ir as ir
 
 
 def fixed(blade: int, coefficient: int = 1) -> dict:
