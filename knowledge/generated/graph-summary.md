@@ -1,22 +1,22 @@
 # Knowledge Graph Summary
 
-- Nodes: 11
-- Edges: 13
+- Nodes: 13
+- Edges: 17
 
 ## Node types
 
 - Component: 3
-- Decision: 2
+- Decision: 3
 - Experiment: 2
 - Risk: 1
-- Task: 3
+- Task: 4
 
 ## Relations
 
-- AFFECTS: 3
-- DEPENDS_ON: 2
+- AFFECTS: 4
+- DEPENDS_ON: 4
 - EXTENDS: 1
-- IMPLEMENTS: 3
+- IMPLEMENTS: 4
 - MITIGATES: 1
 - VALIDATED_BY: 3
 
