@@ -1,0 +1,46 @@
+name: Geometric operator kernel V5.1
+
+on:
+  pull_request:
+    paths:
+      - "tools/geo_operator_v5_1.py"
+      - "tools/geo_operator_v5_1_pipeline.py"
+      - "tools/verify_geo_operator_certificate.py"
+      - "include/geo/operator_kernel.h"
+      - "include/geo/operator_embedded.h"
+      - "src/operator_kernel.c"
+      - "tests/test_operator_kernel.c"
+      - "tests/test_geo_operator_v5_1.py"
+      - "experiments/geometric_operator_kernel_v5_1/**"
+      - "benchmarks/geo_operator_kernel/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/geo-operator-kernel-v5-1.yml"
+
+jobs:
+  host-acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python tests
+        run: python -m unittest tests.test_geo_operator_v5_1
+      - name: Operator pipeline
+        run: |
+          python tools/geo_operator_v5_1_pipeline.py \
+            --config experiments/geometric_operator_kernel_v5_1/config.json \
+            --output-root build/v5-1-pipeline
+      - name: Independent certificates
+        run: python tools/verify_geo_operator_certificate.py build/v5-1-pipeline/certificates
+      - name: Configure C kernel
+        run: cmake -S . -B build/host -DGEO_BUILD_TESTS=ON -DGEO_BUILD_BENCHMARKS=OFF -DGEO_USE_DOUBLE=ON
+      - name: Build C kernel
+        run: cmake --build build/host --target test_operator_kernel --parallel
+      - name: Run C kernel
+        run: ctest --test-dir build/host --output-on-failure -R '^operator_kernel$'
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: geo-operator-v5-1-host
+          path: build/v5-1-pipeline
