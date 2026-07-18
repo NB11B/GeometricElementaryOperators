@@ -1,0 +1,114 @@
+name: Geometric identity engine V4.2
+
+on:
+  push:
+    branches:
+      - research/geometric-identity-engine-v4-2
+  pull_request:
+    paths:
+      - "tools/geo_identity_v4_2_*.py"
+      - "tools/geo_identity_v4_1_ir.py"
+      - "experiments/geometric_identity_engine_v4_2/**"
+      - "benchmarks/geo_identity_search/scripts/run_identity_v4_2_*.ps1"
+      - "tests/test_geo_identity_v4_2_native.py"
+      - ".github/workflows/geometric-identity-engine-v4-2.yml"
+
+jobs:
+  native-host-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Python tools
+        run: |
+          python -m py_compile \
+            tools/geo_identity_v4_2_exact.py \
+            tools/geo_identity_v4_2_compiler.py \
+            tools/geo_identity_v4_2_engine.py \
+            tools/geo_identity_v4_2_corpus.py \
+            tools/geo_identity_v4_2_validate.py \
+            tools/geo_identity_v4_2_manifest_compiler.py \
+            tools/geo_identity_v4_2_relation_audit.py \
+            tools/geo_identity_v4_2_lowering.py \
+            tools/geo_identity_v4_2_grammar_preflight.py
+
+      - name: Run legacy and V4.2 tests
+        run: |
+          python -m unittest \
+            tests.test_geo_identity_compiler \
+            tests.test_geo_identity_discovery \
+            tests.test_geo_identity_grammar_discovery \
+            tests.test_identity_result_summarizer \
+            tests.test_geo_identity_v4_1_fixed_blade \
+            tests.test_geo_identity_v4_2_native
+
+      - name: Run native grammar preflight
+        run: |
+          python tools/geo_identity_v4_2_grammar_preflight.py \
+            --config experiments/geometric_identity_engine_v4_2/config.json \
+            --output-json local-evidence/v4-2/grammar-preflight.json \
+            --markdown-out local-evidence/v4-2/grammar-preflight.md
+
+      - name: Generate CI signature corpus
+        run: |
+          python tools/geo_identity_v4_2_corpus.py \
+            --config experiments/geometric_identity_engine_v4_2/config.json \
+            --output-root local-evidence/v4-2/signature-matrix \
+            --max-relations-per-signature 8
+
+      - name: Validate CI signature corpus
+        run: |
+          python tools/geo_identity_v4_2_validate.py \
+            --corpus-root local-evidence/v4-2/signature-matrix \
+            --output-json local-evidence/v4-2/signature-matrix/validation.json \
+            --markdown-out local-evidence/v4-2/signature-matrix/validation.md \
+            --python-checks 16
+
+      - name: Audit structural relation quotient
+        run: |
+          python tools/geo_identity_v4_2_relation_audit.py \
+            --manifest local-evidence/v4-2/signature-matrix/corpus-manifest.json \
+            --config experiments/geometric_identity_engine_v4_2/config.json \
+            --output-json local-evidence/v4-2/signature-matrix/relation-audit.json \
+            --markdown-out local-evidence/v4-2/signature-matrix/relation-audit.md
+
+      - name: Emit fixed-blade lowering
+        run: |
+          python tools/geo_identity_v4_2_lowering.py \
+            --config experiments/geometric_identity_engine_v4_2/config.json \
+            --output-json local-evidence/v4-2/signature-matrix/lowering.json \
+            --markdown-out local-evidence/v4-2/signature-matrix/lowering.md \
+            --header-out local-evidence/v4-2/signature-matrix/geo_fixed_blade_lowering_v4_2.hpp \
+            --iterations 100
+
+      - name: Compile generated host and CUDA-shared header
+        run: |
+          python tools/geo_identity_v4_2_manifest_compiler.py \
+            --manifest local-evidence/v4-2/signature-matrix/corpus-manifest.json \
+            --output benchmarks/geo_identity_search/generated/geo_identity_corpus.cuh \
+            --python-checks 16
+
+      - name: Compile host generated evaluator
+        run: |
+          g++ \
+            -std=c++17 \
+            -O2 \
+            -Wall \
+            -Wextra \
+            -Wpedantic \
+            benchmarks/geo_identity_search/host_smoke.cpp \
+            -Ibenchmarks/geo_identity_search/generated \
+            -o geo_identity_v4_2_host_smoke
+
+      - name: Run host generated evaluator
+        run: ./geo_identity_v4_2_host_smoke
+
+      - name: Upload V4.2 smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: geometric-identity-v4-2-smoke
+          path: local-evidence/v4-2
