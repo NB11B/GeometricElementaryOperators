@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "name": "commutator_jacobi_family",
+  "description": "Generate nested commutator expressions and classify the cyclic Jacobi combination exactly.",
+  "dimension": 3,
+  "signature": [1, 1, 1],
+  "prime": 65521,
+  "coefficient_bound": 2,
+  "seed": 1618033988,
+  "variables": [
+    {"name": "a", "grades": [0, 1, 2, 3]},
+    {"name": "b", "grades": [0, 1, 2, 3]},
+    {"name": "c", "grades": [0, 1, 2, 3]}
+  ],
+  "grammar": {
+    "max_cost": 5,
+    "max_expressions": 700,
+    "max_per_cost": 180,
+    "max_representatives_per_polynomial": 6,
+    "candidate_multiplier": 12,
+    "operators": {
+      "unary": ["neg", "reverse"],
+      "binary": ["add", "sub", "commutator"],
+      "scales": [-1, 2],
+      "grades": [0, 1, 2, 3]
+    },
+    "constants": [0],
+    "families": [
+      {"kind": "jacobi_cycle", "variables": ["a", "b", "c"]},
+      {"kind": "commutator_antisymmetry", "variables": ["a", "b"]}
+    ],
+    "max_relations": 16,
+    "max_controls": 6,
+    "max_pairs_per_class": 24,
+    "max_relations_per_primitive_class": 3,
+    "min_relation_variables": 3,
+    "require_geometric_operator": true,
+    "term_limit": 200000
+  }
+}
