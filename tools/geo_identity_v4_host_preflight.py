@@ -8,8 +8,9 @@ expanded into the already validated AST vocabulary before classification:
 - Clifford conjugation: reverse(grade_involution(x))
 
 The tool enumerates a bounded seed set, classifies every expanded expression by
-exact blade-wise integer polynomials, groups exact equivalence classes, and emits
-candidate relations for review before any CUDA corpus is generated.
+exact blade-wise integer polynomials, groups exact equivalence classes, removes
+the universal zero class from relation ranking, and emits nonzero exact relations
+for review before any CUDA corpus is generated.
 """
 from __future__ import annotations
 
@@ -116,8 +117,22 @@ def build_records(grammar_path: Path) -> dict[str, Any]:
     for record in records:
         groups[record["exact_hash"]].append(record)
 
+    zero_classes = []
+    nonzero_groups: dict[str, list[dict[str, Any]]] = {}
+    for exact_hash, members in groups.items():
+        if all(member["zero"] for member in members):
+            zero_classes.append(
+                {
+                    "exact_hash": exact_hash,
+                    "member_count": len(members),
+                    "members": sorted(member["label"] for member in members),
+                }
+            )
+        else:
+            nonzero_groups[exact_hash] = members
+
     relations = []
-    for exact_hash, members in sorted(groups.items()):
+    for exact_hash, members in sorted(nonzero_groups.items()):
         if len(members) < 2:
             continue
         members = sorted(members, key=lambda item: (item["cost"], item["label"]))
@@ -137,16 +152,21 @@ def build_records(grammar_path: Path) -> dict[str, Any]:
             )
 
     relations.sort(key=lambda item: (item["combined_cost"], item["lhs"], item["rhs"]))
+    zero_classes.sort(key=lambda item: (-item["member_count"], item["exact_hash"]))
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "engine": "geometric_identity_v4_host_preflight",
         "grammar": grammar.name,
         "dimension": grammar.dimension,
         "signature": list(grammar.signature),
         "expression_count": len(records),
         "equivalence_class_count": len(groups),
+        "nonzero_equivalence_class_count": len(nonzero_groups),
+        "zero_equivalence_class_count": len(zero_classes),
+        "zero_expression_count": sum(item["member_count"] for item in zero_classes),
         "relation_count": len(relations),
         "records": records,
+        "zero_classes": zero_classes,
         "relations": relations,
     }
 
@@ -160,7 +180,10 @@ def markdown(report: dict[str, Any]) -> str:
         f"- signature: `{report['signature']}`",
         f"- expressions: {report['expression_count']}",
         f"- exact equivalence classes: {report['equivalence_class_count']}",
-        f"- candidate relations: {report['relation_count']}",
+        f"- nonzero equivalence classes: {report['nonzero_equivalence_class_count']}",
+        f"- zero equivalence classes: {report['zero_equivalence_class_count']}",
+        f"- expressions in zero classes: {report['zero_expression_count']}",
+        f"- ranked nonzero relations: {report['relation_count']}",
         "",
         "| lhs | rhs | sources | cost |",
         "|---|---|---|---:|",
@@ -174,9 +197,24 @@ def markdown(report: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
+            "## Excluded zero classes",
+            "",
+            "Expressions that classify to the zero polynomial are recorded but not paired",
+            "as candidate relations. This prevents unrelated structural zeros such as",
+            "`v^v = 0` and `[B,B] = 0` from appearing as meaningful identities between",
+            "their surface expressions.",
+            "",
+        ]
+    )
+    for zero_class in report["zero_classes"]:
+        members = ", ".join(f"`{member}`" for member in zero_class["members"])
+        lines.append(f"- {zero_class['member_count']} expressions: {members}")
+    lines.extend(
+        [
+            "",
             "## Boundary",
             "",
-            "Every listed relation is an exact polynomial equivalence in the declared scope.",
+            "Every ranked relation is a nonzero exact polynomial equivalence in the declared scope.",
             "This host preflight does not yet generate near-miss controls or CUDA evidence.",
             "",
         ]
@@ -207,7 +245,8 @@ def main() -> int:
         "V4_PREFLIGHT: PASS "
         f"expressions={report['expression_count']} "
         f"classes={report['equivalence_class_count']} "
-        f"relations={report['relation_count']}"
+        f"nonzero_relations={report['relation_count']} "
+        f"zero_expressions={report['zero_expression_count']}"
     )
     return 0
 
