@@ -35,6 +35,7 @@ $Git = Resolve-CommandPath "git.exe"
 $Corpus = Join-Path $RepositoryRoot $CorpusRoot
 $Manifest = Join-Path $Corpus "corpus-manifest.json"
 $GeneratedHeader = Join-Path $BenchmarkDirectory "generated\geo_identity_corpus.cuh"
+$GeneratedHeaderRelative = "benchmarks/geo_identity_search/generated/geo_identity_corpus.cuh"
 $EvidenceRoot = Join-Path $BenchmarkDirectory "evidence"
 $TemporaryRoot = Join-Path $env:TEMP "geo-v4-2-$PID-$([Guid]::NewGuid().ToString('N'))"
 $TemporaryRunner = Join-Path $TemporaryRoot "run.ps1"
@@ -157,9 +158,9 @@ finally {
     Pop-Location
     Remove-Item -LiteralPath $TemporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $GeneratedHeader) {
-        $Tracked = (& $Git -C $RepositoryRoot ls-files --error-unmatch -- "benchmarks/geo_identity_search/generated/geo_identity_corpus.cuh" 2>$null)
-        if ($LASTEXITCODE -eq 0 -and $Tracked) {
-            & $Git -C $RepositoryRoot restore -- "benchmarks/geo_identity_search/generated/geo_identity_corpus.cuh" 2>$null
+        $TrackedPaths = @(& $Git -C $RepositoryRoot ls-files -- $GeneratedHeaderRelative 2>$null)
+        if ($TrackedPaths.Count -gt 0) {
+            & $Git -C $RepositoryRoot restore -- $GeneratedHeaderRelative 2>$null
         }
         else {
             Remove-Item -LiteralPath $GeneratedHeader -Force -ErrorAction SilentlyContinue
