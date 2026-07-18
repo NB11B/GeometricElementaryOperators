@@ -56,7 +56,11 @@ class RelationAuditTests(unittest.TestCase):
 
     def test_side_swap_and_simultaneous_sign_share_family(self):
         left = {"op": "commutator", "args": [{"var": "a"}, {"var": "b"}]}
-        right = {"op": "scale", "value": 2, "arg": {"op": "wedge", "args": [{"var": "a"}, {"var": "b"}]}}
+        right = {
+            "op": "scale",
+            "value": 2,
+            "arg": {"op": "wedge", "args": [{"var": "a"}, {"var": "b"}]},
+        }
         first = AUDIT.normalize_relation(certificate(left, right))
         second = AUDIT.normalize_relation(certificate(right, left, -1, -1))
         self.assertEqual(first["family_key"], second["family_key"])
@@ -64,7 +68,11 @@ class RelationAuditTests(unittest.TestCase):
     def test_commutator_wedge_is_known(self):
         cert = certificate(
             {"op": "commutator", "args": [{"var": "a"}, {"var": "b"}]},
-            {"op": "scale", "value": 2, "arg": {"op": "wedge", "args": [{"var": "a"}, {"var": "b"}]}}
+            {
+                "op": "scale",
+                "value": 2,
+                "arg": {"op": "wedge", "args": [{"var": "a"}, {"var": "b"}]},
+            },
         )
         cert["lhs"]["label"] = "[a,b]"
         cert["rhs"]["label"] = "2*((a ^ b))"
@@ -73,8 +81,20 @@ class RelationAuditTests(unittest.TestCase):
 
     def test_projection_idempotence_is_tautological(self):
         cert = certificate(
-            {"op": "grade", "grade": 0, "arg": {"op": "gp", "args": [{"var": "a"}, {"var": "b"}]}},
-            {"op": "grade", "grade": 0, "arg": {"op": "grade", "grade": 0, "arg": {"op": "gp", "args": [{"var": "b"}, {"var": "a"}]}}},
+            {
+                "op": "grade",
+                "grade": 0,
+                "arg": {"op": "gp", "args": [{"var": "a"}, {"var": "b"}]},
+            },
+            {
+                "op": "grade",
+                "grade": 0,
+                "arg": {
+                    "op": "grade",
+                    "grade": 0,
+                    "arg": {"op": "gp", "args": [{"var": "b"}, {"var": "a"}]},
+                },
+            },
         )
         cert["lhs"]["label"] = "<(a * b)>_0"
         cert["rhs"]["label"] = "<<(b * a)>_0>_0"
@@ -82,10 +102,23 @@ class RelationAuditTests(unittest.TestCase):
         self.assertEqual((family, status), ("projection_idempotence", "tautological"))
 
     def test_audit_groups_equivalent_presentations(self):
-        base = certificate({"op": "gp", "args": [{"var": "a"}, {"var": "b"}]}, {"op": "gp", "args": [{"var": "a"}, {"var": "b"}]})
+        base = certificate(
+            {"op": "gp", "args": [{"var": "a"}, {"var": "b"}]},
+            {"op": "gp", "args": [{"var": "a"}, {"var": "b"}]},
+        )
         base["relation_id"] = "one"
-        other = certificate({"op": "neg", "arg": {"op": "gp", "args": [{"var": "x"}, {"var": "y"}]}}, {"op": "neg", "arg": {"op": "gp", "args": [{"var": "x"}, {"var": "y"}]}, grades={"x": [1], "y": [1]})
+
+        negated_product = {
+            "op": "neg",
+            "arg": {"op": "gp", "args": [{"var": "x"}, {"var": "y"}]},
+        }
+        other = certificate(
+            negated_product,
+            negated_product,
+            grades={"x": [1], "y": [1]},
+        )
         other["relation_id"] = "two"
+
         report = AUDIT.audit([base, other])
         self.assertEqual(report["certificate_count"], 2)
         self.assertEqual(report["normalized_family_count"], 1)
