@@ -11,9 +11,11 @@ on:
       - "tools/geo_identity_manifest_compiler.py"
       - "tests/test_geo_identity_compiler.py"
       - "tests/test_geo_identity_discovery.py"
+      - "tests/test_identity_result_summarizer.py"
       - "experiments/geometric_identity_engine/**"
       - "experiments/geometric_identity_engine_v2/**"
       - "benchmarks/geo_identity_search/host_smoke.cpp"
+      - "benchmarks/geo_identity_search/scripts/summarize_identity_results.py"
       - ".github/workflows/geometric-identity-discovery.yml"
 
 jobs:
@@ -30,7 +32,8 @@ jobs:
         run: |
           python -m unittest \
             tests.test_geo_identity_compiler \
-            tests.test_geo_identity_discovery
+            tests.test_geo_identity_discovery \
+            tests.test_identity_result_summarizer
 
       - name: Generate a deterministic two-prime discovery corpus
         run: |
