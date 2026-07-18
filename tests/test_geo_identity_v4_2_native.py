@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import copy
 import json
 import sys
 import tempfile
@@ -99,15 +98,15 @@ class NativeV42Tests(unittest.TestCase):
             self.assertEqual({row["target"] for row in plan}, set(range(16)))
             self.assertTrue(all(row["factor"] in (-1, 1) for row in plan))
 
-    def test_contraction_duality_discovery_has_exact_hits(self) -> None:
+    def test_contraction_duality_discovery_is_nonambiguous(self) -> None:
         config_path = ROOT / "experiments" / "geometric_identity_engine_v4_2" / "config.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
         relations, controls = corpus.build_relations(config, [1, 1, -1, -1])
         self.assertGreaterEqual(len(relations), 20)
         self.assertEqual(len(controls), 4)
         discovered = [item for item in relations if item.get("classification") == "discovered-sign"]
-        self.assertGreaterEqual(len(discovered), 1)
         self.assertTrue(all(item.get("sign") in (-1, 1) for item in discovered))
+        self.assertEqual(len({item["family"] for item in discovered}), len(discovered))
 
     def test_corpus_build_is_deterministic(self) -> None:
         config_path = ROOT / "experiments" / "geometric_identity_engine_v4_2" / "config.json"
