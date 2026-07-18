@@ -81,9 +81,9 @@ def discover_signed(relations: list[dict[str, Any]], config: dict[str, Any], sig
         }
         if exact_relation(config, signature, relation):
             hits.append((sign, relation))
-    if len(hits) > 1:
-        raise ValueError(f"ambiguous sign discovery for {family}")
-    if not hits:
+    # Both signs can only survive when both sides are universal zero expressions.
+    # Such rows are structural zeros, not sign discoveries, and are excluded.
+    if len(hits) != 1:
         return False
     relations.append(hits[0][1])
     return True
@@ -137,7 +137,9 @@ def build_relations(config: dict[str, Any], signature: list[int]) -> tuple[list[
 
     max_discovered = int(config["corpus"].get("max_exact_contraction_duality_relations_per_signature", 8))
     discovered = 0
-    candidate_pairs = [("v", "B"), ("v", "T"), ("B", "T"), ("E", "O"), ("O", "M")]
+    # Restrict sign/order search to nonzero homogeneous wedge domains. Mixed-grade
+    # support is tested separately because grade-dependent signs need family splits.
+    candidate_pairs = [("v", "B"), ("v", "T")]
     for left_name, right_name in candidate_pairs:
         if discovered >= max_discovered:
             break
