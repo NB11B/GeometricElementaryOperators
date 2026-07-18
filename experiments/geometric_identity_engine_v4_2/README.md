@@ -97,15 +97,17 @@ python .\tools\geo_identity_v4_2_grammar_preflight.py `
     -PythonChecks 128
 ```
 
-Expected final markers:
+Accepted host markers:
 
 ```text
-V4_2_GRAMMAR_PREFLIGHT: PASS
-V4_2_CORPUS: PASS
-V4_2_VALIDATION: PASS
-V4_2_RELATION_AUDIT: PASS
-V4_2_LOWERING: PASS
+V4_2_GRAMMAR_PREFLIGHT: PASS signatures=5 relations=53
+44 tests: PASS
+V4_2_CORPUS: PASS signatures=5 identity_definitions=160 controls=20 statements=360
+V4_2_VALIDATION: PASS statements=360 identities=320 controls=40
+V4_2_RELATION_AUDIT: PASS definitions=180 families=72 reduction=108
+V4_2_LOWERING: PASS reports=20 blade=15
 V4_2_HOST_GATE: PASS
+V4_2_ALL: PASS
 ```
 
 ## Physical CUDA gate
@@ -116,15 +118,36 @@ V4_2_HOST_GATE: PASS
     -Device 0 `
     -Assignments 65536 `
     -CpuChecks 128 `
+    -MaxRelationsPerSignature 0 `
     -Archive
 ```
 
-Expected final marker:
+Accepted evidence:
 
 ```text
+benchmarks/geo_identity_search/evidence/identity-20260718-102312
+benchmarks/geo_identity_search/evidence/identity-20260718-102312.zip
+benchmarks/geo_identity_search/evidence/identity-20260718-102312.zip.sha256.txt
+```
+
+Accepted physical result:
+
+```text
+statements: 360
+assignments per statement: 65,536
+total exact modular assignments: 23,592,960
+identity rows: 320 PASS without witnesses
+control rows: 40 PASS with exact witnesses
+summed kernel time: 0.006936 s
+aggregate rate: 3,401,553,878.727 assignments/s
+VALIDATION: PASS
 GEO_IDENTITY_V4_2,status=complete
 ```
+
+The complete acceptance record is in `ACCEPTANCE.md`.
 
 ## Evidence boundary
 
 Exact zero integer difference polynomials certify selected identities in the declared dimension, signature, and grade supports. Host/CUDA execution validates the generated finite-field implementation. Counterexample controls must retain nonzero exact polynomials and produce finite-field witnesses. No novelty claim follows from relation survival alone.
+
+The paper is intentionally unchanged in V4.2.
