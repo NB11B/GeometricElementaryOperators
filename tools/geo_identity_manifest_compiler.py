@@ -22,24 +22,47 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def manifest_entries(manifest: object) -> list[dict[str, object]]:
+    if not isinstance(manifest, dict):
+        raise compiler.IdentityError("manifest must be a JSON object")
+
+    entries = manifest.get("entries")
+    if isinstance(entries, list) and entries:
+        return entries
+
+    statements = manifest.get("statements")
+    if isinstance(statements, list) and statements:
+        return statements
+
+    raise compiler.IdentityError("manifest contains no identity entries")
+
+
+def entry_file(entry: object, index: int) -> str:
+    if not isinstance(entry, dict):
+        raise compiler.IdentityError(f"manifest entry {index} must be an object")
+
+    value = entry.get("file")
+    if not isinstance(value, str):
+        value = entry.get("path")
+    if not isinstance(value, str) or not value:
+        raise compiler.IdentityError(
+            f"manifest entry {index} does not contain a file/path string"
+        )
+    return value
+
+
 def main() -> int:
     args = parse_args()
     try:
         if args.python_checks < 0:
             raise compiler.IdentityError("--python-checks must be non-negative")
         manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
-        entries = manifest.get("entries")
-        if not isinstance(entries, list) or not entries:
-            raise compiler.IdentityError("manifest contains no identity entries")
+        entries = manifest_entries(manifest)
         base_directory = args.manifest.parent
         relative_paths: list[str] = []
         identity_paths: list[Path] = []
         for index, entry in enumerate(entries):
-            if not isinstance(entry, dict) or not isinstance(entry.get("file"), str):
-                raise compiler.IdentityError(
-                    f"manifest entry {index} does not contain a file path"
-                )
-            relative = entry["file"]
+            relative = entry_file(entry, index)
             path = base_directory / relative
             if not path.is_file():
                 raise compiler.IdentityError(f"identity file does not exist: {path}")
