@@ -28,9 +28,15 @@ try {
     }
 
     Remove-Item $Corpus -Recurse -Force -ErrorAction SilentlyContinue
-    & $Python .\tools\geo_identity_v4_1_duality_corpus.py `
-        --output-root $Corpus `
-        --primes @Primes
+    $CorpusArguments = @(
+        ".\tools\geo_identity_v4_1_duality_corpus.py",
+        "--output-root", $Corpus,
+        "--primes"
+    )
+    foreach ($Prime in $Primes) {
+        $CorpusArguments += $Prime.ToString()
+    }
+    & $Python @CorpusArguments
     if ($LASTEXITCODE -ne 0) { throw "V4.1 corpus generation failed" }
 
     & $Python .\tools\geo_identity_v4_1_duality_validate.py `
