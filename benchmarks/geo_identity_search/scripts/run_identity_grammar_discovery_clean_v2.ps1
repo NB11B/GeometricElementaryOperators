@@ -49,6 +49,21 @@ function Test-VisualStudioEnvironmentName {
     return $false
 }
 
+function Replace-FirstLiteral {
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][string]$OldValue,
+        [Parameter(Mandatory = $true)][string]$NewValue,
+        [Parameter(Mandatory = $true)][string]$Context
+    )
+
+    $Index = $Text.IndexOf($OldValue, [StringComparison]::Ordinal)
+    if ($Index -lt 0) {
+        throw "Unable to find $Context marker"
+    }
+    return $Text.Substring(0, $Index) + $NewValue + $Text.Substring($Index + $OldValue.Length)
+}
+
 try {
     Get-ChildItem Env: |
         Where-Object { Test-VisualStudioEnvironmentName -Name $_.Name } |
@@ -56,20 +71,20 @@ try {
             [Environment]::SetEnvironmentVariable($_.Name, $null, "Process")
         }
 
-    # The source runner is copied into a temporary directory. Preserve the
-    # checkout script directory through an environment variable rather than
-    # embedding a quoted Windows path into generated PowerShell source.
     $env:GEO_IDENTITY_ORIGINAL_SCRIPT_DIRECTORY = $ScriptDirectory
 
     $RunnerText = Get-Content -LiteralPath $SourceRunner -Raw
+
+    # Replace only the executable script-directory assignment. A global string
+    # replacement also alters the source runner's literal marker for patching the
+    # base runner, causing "Base runner script-directory marker was not found".
     $OriginalScriptDirectoryLine = '$ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path'
-    if (-not $RunnerText.Contains($OriginalScriptDirectoryLine)) {
-        throw "Unable to find script-directory marker in $SourceRunner"
-    }
-    $RunnerText = $RunnerText.Replace(
-        $OriginalScriptDirectoryLine,
-        '$ScriptDirectory = $env:GEO_IDENTITY_ORIGINAL_SCRIPT_DIRECTORY'
-    )
+    $ReplacementScriptDirectoryLine = '$ScriptDirectory = $env:GEO_IDENTITY_ORIGINAL_SCRIPT_DIRECTORY'
+    $RunnerText = Replace-FirstLiteral `
+        -Text $RunnerText `
+        -OldValue $OriginalScriptDirectoryLine `
+        -NewValue $ReplacementScriptDirectoryLine `
+        -Context "source-runner script-directory"
 
     $Marker = '$RunnerText = Get-Content -LiteralPath $BaseRunner -Raw'
     if (-not $RunnerText.Contains($Marker)) {
@@ -80,10 +95,8 @@ try {
 $RunnerText = Get-Content -LiteralPath $BaseRunner -Raw
 
     # CUDA 13.1 --use-local-env requires the compiler found in PATH to be the
-    # exact same path string passed with -ccbin. The base runner historically
-    # passed an 8.3 short path while VsDevCmd placed the canonical long path in
-    # PATH. Normalize both CMake host-compiler settings and CUDAHOSTCXX to the
-    # canonical path returned by Get-Command cl.exe.
+    # exact same path string passed with -ccbin. Normalize CMake and CUDAHOSTCXX
+    # to the canonical path returned by Get-Command cl.exe.
     $RunnerText = $RunnerText.Replace(
         '$env:CUDAHOSTCXX = $ClShortPath',
         '$env:CUDAHOSTCXX = $ClPath'
@@ -134,6 +147,7 @@ $RunnerText = Get-Content -LiteralPath $BaseRunner -Raw
     }
 }
 finally {
+    Remove-Item Env:GEO_IDENTITY_ORIGINAL_SCRIPT_DIRECTORY -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $TemporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
 
     $CurrentNames = @(Get-ChildItem Env: | Select-Object -ExpandProperty Name)
