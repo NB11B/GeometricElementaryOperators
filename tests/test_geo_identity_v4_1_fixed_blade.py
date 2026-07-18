@@ -11,8 +11,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "tools"
-if str(TOOLS) not in sys.path:
-    sys.path.insert(0, str(TOOLS))
+TOOLS_PATH = str(TOOLS)
+if TOOLS_PATH in sys.path:
+    sys.path.remove(TOOLS_PATH)
+sys.path.insert(0, TOOLS_PATH)
 
 import geo_identity_v4_1_ir as ir
 
