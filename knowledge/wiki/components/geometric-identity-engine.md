@@ -2,15 +2,15 @@
 id: component:geometric-identity-engine
 title: "Geometric Identity and Counterexample Engine"
 type: component
-status: experimental
+status: experimental-validated-v2
 created: 2026-07-17
 updated: 2026-07-17
-confidence: verified-v1-v2-implemented
+confidence: verified
 ---
 
 # Geometric Identity and Counterexample Engine
 
-The engine compiles structured Clifford-algebra statements into exact host and CUDA evaluators. V1 physically validated exact finite-field counterexample search. V2 adds symbolic polynomial extraction, deterministic candidate mutation, multi-prime expansion, and exact witness reduction.
+The engine compiles structured Clifford-algebra statements into exact host and CUDA evaluators. V1 physically validated exact finite-field counterexample search. V2 physically validated symbolic polynomial classification, deterministic candidate mutation, four-prime corpus expansion, and exact witness reduction.
 
 ## Pipeline
 
@@ -37,7 +37,7 @@ checked identity JSON
 - false statements return a reproducible assignment, blade, and coefficient mismatch;
 - support masks permit backend compilers to remove impossible blade operations;
 - every v1 expression can be expanded into an exact integer polynomial in the declared scalar coefficients;
-- a zero blade-wise difference polynomial proves the identity for the declared dimension, signature, and grade supports;
+- a zero blade-wise difference polynomial establishes the identity for the declared dimension, signature, and grade supports;
 - primitive polynomial hashes cluster scalar-equivalent statement differences;
 - automatic mutations retain source, edit, expression path, and stable identifier provenance;
 - modular witnesses are greedily reduced to smaller human-readable coefficient assignments.
@@ -46,21 +46,22 @@ checked identity JSON
 
 On the RTX 5070 Laptop GPU, five statements were evaluated over 5,242,880 exact assignments. Three known identities survived the configured sample set, two false controls yielded exact assignment-zero witnesses, host reproduction succeeded, and the evidence validator passed.
 
-## V2 implementation boundary
+## Physically validated v2 boundary
 
-The multi-prime discovery layer is implemented with:
+The full v2 matrix executed on the same GPU:
 
-- four default prime fields;
-- deterministic one-edit mutation generation;
-- exact polynomial certificates;
-- multi-prime corpus manifests;
-- CPU prechecks;
-- manifest-driven generated evaluator compilation;
-- CUDA discovery orchestration;
-- exact witness reduction;
-- cross-prime aggregation and evidence packaging.
+- four exact prime fields;
+- 27 unique structural variants;
+- 108 generated finite-field statements;
+- 28,311,552 total CUDA assignments;
+- 0.045645 seconds summed kernel time;
+- 620,253,207.501 aggregate assignments per second;
+- base and discovery validators both passed;
+- exact GPU witnesses reproduced on the host;
+- reduced witnesses remained valid;
+- evidence finalization completed.
 
-The complete default v2 physical matrix remains to be executed.
+Evidence: `knowledge/wiki/experiments/geometric-identity-discovery-20260717.md`.
 
 ## Current limits
 
