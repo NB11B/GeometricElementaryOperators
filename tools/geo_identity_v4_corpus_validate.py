@@ -74,7 +74,7 @@ def validate(root: Path) -> dict[str, Any]:
             raise ValueError(f"missing statement file: {spec_path}")
         spec = load_json(spec_path)
         DISCOVERY.validate_spec(spec)
-        polynomial = DISCOVERY.classify_spec_polynomial(spec)
+        polynomial = DISCOVERY.extract_polynomial(spec)
         is_zero = bool(polynomial.get("zero"))
         if expected == "identity" and not is_zero:
             raise ValueError(f"identity statement has nonzero polynomial: {name}")
@@ -161,7 +161,13 @@ def main() -> int:
             encoding="utf-8",
         )
         args.markdown_out.write_text(markdown(report), encoding="utf-8", newline="\n")
-    except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
+    except (
+        OSError,
+        ValueError,
+        RuntimeError,
+        json.JSONDecodeError,
+        DISCOVERY.DiscoveryError,
+    ) as exc:
         print(f"ERROR: {exc}")
         return 2
     print(
