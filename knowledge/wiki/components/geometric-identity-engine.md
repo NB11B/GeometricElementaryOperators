@@ -2,26 +2,28 @@
 id: component:geometric-identity-engine
 title: "Geometric Identity and Counterexample Engine"
 type: component
-status: experimental-validated-v2
+status: experimental-validated-v2-v3-implemented
 created: 2026-07-17
-updated: 2026-07-17
-confidence: verified
+updated: 2026-07-18
+confidence: verified-v2-v3-unvalidated-on-gpu
 ---
 
 # Geometric Identity and Counterexample Engine
 
-The engine compiles structured Clifford-algebra statements into exact host and CUDA evaluators. V1 physically validated exact finite-field counterexample search. V2 physically validated symbolic polynomial classification, deterministic candidate mutation, four-prime corpus expansion, and exact witness reduction.
+The engine compiles structured Clifford-algebra statements into exact host and CUDA evaluators. V1 physically validated exact finite-field counterexample search. V2 physically validated symbolic polynomial classification, deterministic candidate mutation, four-prime corpus expansion, and exact witness reduction. V3 adds a bounded grammar front end that generates candidate expressions and exact equivalence classes without requiring every equation to be supplied manually.
 
 ## Pipeline
 
 ```text
-checked identity JSON
-→ validated typed expression
-→ canonical DAG
-→ common-subexpression elimination
+checked identity or grammar
+→ validated typed expression domain
+→ deterministic canonical expression enumeration
+→ common-subexpression and syntax deduplication
 → blade-support propagation
-→ canonical integer polynomial by basis blade
-→ deterministic mutations and prime-matrix expansion
+→ exact integer polynomial by basis blade
+→ exact and primitive polynomial equivalence classes
+→ relation ranking and scoped certificates
+→ near-miss controls and prime-matrix expansion
 → exact modular host/CUDA evaluator
 → CPU prefix verification
 → GPU assignment search
@@ -36,11 +38,13 @@ checked identity JSON
 - generated CPU and GPU evaluators share one semantic source;
 - false statements return a reproducible assignment, blade, and coefficient mismatch;
 - support masks permit backend compilers to remove impossible blade operations;
-- every v1 expression can be expanded into an exact integer polynomial in the declared scalar coefficients;
+- every supported expression can be expanded into an exact integer polynomial in the declared scalar coefficients;
 - a zero blade-wise difference polynomial establishes the identity for the declared dimension, signature, and grade supports;
-- primitive polynomial hashes cluster scalar-equivalent statement differences;
+- exact polynomial hashes identify identical expression semantics;
+- primitive polynomial hashes identify integer scalar multiples modulo content and sign;
 - automatic mutations retain source, edit, expression path, and stable identifier provenance;
-- modular witnesses are greedily reduced to smaller human-readable coefficient assignments.
+- modular witnesses are greedily reduced to smaller human-readable coefficient assignments;
+- bounded grammars can generate, classify, and rank expression relations independently of a supplied equation.
 
 ## Physically validated v1 boundary
 
@@ -63,12 +67,32 @@ The full v2 matrix executed on the same GPU:
 
 Evidence: `knowledge/wiki/experiments/geometric-identity-discovery-20260717.md`.
 
+## V3 implementation boundary
+
+The grammar front end currently includes:
+
+- cost-bounded expression enumeration;
+- canonical syntax and commutative-addition normalization;
+- exact and primitive semantic classes;
+- deterministic relation ranking;
+- recovery of integer-multiple identities;
+- exact relation certificates;
+- near-miss control generation;
+- v1-compatible finite-field corpus emission;
+- vector-product, general-reversion, and Jacobi grammars;
+- host tests and a Windows CUDA evidence runner.
+
+Representative baseline classes include vector commutator/wedge decomposition, reversion of products, commutator antisymmetry, and the cyclic Jacobi zero relation. These validate the discovery mechanism and are not presented as new mathematical results.
+
 ## Current limits
 
 - dimensions at most six;
 - non-degenerate diagonal signatures;
 - scalar coefficient variables are commutative;
-- mutation generation is one edit from a checked source statement;
+- grammar enumeration is bounded rather than exhaustive without limits;
+- only the current v1 expression operations are available;
+- relation ranking is heuristic;
+- no quotienting by variable renaming or general symmetry groups yet;
 - polynomial expansion is protected by a configurable term limit;
 - witness reduction is greedy rather than globally minimal;
 - no automatic dimension or signature quantification;
@@ -79,8 +103,11 @@ Evidence: `knowledge/wiki/experiments/geometric-identity-discovery-20260717.md`.
 - `tools/geo_identity_compiler.py`
 - `tools/geo_identity_discovery.py`
 - `tools/geo_identity_manifest_compiler.py`
+- `tools/geo_identity_grammar_discovery.py`
 - `experiments/geometric_identity_engine/`
 - `experiments/geometric_identity_engine_v2/`
+- `experiments/geometric_identity_engine_v3/`
 - `benchmarks/geo_identity_search/`
 - `tests/test_geo_identity_compiler.py`
 - `tests/test_geo_identity_discovery.py`
+- `tests/test_geo_identity_grammar_discovery.py`

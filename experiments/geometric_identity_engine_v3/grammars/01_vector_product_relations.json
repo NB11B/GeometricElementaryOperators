@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "name": "vector_product_relations",
+  "description": "Enumerate low-cost expressions in two vector variables and discover product, wedge, commutator, grade, and reversion equivalences.",
+  "dimension": 4,
+  "signature": [1, 1, 1, 1],
+  "prime": 65521,
+  "coefficient_bound": 3,
+  "seed": 2718281828,
+  "variables": [
+    {"name": "a", "grades": [1]},
+    {"name": "b", "grades": [1]}
+  ],
+  "grammar": {
+    "max_cost": 7,
+    "max_expressions": 1400,
+    "max_per_cost": 280,
+    "max_representatives_per_polynomial": 6,
+    "candidate_multiplier": 16,
+    "operators": {
+      "unary": ["neg", "reverse"],
+      "binary": ["add", "sub", "gp", "wedge", "commutator"],
+      "scales": [-2, 2],
+      "grades": [0, 1, 2]
+    },
+    "constants": [0],
+    "families": [
+      {"kind": "vector_product_decomposition", "variables": ["a", "b"]},
+      {"kind": "commutator_antisymmetry", "variables": ["a", "b"]},
+      {"kind": "reverse_product", "variables": ["a", "b"]},
+      {"kind": "involution", "variables": ["a", "b"]}
+    ],
+    "max_relations": 24,
+    "max_controls": 8,
+    "max_pairs_per_class": 32,
+    "max_relations_per_primitive_class": 3,
+    "min_relation_variables": 2,
+    "require_geometric_operator": true,
+    "term_limit": 200000
+  }
+}

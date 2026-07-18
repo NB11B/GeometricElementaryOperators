@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "name": "general_reversion_relations",
+  "description": "Search low-cost relations involving reversion, addition, and geometric products of unrestricted multivectors.",
+  "dimension": 4,
+  "signature": [1, 1, -1, -1],
+  "prime": 65521,
+  "coefficient_bound": 2,
+  "seed": 3141592653,
+  "variables": [
+    {"name": "a", "grades": [0, 1, 2, 3, 4]},
+    {"name": "b", "grades": [0, 1, 2, 3, 4]}
+  ],
+  "grammar": {
+    "max_cost": 5,
+    "max_expressions": 900,
+    "max_per_cost": 220,
+    "max_representatives_per_polynomial": 6,
+    "candidate_multiplier": 14,
+    "operators": {
+      "unary": ["neg", "reverse"],
+      "binary": ["add", "sub", "gp", "commutator"],
+      "scales": [-1, 2],
+      "grades": [0, 1, 2, 3, 4]
+    },
+    "constants": [0],
+    "families": [
+      {"kind": "reverse_product", "variables": ["a", "b"]},
+      {"kind": "involution", "variables": ["a", "b"]},
+      {"kind": "commutator_antisymmetry", "variables": ["a", "b"]}
+    ],
+    "max_relations": 20,
+    "max_controls": 6,
+    "max_pairs_per_class": 28,
+    "max_relations_per_primitive_class": 3,
+    "min_relation_variables": 2,
+    "require_geometric_operator": true,
+    "term_limit": 200000
+  }
+}

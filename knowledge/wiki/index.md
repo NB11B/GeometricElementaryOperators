@@ -17,6 +17,7 @@
 - [TASK-20260717-005 — Generate ESP32 IMU sparse schedules automatically](tasks/TASK-20260717-005.md)
 - [TASK-20260717-007 — Build a geometric identity and counterexample engine](tasks/TASK-20260717-007.md)
 - [TASK-20260717-008 — Add multi-prime discovery and witness reduction](tasks/TASK-20260717-008.md)
+- [TASK-20260718-009 — Add grammar-bounded exact identity discovery](tasks/TASK-20260718-009.md)
 
 ## Provenance
 

@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
 
+if(WIN32)
+    set(CMAKE_CUDA_FLAGS_INIT "${CMAKE_CUDA_FLAGS_INIT} --use-local-env")
+endif()
+
 project(geo_identity_search LANGUAGES CXX CUDA)
 
 if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)

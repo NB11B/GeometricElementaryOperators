@@ -1,0 +1,77 @@
+name: Geometric Identity Grammar Discovery
+
+on:
+  push:
+    branches:
+      - research/geometric-identity-engine-v3
+  pull_request:
+    paths:
+      - "tools/geo_identity_compiler.py"
+      - "tools/geo_identity_discovery.py"
+      - "tools/geo_identity_manifest_compiler.py"
+      - "tools/geo_identity_grammar_discovery.py"
+      - "tests/test_geo_identity_compiler.py"
+      - "tests/test_geo_identity_discovery.py"
+      - "tests/test_identity_result_summarizer.py"
+      - "tests/test_geo_identity_grammar_discovery.py"
+      - "experiments/geometric_identity_engine_v3/**"
+      - "benchmarks/geo_identity_search/host_smoke.cpp"
+      - ".github/workflows/geometric-identity-grammar-discovery.yml"
+
+jobs:
+  host-grammar-discovery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run exact compiler and discovery tests
+        run: |
+          python -m unittest \
+            tests.test_geo_identity_compiler \
+            tests.test_geo_identity_discovery \
+            tests.test_identity_result_summarizer \
+            tests.test_geo_identity_grammar_discovery
+
+      - name: Build deterministic two-prime grammar corpora twice
+        run: |
+          python tools/geo_identity_grammar_discovery.py build-corpus \
+            --grammar experiments/geometric_identity_engine_v3/grammars/01_vector_product_relations.json \
+            --grammar experiments/geometric_identity_engine_v3/grammars/02_general_reversion_relations.json \
+            --grammar experiments/geometric_identity_engine_v3/grammars/03_commutator_jacobi.json \
+            --output-dir /tmp/geo-grammar-first \
+            --prime 65521 \
+            --prime 65519 \
+            --precheck-assignments 128 \
+            --max-relations 6 \
+            --max-controls 2 \
+            --clean
+          python tools/geo_identity_grammar_discovery.py build-corpus \
+            --grammar experiments/geometric_identity_engine_v3/grammars/01_vector_product_relations.json \
+            --grammar experiments/geometric_identity_engine_v3/grammars/02_general_reversion_relations.json \
+            --grammar experiments/geometric_identity_engine_v3/grammars/03_commutator_jacobi.json \
+            --output-dir /tmp/geo-grammar-second \
+            --prime 65521 \
+            --prime 65519 \
+            --precheck-assignments 128 \
+            --max-relations 6 \
+            --max-controls 2 \
+            --clean
+          cmp /tmp/geo-grammar-first/corpus-manifest.json /tmp/geo-grammar-second/corpus-manifest.json
+          cmp /tmp/geo-grammar-first/grammar-report.json /tmp/geo-grammar-second/grammar-report.json
+
+      - name: Compile generated relations into a host evaluator
+        run: |
+          mkdir -p /tmp/geo-grammar-generated
+          python tools/geo_identity_manifest_compiler.py \
+            --manifest /tmp/geo-grammar-first/corpus-manifest.json \
+            --output /tmp/geo-grammar-generated/geo_identity_corpus.cuh \
+            --python-checks 128
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+            -I/tmp/geo-grammar-generated \
+            benchmarks/geo_identity_search/host_smoke.cpp \
+            -o /tmp/geo_identity_grammar_host_smoke
+          /tmp/geo_identity_grammar_host_smoke
