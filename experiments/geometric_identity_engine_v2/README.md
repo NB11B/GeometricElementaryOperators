@@ -69,9 +69,42 @@ A GPU witness is first reproduced by the exact host evaluator. The reducer then 
 
 The minimized witness remains an exact counterexample in the specified finite field.
 
-## Initial physical gate
+## Local deterministic validation
 
-The first v2 physical run should use:
+The complete default corpus was generated locally before publication:
+
+- five v1 source controls;
+- 27 structural variants;
+- four prime fields;
+- 108 generated finite-field statements;
+- 16 zero-polynomial rows representing four exact structural identities;
+- 92 nonzero-polynomial rows;
+- all 92 nonzero rows produced a deterministic counterexample within 4,096 exact CPU assignments;
+- no expected counterexample missed the CPU precheck.
+
+One automatically generated mutation is a syntactic tautology obtained by removing the grade projection from the scalar-square control. It is retained as a zero-polynomial control for the classification layer rather than treated as a novel identity.
+
+## Physical gates
+
+### Smoke matrix
+
+The first physical v2 run should constrain compilation size while exercising every new stage:
+
+```powershell
+& .\benchmarks\geo_identity_search\scripts\run_identity_discovery.ps1 `
+    -Assignments 131072 `
+    -CpuChecks 512 `
+    -Primes @(65521,65519) `
+    -MaxMutations 4 `
+    -PrecheckAssignments 2048 `
+    -Archive
+```
+
+This emits 34 finite-field statements.
+
+### Full default matrix
+
+After the smoke matrix passes:
 
 ```powershell
 & .\benchmarks\geo_identity_search\scripts\run_identity_discovery.ps1 `
@@ -79,15 +112,17 @@ The first v2 physical run should use:
     -CpuChecks 1024 `
     -Primes @(65521,65519,65497,32749) `
     -MaxMutations 8 `
+    -PrecheckAssignments 4096 `
     -Archive
 ```
 
-This produces 116 finite-field statements from the five v1 controls:
+The full default matrix emits 108 finite-field statements:
 
 - 20 cross-prime originals;
-- 96 one-edit mutations of the three known identities.
+- 88 one-edit mutation rows;
+- 28,311,552 CUDA assignments in total.
 
-The exact count changes when the mutation limit or prime matrix changes.
+The exact count changes when the mutation limit or prime matrix changes because structurally duplicate edits are removed deterministically.
 
 ## Interpretation boundary
 
