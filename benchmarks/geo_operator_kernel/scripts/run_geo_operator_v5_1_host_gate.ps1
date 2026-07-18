@@ -49,6 +49,42 @@ function Invoke-VisibleNative {
     if ($ExitCode -ne 0) { throw "Command failed with exit code $ExitCode. See $LogPath" }
 }
 
+function Write-Sha256Manifest {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$Manifest,
+        [Parameter(Mandatory = $true)][string]$ManifestHash
+    )
+    Remove-Item -LiteralPath $Manifest -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $ManifestHash -Force -ErrorAction SilentlyContinue
+
+    $Files = @(
+        Get-ChildItem -LiteralPath $Root -Recurse -File -ErrorAction Stop |
+            Where-Object {
+                $_.FullName -ne $Manifest -and
+                $_.FullName -ne $ManifestHash
+            } |
+            Sort-Object FullName
+    )
+    if ($Files.Count -eq 0) { throw "No evidence files were found under $Root" }
+
+    $Hashes = @(
+        $Files |
+            ForEach-Object {
+                Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256 -ErrorAction Stop
+            } |
+            Select-Object Path, Algorithm, Hash
+    )
+    $Hashes | Export-Csv -LiteralPath $Manifest -NoTypeInformation -Encoding UTF8
+    if (-not (Test-Path -LiteralPath $Manifest)) { throw "Manifest was not created: $Manifest" }
+
+    Get-FileHash -LiteralPath $Manifest -Algorithm SHA256 -ErrorAction Stop |
+        Format-List |
+        Out-String |
+        Set-Content -LiteralPath $ManifestHash -Encoding UTF8
+    if (-not (Test-Path -LiteralPath $ManifestHash)) { throw "Manifest hash was not created: $ManifestHash" }
+}
+
 $ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BenchmarkDirectory = Resolve-Path (Join-Path $ScriptDirectory "..")
 $RepositoryRoot = Resolve-Path (Join-Path $BenchmarkDirectory "..\..")
@@ -139,18 +175,7 @@ try {
 
     $Manifest = Join-Path $ResolvedOutput "sha256-manifest.csv"
     $ManifestHash = Join-Path $ResolvedOutput "sha256-manifest.sha256.txt"
-    Remove-Item $Manifest -Force -ErrorAction SilentlyContinue
-    Remove-Item $ManifestHash -Force -ErrorAction SilentlyContinue
-    Get-ChildItem $ResolvedOutput -Recurse -File |
-        Where-Object { $_.FullName -ne $Manifest -and $_.FullName -ne $ManifestHash } |
-        Sort-Object FullName |
-        ForEach-Object { Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256 } |
-        Select-Object Path, Algorithm, Hash |
-        Export-Csv -LiteralPath $Manifest -NoTypeInformation -Encoding UTF8
-    Get-FileHash -LiteralPath $Manifest -Algorithm SHA256 |
-        Format-List |
-        Out-String |
-        Set-Content -LiteralPath $ManifestHash -Encoding UTF8
+    Write-Sha256Manifest -Root $ResolvedOutput -Manifest $Manifest -ManifestHash $ManifestHash
 
     Write-Host "GEO_OPERATOR_V5_1_HOST_GATE: PASS"
     Write-Host "Output: $ResolvedOutput"
