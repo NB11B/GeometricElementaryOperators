@@ -1,0 +1,61 @@
+name: Geometric Identity Discovery
+
+on:
+  push:
+    branches:
+      - research/geometric-identity-engine-v2
+  pull_request:
+    paths:
+      - "tools/geo_identity_compiler.py"
+      - "tools/geo_identity_discovery.py"
+      - "tools/geo_identity_manifest_compiler.py"
+      - "tests/test_geo_identity_compiler.py"
+      - "tests/test_geo_identity_discovery.py"
+      - "experiments/geometric_identity_engine/**"
+      - "experiments/geometric_identity_engine_v2/**"
+      - "benchmarks/geo_identity_search/host_smoke.cpp"
+      - ".github/workflows/geometric-identity-discovery.yml"
+
+jobs:
+  host-discovery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run compiler and discovery tests
+        run: |
+          python -m unittest \
+            tests.test_geo_identity_compiler \
+            tests.test_geo_identity_discovery
+
+      - name: Generate a deterministic two-prime discovery corpus
+        run: |
+          python tools/geo_identity_discovery.py build-corpus \
+            --source experiments/geometric_identity_engine/corpus/01_vector_square_scalar.json \
+            --source experiments/geometric_identity_engine/corpus/02_reverse_product_order.json \
+            --source experiments/geometric_identity_engine/corpus/03_vector_wedge_antisymmetry.json \
+            --source experiments/geometric_identity_engine/corpus/04_vector_product_commutativity_false.json \
+            --source experiments/geometric_identity_engine/corpus/05_mutated_reverse_order_false.json \
+            --output-dir /tmp/geo-identity-discovery \
+            --prime 65521 \
+            --prime 65519 \
+            --precheck-assignments 128 \
+            --max-mutations 2 \
+            --clean
+
+      - name: Compile manifest corpus into a host evaluator
+        run: |
+          mkdir -p /tmp/geo-identity-generated
+          python tools/geo_identity_manifest_compiler.py \
+            --manifest /tmp/geo-identity-discovery/corpus-manifest.json \
+            --output /tmp/geo-identity-generated/geo_identity_corpus.cuh \
+            --python-checks 128
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+            -I/tmp/geo-identity-generated \
+            benchmarks/geo_identity_search/host_smoke.cpp \
+            -o /tmp/geo_identity_host_smoke
+          /tmp/geo_identity_host_smoke
