@@ -63,12 +63,27 @@ function Import-VisualStudioEnvironment {
     param([Parameter(Mandatory = $true)][string]$InstallationPath)
     $VsDevCmd = Join-Path $InstallationPath "Common7\Tools\VsDevCmd.bat"
     if (-not (Test-Path -LiteralPath $VsDevCmd)) { throw "VsDevCmd.bat was not found at $VsDevCmd" }
+
+    $VsDevCmdShort = Resolve-ShortPath -Path $VsDevCmd
     $TempEnvironment = Join-Path $env:TEMP "geo-operator-vs-env-$PID-$([Guid]::NewGuid().ToString('N')).txt"
+    $MinimalPath = @(
+        (Join-Path $env:SystemRoot "System32")
+        $env:SystemRoot
+        (Join-Path $env:SystemRoot "System32\Wbem")
+    ) -join ";"
+
+    $env:PATH = $MinimalPath
+    Remove-Item Env:INCLUDE -ErrorAction SilentlyContinue
+    Remove-Item Env:LIB -ErrorAction SilentlyContinue
+    Remove-Item Env:LIBPATH -ErrorAction SilentlyContinue
+    Remove-Item Env:__VSCMD_PREINIT_PATH -ErrorAction SilentlyContinue
+    Remove-Item Env:CUDAHOSTCXX -ErrorAction SilentlyContinue
+
     try {
-        $CommandLine = "call `"$VsDevCmd`" -no_logo -arch=x64 -host_arch=x64 >nul && set > `"$TempEnvironment`""
+        $CommandLine = "call $VsDevCmdShort -no_logo -arch=x64 -host_arch=x64 >nul && set > `"$TempEnvironment`""
         & $env:ComSpec /d /s /c $CommandLine
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $TempEnvironment)) {
-            throw "Visual Studio developer environment initialization failed"
+            throw "Visual Studio developer environment initialization failed with exit code $LASTEXITCODE"
         }
         $Lines = Get-Content -LiteralPath $TempEnvironment
         if (-not $Lines) { throw "Visual Studio developer environment produced no variables" }
