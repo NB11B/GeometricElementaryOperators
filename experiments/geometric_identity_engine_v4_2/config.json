@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "name": "native_fixed_blade_signature_matrix",
+  "description": "V4.2 native fixed-blade, signature-general duality, contraction-duality, mixed-multivector, quotienting, and hardware-lowering program.",
+  "dimension": 4,
+  "signatures": [
+    {"name": "cl40", "metric": [1, 1, 1, 1]},
+    {"name": "cl31", "metric": [1, 1, 1, -1]},
+    {"name": "cl22", "metric": [1, 1, -1, -1]},
+    {"name": "cl13", "metric": [1, -1, -1, -1]},
+    {"name": "cl04", "metric": [-1, -1, -1, -1]}
+  ],
+  "primes": [65521, 65519],
+  "coefficient_bound": 3,
+  "seed": 1414213562,
+  "variables": [
+    {"name": "v", "grades": [1], "role": "vector"},
+    {"name": "B", "grades": [2], "role": "bivector"},
+    {"name": "T", "grades": [3], "role": "trivector"},
+    {"name": "E", "grades": [0, 2, 4], "role": "even"},
+    {"name": "O", "grades": [1, 3], "role": "odd"},
+    {"name": "M", "grades": [0, 1, 2, 3, 4], "role": "full"}
+  ],
+  "corpus": {
+    "include_pseudoscalar_contract": true,
+    "include_right_and_left_duality": true,
+    "include_dual_round_trip": true,
+    "include_dual_square": true,
+    "include_grade_complements": true,
+    "include_contraction_duality_discovery": true,
+    "include_mixed_multivectors": true,
+    "max_exact_contraction_duality_relations_per_signature": 8,
+    "controls_per_signature": 4,
+    "term_limit": 500000
+  },
+  "lowering": {
+    "emit_right_fixed_blade_permutation": true,
+    "emit_left_fixed_blade_permutation": true,
+    "benchmark_generic_vs_specialized": true
+  }
+}
