@@ -56,20 +56,19 @@ try {
             [Environment]::SetEnvironmentVariable($_.Name, $null, "Process")
         }
 
-    $RunnerText = Get-Content -LiteralPath $SourceRunner -Raw
-
     # The source runner is copied into a temporary directory. Preserve the
-    # original scripts directory so its relative repository-root calculation
-    # still resolves against the checkout rather than %TEMP%.
+    # checkout script directory through an environment variable rather than
+    # embedding a quoted Windows path into generated PowerShell source.
+    $env:GEO_IDENTITY_ORIGINAL_SCRIPT_DIRECTORY = $ScriptDirectory
+
+    $RunnerText = Get-Content -LiteralPath $SourceRunner -Raw
     $OriginalScriptDirectoryLine = '$ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path'
-    $EscapedScriptDirectory = $ScriptDirectory.Replace("'", "''")
-    $ReplacementScriptDirectoryLine = '$ScriptDirectory = ''' + $EscapedScriptDirectory + ''''
     if (-not $RunnerText.Contains($OriginalScriptDirectoryLine)) {
         throw "Unable to find script-directory marker in $SourceRunner"
     }
     $RunnerText = $RunnerText.Replace(
         $OriginalScriptDirectoryLine,
-        $ReplacementScriptDirectoryLine
+        '$ScriptDirectory = $env:GEO_IDENTITY_ORIGINAL_SCRIPT_DIRECTORY'
     )
 
     $Marker = '$RunnerText = Get-Content -LiteralPath $BaseRunner -Raw'
