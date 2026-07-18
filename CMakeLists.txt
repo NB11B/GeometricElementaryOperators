@@ -39,6 +39,7 @@ add_library(geo_kernel STATIC
     src/fixed.c
     src/fixed_geb36.c
     src/native_generated.c
+    src/operator_kernel.c
 )
 
 target_include_directories(geo_kernel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -106,6 +107,7 @@ if(GEO_BUILD_TESTS)
         native_generated
         release_hardening
         abi_consumer
+        operator_kernel
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})
