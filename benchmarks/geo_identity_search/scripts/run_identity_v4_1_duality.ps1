@@ -20,7 +20,7 @@ $BaseRunner = Join-Path $ScriptDirectory "run_identity_search.ps1"
 $HostGate = Join-Path $ScriptDirectory "run_identity_v4_1_host_gate.ps1"
 $Python = (Get-Command python.exe -ErrorAction Stop).Source
 $Git = (Get-Command git.exe -ErrorAction Stop).Source
-$Corpus = Resolve-Path (Join-Path $RepositoryRoot $CorpusRoot)
+$Corpus = Join-Path $RepositoryRoot $CorpusRoot
 $Manifest = Join-Path $Corpus "corpus-manifest.json"
 $GeneratedHeader = Join-Path $BenchmarkDirectory "generated\geo_identity_corpus.cuh"
 $TemporaryRoot = Join-Path $env:TEMP "geo-v4-1-$PID-$([Guid]::NewGuid().ToString('N'))"
@@ -30,14 +30,14 @@ New-Item -ItemType Directory -Force -Path $TemporaryRoot | Out-Null
 if ((& $Git -C $RepositoryRoot branch --show-current).Trim() -ne $ExpectedBranch) {
     throw "Run from $ExpectedBranch"
 }
-if (-not (Test-Path -LiteralPath $Manifest)) {
-    throw "Missing V4.1 corpus manifest. Run run_identity_v4_1_host_gate.ps1 first."
-}
 
 Push-Location $RepositoryRoot
 try {
     & $HostGate -PythonChecks $CpuChecks -ExpectedBranch $ExpectedBranch -CorpusRoot $CorpusRoot
     if ($LASTEXITCODE -ne 0) { throw "V4.1 host gate failed" }
+    if (-not (Test-Path -LiteralPath $Manifest)) {
+        throw "V4.1 host gate did not generate the manifest: $Manifest"
+    }
 
     $Text = Get-Content -LiteralPath $BaseRunner -Raw
     $OriginalDirectory = '$ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path'
@@ -45,7 +45,6 @@ try {
     if (-not $Text.Contains($OriginalDirectory)) { throw "Base runner directory marker changed" }
     $Text = $Text.Replace($OriginalDirectory, '$ScriptDirectory = ''' + $DirectoryLiteral + '''')
 
-    # Preserve the canonical long cl.exe path. This avoids the V3/V4 short-path mismatch.
     $Text = $Text.Replace('$env:CUDAHOSTCXX = $ClShortPath', '$env:CUDAHOSTCXX = $ClPath')
     $Text = $Text.Replace('"-DCMAKE_CUDA_HOST_COMPILER=$ClShortPath"', '"-DCMAKE_CUDA_HOST_COMPILER=$ClPath"')
     $Text = $Text.Replace('"-DCMAKE_CXX_COMPILER=$ClShortPath"', '"-DCMAKE_CXX_COMPILER=$ClPath"')
