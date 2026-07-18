@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "name": "mixed_vector_bivector_involutions",
+  "description": "Host-only V4 preflight over vector and bivector variables with macro-expanded grade involution and Clifford conjugation.",
+  "dimension": 4,
+  "signature": [1, 1, -1, -1],
+  "prime": 65521,
+  "coefficient_bound": 3,
+  "seed": 3141592653,
+  "variables": [
+    {"name": "v", "grades": [1]},
+    {"name": "B", "grades": [2]}
+  ],
+  "grammar": {
+    "max_cost": 9,
+    "max_expressions": 1600,
+    "max_per_cost": 320,
+    "max_representatives_per_polynomial": 8,
+    "candidate_multiplier": 16,
+    "operators": {
+      "unary": ["neg", "reverse"],
+      "binary": ["add", "sub", "gp", "wedge", "commutator"],
+      "scales": [-2, 2],
+      "grades": [0, 1, 2, 3, 4]
+    },
+    "constants": [0],
+    "families": [
+      {"kind": "reverse_product", "variables": ["v", "B"]},
+      {"kind": "involution", "variables": ["v", "B"]}
+    ],
+    "max_relations": 32,
+    "max_controls": 8,
+    "max_pairs_per_class": 48,
+    "max_relations_per_primitive_class": 4,
+    "min_relation_variables": 1,
+    "require_geometric_operator": true,
+    "term_limit": 250000
+  }
+}
