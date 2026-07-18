@@ -9,12 +9,14 @@
 
 - [ESP32-C6 IMU fusion benchmark — 2026-07-17](experiments/esp32-imu-fusion-20260717.md)
 - [Geometric identity engine CUDA validation — 2026-07-17](experiments/geometric-identity-engine-20260717.md)
+- [Geometric identity discovery CUDA validation — 2026-07-17](experiments/geometric-identity-discovery-20260717.md)
 
 ## Tasks
 
 - [TASK-20260717-004 — Clean and reproduce the ESP32-C6 GEO benchmark](tasks/TASK-20260717-004.md)
 - [TASK-20260717-005 — Generate ESP32 IMU sparse schedules automatically](tasks/TASK-20260717-005.md)
 - [TASK-20260717-007 — Build a geometric identity and counterexample engine](tasks/TASK-20260717-007.md)
+- [TASK-20260717-008 — Add multi-prime discovery and witness reduction](tasks/TASK-20260717-008.md)
 
 ## Provenance
 

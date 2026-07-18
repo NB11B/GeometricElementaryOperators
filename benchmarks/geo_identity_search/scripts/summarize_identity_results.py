@@ -129,28 +129,41 @@ def read_rows(path: Path) -> list[Row]:
     return rows
 
 
-def validate(rows: list[Row]) -> list[str]:
+def is_generated_dynamic_corpus(rows: list[Row]) -> bool:
+    """Recognize v2 names like source__mutation__p65521."""
+    return bool(rows) and all(
+        "__" in row.identity and "__p" in row.identity for row in rows
+    )
+
+
+def validate(rows: list[Row], *, allow_dynamic_corpus: bool) -> list[str]:
     failures: list[str] = []
     names = [row.identity for row in rows]
     if len(names) != len(set(names)):
         failures.append("duplicate identity rows are present")
 
-    missing = sorted(set(EXPECTED_NAMES) - set(names))
-    extra = sorted(set(names) - set(EXPECTED_NAMES))
-    if missing:
-        failures.append(f"missing identities: {', '.join(missing)}")
-    if extra:
-        failures.append(f"unexpected identities: {', '.join(extra)}")
+    if not allow_dynamic_corpus:
+        missing = sorted(set(EXPECTED_NAMES) - set(names))
+        extra = sorted(set(names) - set(EXPECTED_NAMES))
+        if missing:
+            failures.append(f"missing identities: {', '.join(missing)}")
+        if extra:
+            failures.append(f"unexpected identities: {', '.join(extra)}")
 
     assignments = {row.assignments for row in rows}
     if len(assignments) != 1:
         failures.append(f"inconsistent assignment counts: {sorted(assignments)}")
 
     for row in rows:
-        expected = EXPECTED_NAMES.get(row.identity)
+        expected = row.expected if allow_dynamic_corpus else EXPECTED_NAMES.get(row.identity)
         if expected is None:
             continue
-        if row.expected != expected:
+        if expected not in {"identity", "counterexample"}:
+            failures.append(
+                f"{row.identity}: invalid expected label {expected!r}"
+            )
+            continue
+        if not allow_dynamic_corpus and row.expected != expected:
             failures.append(
                 f"{row.identity}: expected label {row.expected!r}, "
                 f"corpus requires {expected!r}"
@@ -258,6 +271,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("input", type=Path)
     parser.add_argument("--summary-csv", type=Path)
     parser.add_argument("--markdown-out", type=Path)
+    parser.add_argument(
+        "--allow-dynamic-corpus",
+        action="store_true",
+        help=(
+            "validate arbitrary generated identity names using each row's declared "
+            "identity/counterexample expectation instead of the fixed v1 corpus"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -265,7 +286,8 @@ def main() -> int:
     args = parse_args()
     try:
         rows = read_rows(args.input)
-        failures = validate(rows)
+        dynamic = args.allow_dynamic_corpus or is_generated_dynamic_corpus(rows)
+        failures = validate(rows, allow_dynamic_corpus=dynamic)
     except (OSError, ValueError, csv.Error) as exc:
         print(f"VALIDATION: FAIL\n- {exc}", file=sys.stderr)
         return 1

@@ -222,23 +222,42 @@ bool run_identity(const Options &options, SearchResult *result) {
         return false;
     }
 
+    const uint64_t block_count_u64 =
+        options.assignments / options.block_size +
+        (options.assignments % options.block_size == 0U ? 0U : 1U);
+    if (block_count_u64 > static_cast<uint64_t>(UINT_MAX)) {
+        std::fprintf(stderr, "Grid is too large for %s\n", identity_t::NAME);
+        cudaFree(device_first);
+        return false;
+    }
+
+    const uint64_t warmup_assignments =
+        options.assignments < options.block_size
+        ? options.assignments
+        : options.block_size;
+    search_kernel<ID><<<1U, options.block_size>>>(
+        warmup_assignments,
+        device_first
+    );
+    if (!cuda_ok(cudaGetLastError(), "identity warmup launch") ||
+        !cuda_ok(cudaDeviceSynchronize(), "identity warmup synchronize") ||
+        !cuda_ok(
+            cudaMemcpy(
+                device_first,
+                &sentinel,
+                sizeof(sentinel),
+                cudaMemcpyHostToDevice),
+            "counterexample warmup reset")) {
+        cudaFree(device_first);
+        return false;
+    }
+
     cudaEvent_t start = nullptr;
     cudaEvent_t stop = nullptr;
     if (!cuda_ok(cudaEventCreate(&start), "event create start") ||
         !cuda_ok(cudaEventCreate(&stop), "event create stop")) {
         if (stop != nullptr) cudaEventDestroy(stop);
         if (start != nullptr) cudaEventDestroy(start);
-        cudaFree(device_first);
-        return false;
-    }
-
-    const uint64_t block_count_u64 =
-        options.assignments / options.block_size +
-        (options.assignments % options.block_size == 0U ? 0U : 1U);
-    if (block_count_u64 > static_cast<uint64_t>(UINT_MAX)) {
-        std::fprintf(stderr, "Grid is too large for %s\n", identity_t::NAME);
-        cudaEventDestroy(stop);
-        cudaEventDestroy(start);
         cudaFree(device_first);
         return false;
     }

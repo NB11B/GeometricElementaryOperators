@@ -73,6 +73,7 @@ if(MSVC)
             /O2
             /W4
             /permissive-
+            /wd4127
     )
 else()
     target_compile_options(
