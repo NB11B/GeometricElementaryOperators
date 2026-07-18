@@ -129,6 +129,13 @@ def read_rows(path: Path) -> list[Row]:
     return rows
 
 
+def is_generated_dynamic_corpus(rows: list[Row]) -> bool:
+    """Recognize v2 names like source__mutation__p65521."""
+    return bool(rows) and all(
+        "__" in row.identity and "__p" in row.identity for row in rows
+    )
+
+
 def validate(rows: list[Row], *, allow_dynamic_corpus: bool) -> list[str]:
     failures: list[str] = []
     names = [row.identity for row in rows]
@@ -279,7 +286,8 @@ def main() -> int:
     args = parse_args()
     try:
         rows = read_rows(args.input)
-        failures = validate(rows, allow_dynamic_corpus=args.allow_dynamic_corpus)
+        dynamic = args.allow_dynamic_corpus or is_generated_dynamic_corpus(rows)
+        failures = validate(rows, allow_dynamic_corpus=dynamic)
     except (OSError, ValueError, csv.Error) as exc:
         print(f"VALIDATION: FAIL\n- {exc}", file=sys.stderr)
         return 1
