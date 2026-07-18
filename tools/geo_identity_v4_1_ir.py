@@ -11,12 +11,15 @@ normalized modulo the statement prime in finite-field host/CUDA execution.
 """
 from __future__ import annotations
 
-import copy
 from dataclasses import replace
 from typing import Any, Sequence
 
-import geo_identity_discovery as exact
-import geo_identity_compiler as compiler
+try:
+    import geo_identity_discovery as exact
+    import geo_identity_compiler as compiler
+except ModuleNotFoundError:
+    from tools import geo_identity_discovery as exact
+    from tools import geo_identity_compiler as compiler
 
 
 _EXACT_VALIDATE = exact._validate_expression
@@ -108,7 +111,7 @@ def _builder_fixed_blade(self: compiler.Builder, blade: int, coefficient: int) -
     return self.intern(
         op="fixed_blade",
         value=normalized,
-        grade=blade,  # grade field is unused by this node and stores the blade index.
+        grade=blade,
         support_mask=1 << blade,
         key=("fixed_blade", blade, normalized),
     )
@@ -216,7 +219,6 @@ def install() -> None:
 
 install()
 
-# Stable aliases used by V4.1 tools.
 validate_spec = exact.validate_spec
 extract_polynomial = exact.extract_polynomial
 load_identity = compiler.load_identity
