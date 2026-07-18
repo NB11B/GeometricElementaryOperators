@@ -57,6 +57,21 @@ try {
         }
 
     $RunnerText = Get-Content -LiteralPath $SourceRunner -Raw
+
+    # The source runner is copied into a temporary directory. Preserve the
+    # original scripts directory so its relative repository-root calculation
+    # still resolves against the checkout rather than %TEMP%.
+    $OriginalScriptDirectoryLine = '$ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path'
+    $EscapedScriptDirectory = $ScriptDirectory.Replace("'", "''")
+    $ReplacementScriptDirectoryLine = '$ScriptDirectory = ''' + $EscapedScriptDirectory + ''''
+    if (-not $RunnerText.Contains($OriginalScriptDirectoryLine)) {
+        throw "Unable to find script-directory marker in $SourceRunner"
+    }
+    $RunnerText = $RunnerText.Replace(
+        $OriginalScriptDirectoryLine,
+        $ReplacementScriptDirectoryLine
+    )
+
     $Marker = '$RunnerText = Get-Content -LiteralPath $BaseRunner -Raw'
     if (-not $RunnerText.Contains($Marker)) {
         throw "Unable to find base-runner load marker in $SourceRunner"
