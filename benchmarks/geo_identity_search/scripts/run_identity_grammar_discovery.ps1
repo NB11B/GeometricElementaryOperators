@@ -53,6 +53,7 @@ function Invoke-VisibleCommand {
     $PreviousErrorActionPreference = $ErrorActionPreference
     $PreviousNativePreference = $null
     $HasNativePreference = Test-Path variable:PSNativeCommandUseErrorActionPreference
+    $ExitCode = 0
     if ($HasNativePreference) {
         $PreviousNativePreference = $PSNativeCommandUseErrorActionPreference
         $PSNativeCommandUseErrorActionPreference = $false
@@ -189,17 +190,24 @@ try {
     }
 
     $ManifestLiteral = $ManifestPath.Replace("'", "''")
-    $ReplacementGenerator = @"
+    $ReplacementGenerator = @'
     Invoke-LoggedNativeCommand `
         -Command {
-            & `$PythonPath .\tools\geo_identity_manifest_compiler.py `
-                --manifest '$ManifestLiteral' `
+            & $PythonPath .\tools\geo_identity_manifest_compiler.py `
+                --manifest '__MANIFEST__' `
                 --output .\benchmarks\geo_identity_search\generated\geo_identity_corpus.cuh `
-                --python-checks 256
+                --python-checks __PYTHON_CHECKS__
         } `
-        -LogPath (Join-Path `$EvidenceDirectory "generator-check.log")
+        -LogPath (Join-Path $EvidenceDirectory "generator-check.log")
 
-"@
+'@
+    $ReplacementGenerator = $ReplacementGenerator.Replace(
+        "__MANIFEST__",
+        $ManifestLiteral
+    ).Replace(
+        "__PYTHON_CHECKS__",
+        $PrecheckAssignments.ToString()
+    )
     $RunnerText =
         $RunnerText.Substring(0, $StartIndex) +
         $ReplacementGenerator +
@@ -217,8 +225,8 @@ try {
         -BlockSize $BlockSize `
         -CudaArchitectures $CudaArchitectures `
         -ExpectedBranch $ExpectedBranch
-    if ($LASTEXITCODE -ne 0) {
-        throw "Generated CUDA runner failed with exit code $LASTEXITCODE"
+    if (-not $?) {
+        throw "Generated CUDA runner failed"
     }
 
     $EvidenceDirectory = Get-ChildItem -LiteralPath $EvidenceRoot -Directory |
