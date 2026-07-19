@@ -63,20 +63,28 @@ jobs:
           -DGEO_BUILD_BENCHMARKS=OFF
           -DGEO_USE_DOUBLE=ON
       - name: Build all host tests
+        id: full-build
+        continue-on-error: true
         shell: bash
         run: |
-          set +e
           cmake --build build/full --parallel 2 > build/full-build.log 2>&1
-          status=$?
-          if [ "$status" -ne 0 ]; then
-            echo "Full host build failed. Relevant diagnostics:"
-            grep -n -E "error:|fatal error:|undefined reference|FAILED|Error [0-9]+" build/full-build.log | tail -n 50 || true
-            echo "Final build output:"
-            tail -n 80 build/full-build.log
-            exit "$status"
-          fi
-          tail -n 20 build/full-build.log
+      - name: Upload full build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: geo-v7-full-host-build-log
+          path: build/full-build.log
+      - name: Report full build failure
+        if: steps.full-build.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "Full host build failed. Relevant diagnostics:"
+          grep -n -E "error:|fatal error:|undefined reference|FAILED|Error [0-9]+" build/full-build.log | tail -n 50 || true
+          echo "Final build output:"
+          tail -n 80 build/full-build.log
+          exit 1
       - name: Run all host tests
+        if: steps.full-build.outcome == 'success'
         run: ctest --test-dir build/full --output-on-failure
 
   sanitizers:
