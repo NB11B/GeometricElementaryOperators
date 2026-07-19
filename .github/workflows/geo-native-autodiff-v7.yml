@@ -1,0 +1,121 @@
+name: GEO native autodiff V7
+
+on:
+  pull_request:
+    paths:
+      - "include/geo/autodiff_v7.h"
+      - "include/geo/operator_kernel.h"
+      - "src/autodiff_v7.c"
+      - "src/operator_kernel.c"
+      - "tests/test_autodiff_v7.c"
+      - "tests/test_operator_gradients.c"
+      - "tests/test_operator_kernel.c"
+      - "CMakeLists.txt"
+      - ".github/workflows/geo-native-autodiff-v7.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: geo-native-autodiff-v7-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compiler-matrix:
+    name: ${{ matrix.compiler }} V7 runtime
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        env:
+          CC: ${{ matrix.compiler }}
+        run: >-
+          cmake -S . -B build/${{ matrix.compiler }}
+          -DCMAKE_BUILD_TYPE=Release
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_USE_DOUBLE=ON
+      - name: Build native differentiation targets
+        run: >-
+          cmake --build build/${{ matrix.compiler }}
+          --target test_operator_kernel test_operator_gradients test_autodiff_v7
+          --parallel
+      - name: Run native differentiation targets
+        run: >-
+          ctest --test-dir build/${{ matrix.compiler }}
+          --output-on-failure
+          -R "^(operator_kernel|operator_gradients|autodiff_v7)$"
+
+  full-host-regression:
+    name: Full host regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure full host gate
+        env:
+          CC: gcc
+        run: >-
+          cmake -S . -B build/full
+          -DCMAKE_BUILD_TYPE=Release
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_USE_DOUBLE=ON
+      - name: Build all host tests
+        run: cmake --build build/full --parallel
+      - name: Run all host tests
+        run: ctest --test-dir build/full --output-on-failure
+
+  sanitizers:
+    name: GCC ASan and UBSan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure sanitizers
+        env:
+          CC: gcc
+        run: >-
+          cmake -S . -B build/sanitizers
+          -DCMAKE_BUILD_TYPE=Debug
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_USE_DOUBLE=ON
+          -DGEO_ENABLE_SANITIZERS=ON
+      - name: Build native differentiation targets
+        run: >-
+          cmake --build build/sanitizers
+          --target test_operator_kernel test_operator_gradients test_autodiff_v7
+          --parallel
+      - name: Run under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+          UBSAN_OPTIONS: halt_on_error=1
+        run: >-
+          ctest --test-dir build/sanitizers
+          --output-on-failure
+          -R "^(operator_kernel|operator_gradients|autodiff_v7)$"
+
+  windows-msvc:
+    name: Windows MSVC V7 runtime
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: >-
+          cmake -S . -B build/windows
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_USE_DOUBLE=ON
+      - name: Build native differentiation targets
+        run: >-
+          cmake --build build/windows
+          --config Release
+          --target test_operator_kernel test_operator_gradients test_autodiff_v7
+          --parallel
+      - name: Run native differentiation targets
+        run: >-
+          ctest --test-dir build/windows
+          -C Release
+          --output-on-failure
+          -R "^(operator_kernel|operator_gradients|autodiff_v7)$"
