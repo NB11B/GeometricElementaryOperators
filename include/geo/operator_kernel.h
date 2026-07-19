@@ -12,6 +12,7 @@ extern "C" {
 #define GEO_OPERATOR_MAX_BLADES 64u
 #define GEO_OPERATOR_MAX_TERMS 64u
 #define GEO_OPERATOR_ABI_VERSION 0x00050100u
+#define GEO_OPERATOR_GRADIENT_ABI_VERSION 0x00010000u
 
 typedef enum {
     GEO_OPERATOR_OK = 0,
@@ -62,6 +63,7 @@ typedef struct {
 } geo_operator_mv_i32_t;
 
 uint32_t geo_operator_abi_version(void);
+uint32_t geo_operator_gradient_abi_version(void);
 size_t geo_operator_blade_count(uint8_t dimension);
 int geo_operator_gp_sign(uint8_t left_blade, uint8_t right_blade, const int8_t *signature, uint8_t dimension);
 
@@ -89,6 +91,44 @@ geo_operator_status_t geo_operator_apply_f64(
     geo_operator_mv_f64_t *output
 );
 
+/*
+ * Apply a validated fixed-operator topology with caller-owned real-valued
+ * parameters. parameters[i] replaces plan->terms[i].coefficient for this
+ * call, so a certified integer plan can be used as a sparse trainable layer.
+ */
+geo_operator_status_t geo_operator_apply_parametric_f64(
+    const geo_operator_plan_i32_t *plan,
+    const double *parameters,
+    size_t parameter_count,
+    const geo_operator_mv_f64_t *input,
+    geo_operator_mv_f64_t *output
+);
+
+/*
+ * Reverse-mode vector-Jacobian product for geo_operator_apply_f64.
+ * This returns the exact coefficient-space adjoint M^T * output_cotangent.
+ */
+geo_operator_status_t geo_operator_apply_f64_vjp(
+    const geo_operator_plan_i32_t *plan,
+    const geo_operator_mv_f64_t *output_cotangent,
+    geo_operator_mv_f64_t *input_cotangent
+);
+
+/*
+ * Reverse-mode VJP for geo_operator_apply_parametric_f64. The function
+ * returns gradients for both the multivector input and every real parameter.
+ */
+geo_operator_status_t geo_operator_apply_parametric_f64_vjp(
+    const geo_operator_plan_i32_t *plan,
+    const double *parameters,
+    size_t parameter_count,
+    const geo_operator_mv_f64_t *input,
+    const geo_operator_mv_f64_t *output_cotangent,
+    geo_operator_mv_f64_t *input_cotangent,
+    double *parameter_cotangents,
+    size_t parameter_cotangent_count
+);
+
 geo_operator_status_t geo_operator_apply_mod_i32(
     const geo_operator_plan_i32_t *plan,
     const geo_operator_mv_i32_t *input,
@@ -107,6 +147,24 @@ geo_operator_status_t geo_operator_gp_f64(
     const geo_operator_mv_f64_t *left,
     const geo_operator_mv_f64_t *right,
     geo_operator_mv_f64_t *output
+);
+
+/* Forward-mode Jacobian-vector product: d(left * right). */
+geo_operator_status_t geo_operator_gp_f64_jvp(
+    const geo_operator_mv_f64_t *left,
+    const geo_operator_mv_f64_t *right,
+    const geo_operator_mv_f64_t *left_tangent,
+    const geo_operator_mv_f64_t *right_tangent,
+    geo_operator_mv_f64_t *output_tangent
+);
+
+/* Reverse-mode VJP for the geometric product. */
+geo_operator_status_t geo_operator_gp_f64_vjp(
+    const geo_operator_mv_f64_t *left,
+    const geo_operator_mv_f64_t *right,
+    const geo_operator_mv_f64_t *output_cotangent,
+    geo_operator_mv_f64_t *left_cotangent,
+    geo_operator_mv_f64_t *right_cotangent
 );
 
 #ifdef __cplusplus
