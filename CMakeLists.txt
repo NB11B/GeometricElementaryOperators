@@ -11,6 +11,7 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 option(GEO_BUILD_TESTS "Build host-side verification tests" ON)
 option(GEO_BUILD_BENCHMARKS "Build host-side benchmarks" ON)
+option(GEO_BUILD_TOOLS "Build standalone GEO developer tools" ON)
 option(GEO_USE_DOUBLE "Use double precision instead of float" ON)
 option(GEO_ENABLE_STACK_USAGE "Emit compiler stack-usage reports" OFF)
 option(GEO_ENABLE_LINK_MAP "Emit linker map for benchmark executable" OFF)
@@ -81,6 +82,11 @@ endfunction()
 
 find_package(Python3 COMPONENTS Interpreter)
 
+if(GEO_BUILD_TOOLS)
+    add_executable(geo_grad tools/geo_grad.c)
+    geo_link_target(geo_grad)
+endif()
+
 if(GEO_BUILD_TESTS)
     enable_testing()
 
@@ -125,6 +131,15 @@ if(GEO_BUILD_TESTS)
         set_tests_properties(generators PROPERTIES
             ENVIRONMENT "CC=${CMAKE_C_COMPILER}"
         )
+
+        if(GEO_BUILD_TOOLS)
+            add_test(
+                NAME geo_grad_cli
+                COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_geo_grad_cli.py
+                    --exe $<TARGET_FILE:geo_grad>
+            )
+        endif()
     endif()
 endif()
 
