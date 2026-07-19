@@ -108,6 +108,7 @@ if(GEO_BUILD_TESTS)
         release_hardening
         abi_consumer
         operator_kernel
+        operator_gradients
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})

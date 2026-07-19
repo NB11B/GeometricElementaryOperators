@@ -29,6 +29,26 @@ static int geo_operator_same_metric(
     return 1;
 }
 
+static int geo_operator_mv_f64_matches(
+    const geo_operator_mv_f64_t *value,
+    uint8_t dimension,
+    const int8_t *signature
+) {
+    return value != NULL &&
+        value->dimension == dimension &&
+        geo_operator_same_metric(dimension, value->signature, signature);
+}
+
+static void geo_operator_mv_f64_zero(
+    geo_operator_mv_f64_t *value,
+    uint8_t dimension,
+    const int8_t *signature
+) {
+    memset(value, 0, sizeof(*value));
+    value->dimension = dimension;
+    memcpy(value->signature, signature, dimension * sizeof(signature[0]));
+}
+
 static int32_t geo_operator_mod_normalize(int64_t value, uint32_t modulus) {
     int64_t normalized = value % (int64_t)modulus;
     if (normalized < 0) normalized += (int64_t)modulus;
@@ -65,8 +85,22 @@ static geo_operator_status_t geo_operator_validate_plan(const geo_operator_plan_
     return GEO_OPERATOR_OK;
 }
 
+static int geo_operator_plan_sign(
+    const geo_operator_plan_i32_t *plan,
+    uint8_t source,
+    uint8_t fixed_blade
+) {
+    return plan->side == GEO_OPERATOR_SIDE_RIGHT
+        ? geo_operator_gp_sign(source, fixed_blade, plan->signature, plan->dimension)
+        : geo_operator_gp_sign(fixed_blade, source, plan->signature, plan->dimension);
+}
+
 uint32_t geo_operator_abi_version(void) {
     return GEO_OPERATOR_ABI_VERSION;
+}
+
+uint32_t geo_operator_gradient_abi_version(void) {
+    return GEO_OPERATOR_GRADIENT_ABI_VERSION;
 }
 
 size_t geo_operator_blade_count(uint8_t dimension) {
@@ -162,29 +196,140 @@ geo_operator_status_t geo_operator_apply_f64(
     size_t source;
     size_t term_index;
     size_t blade_count;
+    geo_operator_mv_f64_t result;
     geo_operator_status_t status = geo_operator_validate_plan(plan);
     if (status != GEO_OPERATOR_OK) return status;
     if (input == NULL || output == NULL) return GEO_OPERATOR_INVALID_ARGUMENT;
-    if (input->dimension != plan->dimension ||
-        !geo_operator_same_metric(plan->dimension, input->signature, plan->signature)) {
+    if (!geo_operator_mv_f64_matches(input, plan->dimension, plan->signature)) {
         return GEO_OPERATOR_INVALID_ARGUMENT;
     }
     blade_count = geo_operator_blade_count(plan->dimension);
-    memset(output, 0, sizeof(*output));
-    output->dimension = plan->dimension;
-    memcpy(output->signature, plan->signature, plan->dimension * sizeof(plan->signature[0]));
+    geo_operator_mv_f64_zero(&result, plan->dimension, plan->signature);
     for (source = 0u; source < blade_count; ++source) {
         const double source_value = input->coefficients[source];
         if (source_value == 0.0) continue;
         for (term_index = 0u; term_index < plan->term_count; ++term_index) {
             const geo_operator_term_i32_t term = plan->terms[term_index];
             const uint8_t target = (uint8_t)(source ^ term.blade);
-            const int sign = plan->side == GEO_OPERATOR_SIDE_RIGHT
-                ? geo_operator_gp_sign((uint8_t)source, term.blade, plan->signature, plan->dimension)
-                : geo_operator_gp_sign(term.blade, (uint8_t)source, plan->signature, plan->dimension);
-            output->coefficients[target] += source_value * (double)(sign * term.coefficient);
+            const int sign = geo_operator_plan_sign(plan, (uint8_t)source, term.blade);
+            result.coefficients[target] += source_value * (double)(sign * term.coefficient);
         }
     }
+    *output = result;
+    return GEO_OPERATOR_OK;
+}
+
+geo_operator_status_t geo_operator_apply_parametric_f64(
+    const geo_operator_plan_i32_t *plan,
+    const double *parameters,
+    size_t parameter_count,
+    const geo_operator_mv_f64_t *input,
+    geo_operator_mv_f64_t *output
+) {
+    size_t source;
+    size_t term_index;
+    size_t blade_count;
+    geo_operator_mv_f64_t result;
+    geo_operator_status_t status = geo_operator_validate_plan(plan);
+    if (status != GEO_OPERATOR_OK) return status;
+    if (parameters == NULL || input == NULL || output == NULL) return GEO_OPERATOR_INVALID_ARGUMENT;
+    if (parameter_count != (size_t)plan->term_count) return GEO_OPERATOR_INVALID_ARGUMENT;
+    if (!geo_operator_mv_f64_matches(input, plan->dimension, plan->signature)) {
+        return GEO_OPERATOR_INVALID_ARGUMENT;
+    }
+    blade_count = geo_operator_blade_count(plan->dimension);
+    geo_operator_mv_f64_zero(&result, plan->dimension, plan->signature);
+    for (source = 0u; source < blade_count; ++source) {
+        const double source_value = input->coefficients[source];
+        if (source_value == 0.0) continue;
+        for (term_index = 0u; term_index < plan->term_count; ++term_index) {
+            const uint8_t fixed_blade = plan->terms[term_index].blade;
+            const uint8_t target = (uint8_t)(source ^ fixed_blade);
+            const int sign = geo_operator_plan_sign(plan, (uint8_t)source, fixed_blade);
+            result.coefficients[target] += source_value * parameters[term_index] * (double)sign;
+        }
+    }
+    *output = result;
+    return GEO_OPERATOR_OK;
+}
+
+geo_operator_status_t geo_operator_apply_f64_vjp(
+    const geo_operator_plan_i32_t *plan,
+    const geo_operator_mv_f64_t *output_cotangent,
+    geo_operator_mv_f64_t *input_cotangent
+) {
+    size_t source;
+    size_t term_index;
+    size_t blade_count;
+    geo_operator_mv_f64_t result;
+    geo_operator_status_t status = geo_operator_validate_plan(plan);
+    if (status != GEO_OPERATOR_OK) return status;
+    if (output_cotangent == NULL || input_cotangent == NULL) return GEO_OPERATOR_INVALID_ARGUMENT;
+    if (!geo_operator_mv_f64_matches(output_cotangent, plan->dimension, plan->signature)) {
+        return GEO_OPERATOR_INVALID_ARGUMENT;
+    }
+    blade_count = geo_operator_blade_count(plan->dimension);
+    geo_operator_mv_f64_zero(&result, plan->dimension, plan->signature);
+    for (source = 0u; source < blade_count; ++source) {
+        for (term_index = 0u; term_index < plan->term_count; ++term_index) {
+            const geo_operator_term_i32_t term = plan->terms[term_index];
+            const uint8_t target = (uint8_t)(source ^ term.blade);
+            const int sign = geo_operator_plan_sign(plan, (uint8_t)source, term.blade);
+            result.coefficients[source] +=
+                output_cotangent->coefficients[target] * (double)(sign * term.coefficient);
+        }
+    }
+    *input_cotangent = result;
+    return GEO_OPERATOR_OK;
+}
+
+geo_operator_status_t geo_operator_apply_parametric_f64_vjp(
+    const geo_operator_plan_i32_t *plan,
+    const double *parameters,
+    size_t parameter_count,
+    const geo_operator_mv_f64_t *input,
+    const geo_operator_mv_f64_t *output_cotangent,
+    geo_operator_mv_f64_t *input_cotangent,
+    double *parameter_cotangents,
+    size_t parameter_cotangent_count
+) {
+    size_t source;
+    size_t term_index;
+    size_t blade_count;
+    double parameter_result[GEO_OPERATOR_MAX_TERMS] = {0.0};
+    geo_operator_mv_f64_t input_result;
+    geo_operator_status_t status = geo_operator_validate_plan(plan);
+    if (status != GEO_OPERATOR_OK) return status;
+    if (parameters == NULL || input == NULL || output_cotangent == NULL ||
+        input_cotangent == NULL || parameter_cotangents == NULL) {
+        return GEO_OPERATOR_INVALID_ARGUMENT;
+    }
+    if (parameter_count != (size_t)plan->term_count ||
+        parameter_cotangent_count < (size_t)plan->term_count) {
+        return GEO_OPERATOR_INVALID_ARGUMENT;
+    }
+    if (!geo_operator_mv_f64_matches(input, plan->dimension, plan->signature) ||
+        !geo_operator_mv_f64_matches(output_cotangent, plan->dimension, plan->signature)) {
+        return GEO_OPERATOR_INVALID_ARGUMENT;
+    }
+    blade_count = geo_operator_blade_count(plan->dimension);
+    geo_operator_mv_f64_zero(&input_result, plan->dimension, plan->signature);
+    for (source = 0u; source < blade_count; ++source) {
+        for (term_index = 0u; term_index < plan->term_count; ++term_index) {
+            const uint8_t fixed_blade = plan->terms[term_index].blade;
+            const uint8_t target = (uint8_t)(source ^ fixed_blade);
+            const int sign = geo_operator_plan_sign(plan, (uint8_t)source, fixed_blade);
+            const double cotangent = output_cotangent->coefficients[target];
+            input_result.coefficients[source] += cotangent * parameters[term_index] * (double)sign;
+            parameter_result[term_index] += cotangent * input->coefficients[source] * (double)sign;
+        }
+    }
+    *input_cotangent = input_result;
+    memcpy(
+        parameter_cotangents,
+        parameter_result,
+        (size_t)plan->term_count * sizeof(parameter_result[0])
+    );
     return GEO_OPERATOR_OK;
 }
 
@@ -215,9 +360,7 @@ geo_operator_status_t geo_operator_apply_mod_i32(
         for (term_index = 0u; term_index < plan->term_count; ++term_index) {
             const geo_operator_term_i32_t term = plan->terms[term_index];
             const uint8_t target = (uint8_t)(source ^ term.blade);
-            const int sign = plan->side == GEO_OPERATOR_SIDE_RIGHT
-                ? geo_operator_gp_sign((uint8_t)source, term.blade, plan->signature, plan->dimension)
-                : geo_operator_gp_sign(term.blade, (uint8_t)source, plan->signature, plan->dimension);
+            const int sign = geo_operator_plan_sign(plan, (uint8_t)source, term.blade);
             const int64_t next = (int64_t)output->coefficients[target] +
                 (int64_t)source_value * (int64_t)term.coefficient * (int64_t)sign;
             output->coefficients[target] = geo_operator_mod_normalize(next, modulus);
@@ -255,9 +398,7 @@ geo_operator_status_t geo_operator_apply_q_i32(
         for (term_index = 0u; term_index < plan->term_count; ++term_index) {
             const geo_operator_term_i32_t term = plan->terms[term_index];
             const uint8_t target = (uint8_t)(source ^ term.blade);
-            const int sign = plan->side == GEO_OPERATOR_SIDE_RIGHT
-                ? geo_operator_gp_sign((uint8_t)source, term.blade, plan->signature, plan->dimension)
-                : geo_operator_gp_sign(term.blade, (uint8_t)source, plan->signature, plan->dimension);
+            const int sign = geo_operator_plan_sign(plan, (uint8_t)source, term.blade);
             const int64_t product = (int64_t)source_value * (int64_t)term.coefficient * (int64_t)sign;
             const int64_t rounded = geo_operator_round_divide(product, scale);
             const int64_t next = (int64_t)output->coefficients[target] + rounded;
@@ -276,6 +417,7 @@ geo_operator_status_t geo_operator_gp_f64(
     size_t left_blade;
     size_t right_blade;
     size_t blade_count;
+    geo_operator_mv_f64_t result;
     if (left == NULL || right == NULL || output == NULL) return GEO_OPERATOR_INVALID_ARGUMENT;
     if (!geo_operator_dimension_valid(left->dimension) || left->dimension != right->dimension) {
         return GEO_OPERATOR_UNSUPPORTED_DIMENSION;
@@ -285,9 +427,7 @@ geo_operator_status_t geo_operator_gp_f64(
         return GEO_OPERATOR_INVALID_ARGUMENT;
     }
     blade_count = geo_operator_blade_count(left->dimension);
-    memset(output, 0, sizeof(*output));
-    output->dimension = left->dimension;
-    memcpy(output->signature, left->signature, left->dimension * sizeof(left->signature[0]));
+    geo_operator_mv_f64_zero(&result, left->dimension, left->signature);
     for (left_blade = 0u; left_blade < blade_count; ++left_blade) {
         if (left->coefficients[left_blade] == 0.0) continue;
         for (right_blade = 0u; right_blade < blade_count; ++right_blade) {
@@ -298,9 +438,102 @@ geo_operator_status_t geo_operator_gp_f64(
                 left->signature,
                 left->dimension
             );
-            output->coefficients[target] +=
+            result.coefficients[target] +=
                 left->coefficients[left_blade] * right->coefficients[right_blade] * (double)sign;
         }
     }
+    *output = result;
+    return GEO_OPERATOR_OK;
+}
+
+geo_operator_status_t geo_operator_gp_f64_jvp(
+    const geo_operator_mv_f64_t *left,
+    const geo_operator_mv_f64_t *right,
+    const geo_operator_mv_f64_t *left_tangent,
+    const geo_operator_mv_f64_t *right_tangent,
+    geo_operator_mv_f64_t *output_tangent
+) {
+    size_t left_blade;
+    size_t right_blade;
+    size_t blade_count;
+    geo_operator_mv_f64_t result;
+    if (left == NULL || right == NULL || left_tangent == NULL ||
+        right_tangent == NULL || output_tangent == NULL) {
+        return GEO_OPERATOR_INVALID_ARGUMENT;
+    }
+    if (!geo_operator_dimension_valid(left->dimension) || left->dimension != right->dimension) {
+        return GEO_OPERATOR_UNSUPPORTED_DIMENSION;
+    }
+    if (!geo_operator_signature_valid(left->signature, left->dimension) ||
+        !geo_operator_same_metric(left->dimension, left->signature, right->signature) ||
+        !geo_operator_mv_f64_matches(left_tangent, left->dimension, left->signature) ||
+        !geo_operator_mv_f64_matches(right_tangent, left->dimension, left->signature)) {
+        return GEO_OPERATOR_INVALID_ARGUMENT;
+    }
+    blade_count = geo_operator_blade_count(left->dimension);
+    geo_operator_mv_f64_zero(&result, left->dimension, left->signature);
+    for (left_blade = 0u; left_blade < blade_count; ++left_blade) {
+        for (right_blade = 0u; right_blade < blade_count; ++right_blade) {
+            const uint8_t target = (uint8_t)(left_blade ^ right_blade);
+            const int sign = geo_operator_gp_sign(
+                (uint8_t)left_blade,
+                (uint8_t)right_blade,
+                left->signature,
+                left->dimension
+            );
+            result.coefficients[target] += (
+                left_tangent->coefficients[left_blade] * right->coefficients[right_blade] +
+                left->coefficients[left_blade] * right_tangent->coefficients[right_blade]
+            ) * (double)sign;
+        }
+    }
+    *output_tangent = result;
+    return GEO_OPERATOR_OK;
+}
+
+geo_operator_status_t geo_operator_gp_f64_vjp(
+    const geo_operator_mv_f64_t *left,
+    const geo_operator_mv_f64_t *right,
+    const geo_operator_mv_f64_t *output_cotangent,
+    geo_operator_mv_f64_t *left_cotangent,
+    geo_operator_mv_f64_t *right_cotangent
+) {
+    size_t left_blade;
+    size_t right_blade;
+    size_t blade_count;
+    geo_operator_mv_f64_t left_result;
+    geo_operator_mv_f64_t right_result;
+    if (left == NULL || right == NULL || output_cotangent == NULL ||
+        left_cotangent == NULL || right_cotangent == NULL ||
+        left_cotangent == right_cotangent) {
+        return GEO_OPERATOR_INVALID_ARGUMENT;
+    }
+    if (!geo_operator_dimension_valid(left->dimension) || left->dimension != right->dimension) {
+        return GEO_OPERATOR_UNSUPPORTED_DIMENSION;
+    }
+    if (!geo_operator_signature_valid(left->signature, left->dimension) ||
+        !geo_operator_same_metric(left->dimension, left->signature, right->signature) ||
+        !geo_operator_mv_f64_matches(output_cotangent, left->dimension, left->signature)) {
+        return GEO_OPERATOR_INVALID_ARGUMENT;
+    }
+    blade_count = geo_operator_blade_count(left->dimension);
+    geo_operator_mv_f64_zero(&left_result, left->dimension, left->signature);
+    geo_operator_mv_f64_zero(&right_result, left->dimension, left->signature);
+    for (left_blade = 0u; left_blade < blade_count; ++left_blade) {
+        for (right_blade = 0u; right_blade < blade_count; ++right_blade) {
+            const uint8_t target = (uint8_t)(left_blade ^ right_blade);
+            const int sign = geo_operator_gp_sign(
+                (uint8_t)left_blade,
+                (uint8_t)right_blade,
+                left->signature,
+                left->dimension
+            );
+            const double cotangent = output_cotangent->coefficients[target] * (double)sign;
+            left_result.coefficients[left_blade] += cotangent * right->coefficients[right_blade];
+            right_result.coefficients[right_blade] += cotangent * left->coefficients[left_blade];
+        }
+    }
+    *left_cotangent = left_result;
+    *right_cotangent = right_result;
     return GEO_OPERATOR_OK;
 }

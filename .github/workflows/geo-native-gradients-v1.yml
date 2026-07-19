@@ -1,0 +1,74 @@
+name: GEO native gradients V1
+
+on:
+  pull_request:
+    paths:
+      - "include/geo/operator_kernel.h"
+      - "src/operator_kernel.c"
+      - "tests/test_operator_gradients.c"
+      - "tests/test_operator_kernel.c"
+      - "CMakeLists.txt"
+      - ".github/workflows/geo-native-gradients-v1.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: geo-native-gradients-v1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compiler-matrix:
+    name: ${{ matrix.compiler }} native gradients
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        env:
+          CC: ${{ matrix.compiler }}
+        run: >-
+          cmake -S . -B build/${{ matrix.compiler }}
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_USE_DOUBLE=ON
+      - name: Build operator tests
+        run: >-
+          cmake --build build/${{ matrix.compiler }}
+          --target test_operator_kernel test_operator_gradients
+          --parallel
+      - name: Run operator tests
+        run: >-
+          ctest --test-dir build/${{ matrix.compiler }}
+          --output-on-failure
+          -R "^operator_(kernel|gradients)$"
+
+  sanitizers:
+    name: GCC ASan and UBSan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure sanitizers
+        env:
+          CC: gcc
+        run: >-
+          cmake -S . -B build/sanitizers
+          -DCMAKE_BUILD_TYPE=Debug
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_USE_DOUBLE=ON
+          -DGEO_ENABLE_SANITIZERS=ON
+      - name: Build operator tests
+        run: >-
+          cmake --build build/sanitizers
+          --target test_operator_kernel test_operator_gradients
+          --parallel
+      - name: Run operator tests under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+          UBSAN_OPTIONS: halt_on_error=1
+        run: >-
+          ctest --test-dir build/sanitizers
+          --output-on-failure
+          -R "^operator_(kernel|gradients)$"
