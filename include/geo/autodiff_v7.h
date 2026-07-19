@@ -25,8 +25,9 @@ typedef enum {
     GEO_V7_BAD_NODE = 5,
     GEO_V7_NOT_COMPILED = 6,
     GEO_V7_FORWARD_REQUIRED = 7,
-    GEO_V7_NON_SCALAR_LOSS = 8,
-    GEO_V7_NUMERIC_FAILURE = 9
+    GEO_V7_BACKWARD_REQUIRED = 8,
+    GEO_V7_NON_SCALAR_LOSS = 9,
+    GEO_V7_NUMERIC_FAILURE = 10
 } geo_v7_status_t;
 
 typedef enum {
@@ -66,7 +67,7 @@ typedef struct {
     uint8_t pairing;
     uint8_t compiled;
     uint8_t forward_valid;
-    uint8_t reserved;
+    uint8_t backward_valid;
     geo_v7_node_id_t node_count;
     geo_v7_node_id_t loss_node;
     uint64_t optimizer_step;
