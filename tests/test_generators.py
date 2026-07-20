@@ -29,6 +29,28 @@ def compiler_command() -> tuple[list[str], bool]:
     return compiler, executable in {"cl", "cl.exe"}
 
 
+def find_vsdevcmd(compiler_path: str) -> Path | None:
+    path = Path(compiler_path).resolve()
+    for parent in path.parents:
+        candidate = parent / "Common7" / "Tools" / "VsDevCmd.bat"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def run_msvc(compiler: list[str], arguments: list[str]) -> None:
+    vsdevcmd = find_vsdevcmd(compiler[0])
+    if vsdevcmd is None:
+        run(*compiler, *arguments)
+        return
+    compile_command = subprocess.list2cmdline([*compiler, *arguments])
+    command = (
+        f'call "{vsdevcmd}" -arch=x64 -host_arch=x64 >nul '
+        f'&& {compile_command}'
+    )
+    run("cmd.exe", "/d", "/s", "/c", command)
+
+
 def test_clpq(temp: Path) -> None:
     out = temp / "clpq"
     run(
@@ -58,8 +80,7 @@ def test_clpq(temp: Path) -> None:
     compiler, is_msvc = compiler_command()
     executable = out / ("test_generated.exe" if os.name == "nt" else "test_generated")
     if is_msvc:
-        command = [
-            *compiler,
+        arguments = [
             "/nologo",
             "/std:c11",
             f"/I{ROOT / 'include'}",
@@ -68,6 +89,7 @@ def test_clpq(temp: Path) -> None:
             str(test_c),
             f"/Fe:{executable}",
         ]
+        run_msvc(compiler, arguments)
     else:
         command = [
             *compiler,
@@ -80,7 +102,7 @@ def test_clpq(temp: Path) -> None:
         if os.name != "nt":
             command.append("-lm")
         command.extend(["-o", str(executable)])
-    run(*command)
+        run(*command)
     run(str(executable))
 
 
