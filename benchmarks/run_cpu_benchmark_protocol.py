@@ -6,8 +6,10 @@ import csv
 import json
 import math
 import os
+import shutil
 import statistics
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -67,6 +69,15 @@ def aggregate(raw_files: list[Path], output: Path, raw_json: Path) -> None:
     raw_json.write_text(json.dumps(raw, indent=2), encoding="utf-8")
 
 
+def affinity_prefix(cpu: int) -> tuple[list[str], str]:
+    taskset = shutil.which("taskset")
+    if os.name != "nt" and taskset is not None:
+        return [taskset, "-c", str(cpu)], "taskset"
+    if os.name == "nt":
+        return [], "unsupported_on_windows"
+    return [], "taskset_unavailable"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--baseline", required=True, type=Path)
@@ -90,10 +101,15 @@ def main() -> int:
     ):
         env[name] = "1"
 
-    taskset = subprocess.run(["sh", "-c", "command -v taskset"], capture_output=True, text=True).returncode == 0
-    prefix = ["taskset", "-c", str(args.cpu)] if taskset else []
+    prefix, affinity_mode = affinity_prefix(args.cpu)
     (args.out_dir / "affinity.txt").write_text(
-        f"taskset_available={str(taskset).lower()}\nrequested_cpu={args.cpu}\n",
+        "\n".join([
+            f"platform={sys.platform}",
+            f"affinity_mode={affinity_mode}",
+            f"requested_cpu={args.cpu}",
+            f"affinity_applied={str(bool(prefix)).lower()}",
+            "",
+        ]),
         encoding="utf-8",
     )
 
@@ -106,7 +122,7 @@ def main() -> int:
         pytorch_path = args.out_dir / f"pytorch-trial-{trial:02d}.csv"
         run(prefix + [str(args.baseline), str(baseline_path)], env)
         run(prefix + [str(args.optimized), str(optimized_path)], env)
-        run(prefix + ["python", str(args.pytorch_script), "--out", str(pytorch_path)], env)
+        run(prefix + [sys.executable, str(args.pytorch_script), "--out", str(pytorch_path)], env)
         baseline_raw.append(baseline_path)
         optimized_raw.append(optimized_path)
         pytorch_raw.append(pytorch_path)
@@ -126,7 +142,10 @@ def main() -> int:
         args.out_dir / "pytorch.csv",
         args.out_dir / "pytorch-raw-trials.json",
     )
-    print(f"GEO_CPU_BENCHMARK_PROTOCOL: PASS trials={args.trials} affinity={taskset}")
+    print(
+        "GEO_CPU_BENCHMARK_PROTOCOL: PASS "
+        f"trials={args.trials} affinity_mode={affinity_mode}"
+    )
     return 0
 
 
