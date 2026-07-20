@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "name": "imu_orientation_sparse_v1",
+  "description": "Sparse polynomial schedules lowered from the paired-Cl(2,0) quaternion representation used by the ESP32 IMU benchmark. Output scale preserves source grouping and floating operation order.",
+  "functions": [
+    {
+      "name": "gravity",
+      "inputs": ["qw", "qx", "qy", "qz"],
+      "outputs": [
+        {
+          "name": "gx",
+          "scale": 2,
+          "terms": [
+            {"coefficient": 1, "factors": ["qx", "qz"]},
+            {"coefficient": -1, "factors": ["qw", "qy"]}
+          ]
+        },
+        {
+          "name": "gy",
+          "scale": 2,
+          "terms": [
+            {"coefficient": 1, "factors": ["qw", "qx"]},
+            {"coefficient": 1, "factors": ["qy", "qz"]}
+          ]
+        },
+        {
+          "name": "gz",
+          "scale": 1,
+          "terms": [
+            {"coefficient": 1, "factors": ["qw", "qw"]},
+            {"coefficient": -1, "factors": ["qx", "qx"]},
+            {"coefficient": -1, "factors": ["qy", "qy"]},
+            {"coefficient": 1, "factors": ["qz", "qz"]}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "q_times_vector_quaternion",
+      "inputs": ["qw", "qx", "qy", "qz", "wx", "wy", "wz"],
+      "outputs": [
+        {
+          "name": "dw",
+          "scale": 1,
+          "terms": [
+            {"coefficient": -1, "factors": ["qx", "wx"]},
+            {"coefficient": -1, "factors": ["qy", "wy"]},
+            {"coefficient": -1, "factors": ["qz", "wz"]}
+          ]
+        },
+        {
+          "name": "dx",
+          "scale": 1,
+          "terms": [
+            {"coefficient": 1, "factors": ["qw", "wx"]},
+            {"coefficient": 1, "factors": ["qy", "wz"]},
+            {"coefficient": -1, "factors": ["qz", "wy"]}
+          ]
+        },
+        {
+          "name": "dy",
+          "scale": 1,
+          "terms": [
+            {"coefficient": 1, "factors": ["qw", "wy"]},
+            {"coefficient": -1, "factors": ["qx", "wz"]},
+            {"coefficient": 1, "factors": ["qz", "wx"]}
+          ]
+        },
+        {
+          "name": "dz",
+          "scale": 1,
+          "terms": [
+            {"coefficient": 1, "factors": ["qw", "wz"]},
+            {"coefficient": 1, "factors": ["qx", "wy"]},
+            {"coefficient": -1, "factors": ["qy", "wx"]}
+          ]
+        }
+      ]
+    }
+  ]
+}

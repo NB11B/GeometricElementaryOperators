@@ -11,6 +11,7 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 option(GEO_BUILD_TESTS "Build host-side verification tests" ON)
 option(GEO_BUILD_BENCHMARKS "Build host-side benchmarks" ON)
+option(GEO_BUILD_TOOLS "Build standalone GEO developer tools" ON)
 option(GEO_USE_DOUBLE "Use double precision instead of float" ON)
 option(GEO_ENABLE_STACK_USAGE "Emit compiler stack-usage reports" OFF)
 option(GEO_ENABLE_LINK_MAP "Emit linker map for benchmark executable" OFF)
@@ -39,6 +40,10 @@ add_library(geo_kernel STATIC
     src/fixed.c
     src/fixed_geb36.c
     src/native_generated.c
+    src/operator_kernel.c
+    src/autodiff_v7.c
+    src/full_cycle_v8.c
+    src/batch_gp.c
 )
 
 target_include_directories(geo_kernel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -79,6 +84,23 @@ endfunction()
 
 find_package(Python3 COMPONENTS Interpreter)
 
+if(GEO_BUILD_TOOLS)
+    add_executable(geo_grad tools/geo_grad.c)
+    geo_link_target(geo_grad)
+
+    add_executable(geo_cycle
+        tools/geo_cycle.c
+        tools/geo_cycle_common.c
+        tools/geo_cycle_loader.c
+        tools/geo_cycle_io.c
+    )
+    set_source_files_properties(tools/geo_cycle_common.c PROPERTIES
+        COMPILE_DEFINITIONS geo_cycle_load_model=geo_cycle_load_model_legacy
+    )
+    target_include_directories(geo_cycle PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+    geo_link_target(geo_cycle)
+endif()
+
 if(GEO_BUILD_TESTS)
     enable_testing()
 
@@ -106,6 +128,12 @@ if(GEO_BUILD_TESTS)
         native_generated
         release_hardening
         abi_consumer
+        operator_kernel
+        operator_gradients
+        autodiff_v7
+        geo_grad_validation_v7_2
+        full_cycle_v8
+        batch_gp
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})
@@ -120,6 +148,31 @@ if(GEO_BUILD_TESTS)
         set_tests_properties(generators PROPERTIES
             ENVIRONMENT "CC=${CMAKE_C_COMPILER}"
         )
+
+        if(GEO_BUILD_TOOLS)
+            add_test(
+                NAME geo_grad_cli
+                COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_geo_grad_cli.py
+                    --exe $<TARGET_FILE:geo_grad>
+            )
+            add_test(
+                NAME geo_grad_validation_v7_2_cli
+                COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_geo_grad_validation_v7_2.py
+                    --exe $<TARGET_FILE:geo_grad>
+            )
+            set_tests_properties(geo_grad_validation_v7_2_cli PROPERTIES TIMEOUT 300)
+
+            add_test(
+                NAME geo_cycle_v8_cli
+                COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_geo_cycle_v8.py
+                    --compiler ${CMAKE_CURRENT_SOURCE_DIR}/tools/geo_model.py
+                    --runner $<TARGET_FILE:geo_cycle>
+            )
+            set_tests_properties(geo_cycle_v8_cli PROPERTIES TIMEOUT 600)
+        endif()
     endif()
 endif()
 
@@ -133,6 +186,12 @@ if(GEO_BUILD_BENCHMARKS)
     add_executable(bench_complete benchmarks/bench_complete.c)
     geo_link_target(bench_complete)
 
+    add_executable(bench_v8_full_cycle benchmarks/bench_v8_full_cycle.c)
+    geo_link_target(bench_v8_full_cycle)
+
+    add_executable(bench_v8_batch_gp benchmarks/bench_v8_batch_gp.c)
+    geo_link_target(bench_v8_batch_gp)
+
     if(GEO_BUILD_TESTS)
         add_test(
             NAME selected_path_benchmark
@@ -144,6 +203,8 @@ if(GEO_BUILD_BENCHMARKS)
         target_link_options(bench_host PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_host.map")
         target_link_options(bench_compare PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_compare.map")
         target_link_options(bench_complete PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_complete.map")
+        target_link_options(bench_v8_full_cycle PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_v8_full_cycle.map")
+        target_link_options(bench_v8_batch_gp PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_v8_batch_gp.map")
     endif()
 
     if(Python3_Interpreter_FOUND)

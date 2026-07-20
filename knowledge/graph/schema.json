@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Geometric Elementary Operators Knowledge Graph Record",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["id", "type", "name", "status", "confidence", "summary", "provenance", "updated"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "type": {"enum": ["Component", "Decision", "Experiment", "Evidence", "Failure", "Risk", "Task", "Test"]},
+        "name": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "minLength": 1},
+        "confidence": {"enum": ["verified", "documented", "inferred", "hypothesis"]},
+        "summary": {"type": "string", "minLength": 1},
+        "provenance": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "updated": {"type": "string", "format": "date"}
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["id", "source", "relation", "target", "confidence", "provenance", "updated"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "source": {"type": "string", "minLength": 1},
+        "relation": {"enum": ["AFFECTS", "DEPENDS_ON", "IMPLEMENTS", "MITIGATES", "RELATED_TO", "RESOLVED_BY", "TESTED_BY", "VALIDATED_BY"]},
+        "target": {"type": "string", "minLength": 1},
+        "confidence": {"enum": ["verified", "documented", "inferred", "hypothesis"]},
+        "provenance": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "updated": {"type": "string", "format": "date"}
+      },
+      "additionalProperties": false
+    }
+  ]
+}

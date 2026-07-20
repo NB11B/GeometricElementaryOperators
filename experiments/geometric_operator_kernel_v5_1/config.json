@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "engine": "geometric_operator_kernel_v5_1",
+  "dimensions": [2, 3, 4, 5, 6],
+  "signature_names": [],
+  "prime": 65521,
+  "term_limit": 500000,
+  "all_fixed_blades": true,
+  "specialization_iterations": 8,
+  "sparse_iterations": 16,
+  "sparse_terms": [
+    {"blade": 0, "coefficient": 1},
+    {"blade": 1, "coefficient": -2},
+    {"blade": -1, "coefficient": 1}
+  ],
+  "kernel": {
+    "maximum_dimension": 6,
+    "maximum_blades": 64,
+    "maximum_fixed_terms": 64,
+    "numeric_modes": ["exact-modular-i32", "fixed-q", "real"],
+    "dynamic_allocation": false,
+    "runtime_parsing": false
+  }
+}

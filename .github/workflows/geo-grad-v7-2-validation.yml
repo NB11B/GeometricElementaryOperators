@@ -1,0 +1,159 @@
+name: GEO gradient V7.2 validation
+
+on:
+  pull_request:
+    paths:
+      - "tests/test_geo_grad_validation_v7_2.c"
+      - "tests/test_geo_grad_validation_v7_2.py"
+      - "tools/geo_grad.c"
+      - "include/geo/autodiff_v7.h"
+      - "src/autodiff_v7.c"
+      - "include/geo/operator_kernel.h"
+      - "src/operator_kernel.c"
+      - "CMakeLists.txt"
+      - ".github/workflows/geo-grad-v7-2-validation.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: geo-grad-v7-2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-matrix:
+    name: ${{ matrix.compiler }} ${{ matrix.build_type }} V7.2
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        build_type: [Release, Debug]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure
+        env:
+          CC: ${{ matrix.compiler }}
+        run: >-
+          cmake -S . -B build/${{ matrix.compiler }}-${{ matrix.build_type }}
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_TOOLS=ON
+          -DGEO_USE_DOUBLE=ON
+      - name: Build validation targets
+        run: >-
+          cmake --build build/${{ matrix.compiler }}-${{ matrix.build_type }}
+          --target geo_grad test_geo_grad_validation_v7_2 test_operator_gradients test_autodiff_v7
+          --parallel 2
+      - name: Run core and CLI validation
+        run: >-
+          ctest --test-dir build/${{ matrix.compiler }}-${{ matrix.build_type }}
+          --output-on-failure
+          -R "^(operator_gradients|autodiff_v7|geo_grad_validation_v7_2|geo_grad_validation_v7_2_cli)$"
+
+  sanitizers:
+    name: GCC ASan UBSan V7.2
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure sanitizers
+        env:
+          CC: gcc
+        run: >-
+          cmake -S . -B build/sanitizers
+          -DCMAKE_BUILD_TYPE=Debug
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_TOOLS=ON
+          -DGEO_USE_DOUBLE=ON
+          -DGEO_ENABLE_SANITIZERS=ON
+      - name: Build validation targets
+        run: >-
+          cmake --build build/sanitizers
+          --target geo_grad test_geo_grad_validation_v7_2 test_operator_gradients test_autodiff_v7
+          --parallel 2
+      - name: Run under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: >-
+          ctest --test-dir build/sanitizers
+          --output-on-failure
+          -R "^(operator_gradients|autodiff_v7|geo_grad_validation_v7_2|geo_grad_validation_v7_2_cli)$"
+
+  valgrind:
+    name: Valgrind lifecycle validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Valgrind
+        run: sudo apt-get update && sudo apt-get install -y valgrind
+      - name: Configure
+        env:
+          CC: gcc
+        run: >-
+          cmake -S . -B build/valgrind
+          -DCMAKE_BUILD_TYPE=Debug
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_TOOLS=ON
+      - name: Build core validation
+        run: cmake --build build/valgrind --target test_geo_grad_validation_v7_2 --parallel 2
+      - name: Run Valgrind
+        run: >-
+          valgrind --error-exitcode=99 --leak-check=full --show-leak-kinds=all
+          ./build/valgrind/test_geo_grad_validation_v7_2
+
+  windows-msvc:
+    name: Windows MSVC V7.2
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure
+        run: >-
+          cmake -S . -B build/windows
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_TOOLS=ON
+          -DGEO_USE_DOUBLE=ON
+      - name: Build validation targets
+        run: >-
+          cmake --build build/windows
+          --config Release
+          --target geo_grad test_geo_grad_validation_v7_2 test_operator_gradients test_autodiff_v7
+          --parallel 2
+      - name: Run validation
+        run: >-
+          ctest --test-dir build/windows -C Release --output-on-failure
+          -R "^(operator_gradients|autodiff_v7|geo_grad_validation_v7_2|geo_grad_validation_v7_2_cli)$"
+
+  full-host-regression:
+    name: Full host regression V7.2
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure
+        env:
+          CC: gcc
+        run: >-
+          cmake -S . -B build/full
+          -DCMAKE_BUILD_TYPE=Release
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_TOOLS=ON
+          -DGEO_USE_DOUBLE=ON
+      - name: Build all host targets
+        run: cmake --build build/full --parallel 2
+      - name: Run complete host suite
+        run: ctest --test-dir build/full --output-on-failure

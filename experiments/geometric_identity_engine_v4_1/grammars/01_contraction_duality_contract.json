@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "name": "contraction_duality_contract_cl22",
+  "description": "Host-first V4.1 corpus for exact left/right contractions and an explicit Cl(2,2) pseudoscalar duality contract.",
+  "dimension": 4,
+  "signature": [1, 1, -1, -1],
+  "prime": 65521,
+  "coefficient_bound": 3,
+  "seed": 2718281828,
+  "variables": [
+    {"name": "v", "grades": [1]},
+    {"name": "B", "grades": [2]},
+    {"name": "T", "grades": [3]}
+  ],
+  "operator_contract": {
+    "left_contraction": "A_r lcontract B_s := <reverse(A_r) B_s>_{s-r} for r <= s, otherwise 0; extend bilinearly by grade decomposition",
+    "right_contraction": "A_r rcontract B_s := <A_r reverse(B_s)>_{r-s} for r >= s, otherwise 0; extend bilinearly by grade decomposition",
+    "pseudoscalar_blade": 15,
+    "pseudoscalar_square": 1,
+    "pseudoscalar_inverse_scale": 1,
+    "right_dual": "dual_r(A) := A I^{-1}",
+    "left_dual": "dual_l(A) := I^{-1} A",
+    "duality_backend_status": "contract-checked; blade-constant AST support required before relation generation"
+  },
+  "search": {
+    "include_products": true,
+    "include_wedges": true,
+    "include_contractions": true,
+    "exclude_zero_classes_from_ranking": true,
+    "term_limit": 300000
+  }
+}

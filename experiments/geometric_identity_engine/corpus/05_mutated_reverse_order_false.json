@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "name": "reverse_preserves_product_order_false",
+  "description": "Mutation: claims reverse(a*b)=reverse(a)*reverse(b); search must reject it.",
+  "expected": "counterexample",
+  "dimension": 4,
+  "signature": [1, 1, -1, -1],
+  "prime": 65521,
+  "coefficient_bound": 3,
+  "seed": 1414213562,
+  "variables": [
+    {"name": "a", "grades": [1, 2]},
+    {"name": "b", "grades": [1, 2]}
+  ],
+  "lhs": {
+    "op": "reverse",
+    "arg": {
+      "op": "gp",
+      "args": [{"var": "a"}, {"var": "b"}]
+    }
+  },
+  "rhs": {
+    "op": "gp",
+    "args": [
+      {"op": "reverse", "arg": {"var": "a"}},
+      {"op": "reverse", "arg": {"var": "b"}}
+    ]
+  }
+}

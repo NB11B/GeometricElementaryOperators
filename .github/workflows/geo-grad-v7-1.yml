@@ -1,0 +1,136 @@
+name: GEO gradient tool V7.1
+
+on:
+  pull_request:
+    paths:
+      - "tools/geo_grad.c"
+      - "tests/test_geo_grad_cli.py"
+      - "include/geo/autodiff_v7.h"
+      - "src/autodiff_v7.c"
+      - "include/geo/operator_kernel.h"
+      - "src/operator_kernel.c"
+      - "CMakeLists.txt"
+      - ".github/workflows/geo-grad-v7-1.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: geo-grad-v7-1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-matrix:
+    name: ${{ matrix.compiler }} geo_grad
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure
+        env:
+          CC: ${{ matrix.compiler }}
+        run: >-
+          cmake -S . -B build/${{ matrix.compiler }}
+          -DCMAKE_BUILD_TYPE=Release
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_TOOLS=ON
+          -DGEO_USE_DOUBLE=ON
+      - name: Build tool and native runtime tests
+        run: >-
+          cmake --build build/${{ matrix.compiler }}
+          --target geo_grad test_operator_gradients test_autodiff_v7
+          --parallel
+      - name: Run tool and native runtime tests
+        run: >-
+          ctest --test-dir build/${{ matrix.compiler }}
+          --output-on-failure
+          -R "^(operator_gradients|autodiff_v7|geo_grad_cli)$"
+
+  sanitizers:
+    name: GCC ASan and UBSan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure sanitizers
+        env:
+          CC: gcc
+        run: >-
+          cmake -S . -B build/sanitizers
+          -DCMAKE_BUILD_TYPE=Debug
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_TOOLS=ON
+          -DGEO_USE_DOUBLE=ON
+          -DGEO_ENABLE_SANITIZERS=ON
+      - name: Build tool and tests
+        run: >-
+          cmake --build build/sanitizers
+          --target geo_grad test_operator_gradients test_autodiff_v7
+          --parallel
+      - name: Run under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+          UBSAN_OPTIONS: halt_on_error=1
+        run: >-
+          ctest --test-dir build/sanitizers
+          --output-on-failure
+          -R "^(operator_gradients|autodiff_v7|geo_grad_cli)$"
+
+  windows-msvc:
+    name: Windows MSVC geo_grad
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure
+        run: >-
+          cmake -S . -B build/windows
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_TOOLS=ON
+          -DGEO_USE_DOUBLE=ON
+      - name: Build tool and tests
+        run: >-
+          cmake --build build/windows
+          --config Release
+          --target geo_grad test_operator_gradients test_autodiff_v7
+          --parallel
+      - name: Run tool and native runtime tests
+        run: >-
+          ctest --test-dir build/windows
+          -C Release
+          --output-on-failure
+          -R "^(operator_gradients|autodiff_v7|geo_grad_cli)$"
+
+  full-host-regression:
+    name: Full host regression with tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure
+        env:
+          CC: gcc
+        run: >-
+          cmake -S . -B build/full
+          -DCMAKE_BUILD_TYPE=Release
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_TOOLS=ON
+          -DGEO_USE_DOUBLE=ON
+      - name: Build all host targets
+        run: cmake --build build/full --parallel 2
+      - name: Run all host tests
+        run: ctest --test-dir build/full --output-on-failure
