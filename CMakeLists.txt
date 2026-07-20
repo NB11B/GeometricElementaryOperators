@@ -117,6 +117,7 @@ if(GEO_BUILD_TESTS)
         operator_kernel
         operator_gradients
         autodiff_v7
+        geo_grad_validation_v7_2
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})
@@ -139,6 +140,13 @@ if(GEO_BUILD_TESTS)
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_geo_grad_cli.py
                     --exe $<TARGET_FILE:geo_grad>
             )
+            add_test(
+                NAME geo_grad_validation_v7_2_cli
+                COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_geo_grad_validation_v7_2.py
+                    --exe $<TARGET_FILE:geo_grad>
+            )
+            set_tests_properties(geo_grad_validation_v7_2_cli PROPERTIES TIMEOUT 300)
         endif()
     endif()
 endif()
