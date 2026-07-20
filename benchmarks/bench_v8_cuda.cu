@@ -1,5 +1,6 @@
 #include "geo/batch_gp.h"
 #include "geo/batch_gp_cuda.h"
+#include "geo/hand_cuda_comparator.h"
 
 #include <cuda_runtime.h>
 #include <chrono>
@@ -62,10 +63,14 @@ static void upload(DeviceBuffers &b, const std::vector<double> &inputs,
 static void launch(const char *backend, const char *mode, const geo_batch_gp_cuda_plan_t &plan,
                    DeviceBuffers &b, size_t batch) {
     const bool reference = std::strcmp(backend, "geo_cuda_reference") == 0;
+    const bool hand = std::strcmp(backend, "hand_cuda_same_plan") == 0;
     if (std::strcmp(mode, "inference") == 0) {
         if (reference) {
             die_geo(geo_batch_gp_cuda_reference_forward_f64(
                 &plan, b.inputs, batch, b.parameter, 0, b.outputs, 0), "reference forward");
+        } else if (hand) {
+            die_geo(geo_hand_cuda_forward_f64(
+                &plan, b.inputs, batch, b.parameter, 0, b.outputs, 0), "hand forward");
         } else {
             die_geo(geo_batch_gp_cuda_planned_forward_f64(
                 &plan, b.inputs, batch, b.parameter, 0, b.outputs, 0), "planned forward");
@@ -74,6 +79,10 @@ static void launch(const char *backend, const char *mode, const geo_batch_gp_cud
         die_geo(geo_batch_gp_cuda_reference_mse_sgd_step_f64(
             &plan, b.inputs, b.targets, batch, 0.0001, 0,
             b.parameter, b.outputs, b.gradient, b.loss, 0), "reference training step");
+    } else if (hand) {
+        die_geo(geo_hand_cuda_mse_sgd_step_f64(
+            &plan, b.inputs, b.targets, batch, 0.0001, 0,
+            b.parameter, b.outputs, b.gradient, b.loss, 0), "hand training step");
     } else {
         die_geo(geo_batch_gp_cuda_mse_sgd_step_f64(
             &plan, b.inputs, b.targets, batch, 0.0001, 0,
@@ -163,7 +172,7 @@ int main(int argc, char **argv) {
     std::printf("GEO_CUDA_DEVICE=%s capability=%d.%d\n", props.name, props.major, props.minor);
 
     const size_t batches[] = {1u, 16u, 64u, 256u, 1024u};
-    const char *backends[] = {"geo_cuda_reference", "geo_cuda_planned"};
+    const char *backends[] = {"geo_cuda_reference", "geo_cuda_planned", "hand_cuda_same_plan"};
     const char *modes[] = {"inference", "training"};
     const char *timings[] = {"resident", "transfer_compute", "end_to_end"};
 
