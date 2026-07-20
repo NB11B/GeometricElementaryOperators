@@ -18,6 +18,17 @@ def run(*args: str, cwd: Path | None = None) -> None:
     subprocess.run(args, cwd=cwd, check=True)
 
 
+def compiler_command() -> tuple[list[str], bool]:
+    raw = os.environ.get("CC", "cc")
+    raw_path = Path(raw.strip('"'))
+    if raw_path.exists():
+        compiler = [str(raw_path)]
+    else:
+        compiler = shlex.split(raw, posix=os.name != "nt")
+    executable = Path(compiler[0]).name.lower()
+    return compiler, executable in {"cl", "cl.exe"}
+
+
 def test_clpq(temp: Path) -> None:
     out = temp / "clpq"
     run(
@@ -44,19 +55,31 @@ def test_clpq(temp: Path) -> None:
         '}\n',
         encoding="utf-8",
     )
-    compiler = shlex.split(os.environ.get("CC", "cc"))
+    compiler, is_msvc = compiler_command()
     executable = out / ("test_generated.exe" if os.name == "nt" else "test_generated")
-    command = [
-        *compiler,
-        "-std=c11",
-        "-I", str(ROOT / "include"),
-        "-I", str(out),
-        str(out / "generated_cl30.c"),
-        str(test_c),
-    ]
-    if os.name != "nt":
-        command.append("-lm")
-    command.extend(["-o", str(executable)])
+    if is_msvc:
+        command = [
+            *compiler,
+            "/nologo",
+            "/std:c11",
+            f"/I{ROOT / 'include'}",
+            f"/I{out}",
+            str(out / "generated_cl30.c"),
+            str(test_c),
+            f"/Fe:{executable}",
+        ]
+    else:
+        command = [
+            *compiler,
+            "-std=c11",
+            "-I", str(ROOT / "include"),
+            "-I", str(out),
+            str(out / "generated_cl30.c"),
+            str(test_c),
+        ]
+        if os.name != "nt":
+            command.append("-lm")
+        command.extend(["-o", str(executable)])
     run(*command)
     run(str(executable))
 
