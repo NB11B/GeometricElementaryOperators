@@ -184,6 +184,9 @@ if(GEO_BUILD_BENCHMARKS)
     add_executable(bench_complete benchmarks/bench_complete.c)
     geo_link_target(bench_complete)
 
+    add_executable(bench_v8_full_cycle benchmarks/bench_v8_full_cycle.c)
+    geo_link_target(bench_v8_full_cycle)
+
     if(GEO_BUILD_TESTS)
         add_test(
             NAME selected_path_benchmark
@@ -195,6 +198,7 @@ if(GEO_BUILD_BENCHMARKS)
         target_link_options(bench_host PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_host.map")
         target_link_options(bench_compare PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_compare.map")
         target_link_options(bench_complete PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_complete.map")
+        target_link_options(bench_v8_full_cycle PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/bench_v8_full_cycle.map")
     endif()
 
     if(Python3_Interpreter_FOUND)
