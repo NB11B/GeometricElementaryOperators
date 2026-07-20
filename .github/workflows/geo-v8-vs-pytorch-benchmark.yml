@@ -1,0 +1,133 @@
+name: GEO V8 vs PyTorch CPU benchmark
+
+on:
+  pull_request:
+    paths:
+      - "benchmarks/bench_v8_full_cycle.c"
+      - "benchmarks/bench_v8_batch_gp.c"
+      - "benchmarks/bench_pytorch_full_cycle.py"
+      - "benchmarks/compare_v8_pytorch.py"
+      - "benchmarks/compare_v8_optimized.py"
+      - "benchmarks/run_cpu_benchmark_protocol.py"
+      - "benchmarks/GEO_V8_CPU_BENCHMARK_CONTRACT.md"
+      - "benchmarks/GEO_V8_GPU_PULL_RUN_TEST_PLAN.md"
+      - "include/geo/batch_gp.h"
+      - "src/batch_gp.c"
+      - "tests/test_batch_gp.c"
+      - "src/full_cycle_v8.c"
+      - "include/geo/full_cycle_v8.h"
+      - "CMakeLists.txt"
+      - ".github/workflows/geo-v8-vs-pytorch-benchmark.yml"
+  workflow_dispatch:
+
+jobs:
+  cpu-comparison:
+    runs-on: ubuntu-latest
+    env:
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+      GEO_BENCHMARK_TRIALS: "9"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PyTorch CPU
+        run: python -m pip install --upgrade pip torch
+      - name: Configure GEO release benchmark
+        env:
+          CC: gcc
+        run: |
+          mkdir -p benchmark-results
+          cat > benchmark-results/configure-command.txt <<'EOF'
+          cmake -S . -B build/bench -DCMAKE_BUILD_TYPE=Release -DGEO_BUILD_TESTS=ON -DGEO_BUILD_TOOLS=OFF -DGEO_BUILD_BENCHMARKS=ON -DGEO_USE_DOUBLE=ON
+          EOF
+          cmake -S . -B build/bench \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGEO_BUILD_TESTS=ON \
+            -DGEO_BUILD_TOOLS=OFF \
+            -DGEO_BUILD_BENCHMARKS=ON \
+            -DGEO_USE_DOUBLE=ON
+      - name: Build GEO benchmarks and batch tests
+        run: >-
+          cmake --build build/bench
+          --target bench_v8_full_cycle bench_v8_batch_gp test_batch_gp
+          --parallel 2
+      - name: Run batch correctness gate
+        run: ctest --test-dir build/bench --output-on-failure -R "^batch_gp$" | tee benchmark-results/correctness-gate.txt
+      - name: Record environment and source
+        run: |
+          {
+            echo "workflow_run_id=${GITHUB_RUN_ID}"
+            echo "workflow_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "repository=${GITHUB_REPOSITORY}"
+            echo "ref=${GITHUB_REF}"
+            echo "sha=${GITHUB_SHA}"
+            echo "runner_name=${RUNNER_NAME}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "runner_arch=${RUNNER_ARCH}"
+            echo "OMP_NUM_THREADS=${OMP_NUM_THREADS}"
+            echo "MKL_NUM_THREADS=${MKL_NUM_THREADS}"
+            echo "OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS}"
+            echo "VECLIB_MAXIMUM_THREADS=${VECLIB_MAXIMUM_THREADS}"
+            echo "NUMEXPR_NUM_THREADS=${NUMEXPR_NUM_THREADS}"
+            git status --short
+            git rev-parse HEAD
+            git branch --show-current
+            git remote -v
+            uname -a
+            lscpu
+            command -v gcc
+            gcc --version
+            command -v cmake
+            cmake --version
+            python - <<'PY'
+          import platform, torch
+          print("python", platform.python_version())
+          print("torch", torch.__version__)
+          print("torch_threads", torch.get_num_threads())
+          print("torch_interop_threads", torch.get_num_interop_threads())
+          PY
+          } | tee benchmark-results/environment.txt
+          cp build/bench/CMakeCache.txt benchmark-results/CMakeCache.txt
+          ls -lh build/bench/bench_v8_full_cycle build/bench/bench_v8_batch_gp | tee benchmark-results/executable-sizes.txt
+      - name: Run repeated matched benchmark protocol
+        run: >-
+          python benchmarks/run_cpu_benchmark_protocol.py
+          --baseline build/bench/bench_v8_full_cycle
+          --optimized build/bench/bench_v8_batch_gp
+          --pytorch-script benchmarks/bench_pytorch_full_cycle.py
+          --out-dir benchmark-results
+          --trials "${GEO_BENCHMARK_TRIALS}"
+          --cpu 2
+      - name: Render baseline comparison
+        run: >-
+          python benchmarks/compare_v8_pytorch.py
+          --geo benchmark-results/geo-baseline.csv
+          --pytorch benchmark-results/pytorch.csv
+          --csv benchmark-results/comparison-baseline.csv
+          --json benchmark-results/comparison-baseline.json
+          --markdown benchmark-results/REPORT-BASELINE.md
+      - name: Render optimized comparison
+        run: >-
+          python benchmarks/compare_v8_optimized.py
+          --baseline benchmark-results/geo-baseline.csv
+          --optimized benchmark-results/geo-optimized.csv
+          --pytorch benchmark-results/pytorch.csv
+          --csv benchmark-results/comparison-optimized.csv
+          --json benchmark-results/comparison-optimized.json
+          --markdown benchmark-results/REPORT-OPTIMIZED.md
+      - name: Preserve benchmark contracts
+        run: |
+          cp benchmarks/GEO_V8_CPU_BENCHMARK_CONTRACT.md benchmark-results/
+          cp benchmarks/GEO_V8_GPU_PULL_RUN_TEST_PLAN.md benchmark-results/
+          sha256sum benchmark-results/* > benchmark-results/SHA256SUMS.txt
+      - name: Print optimized report
+        run: cat benchmark-results/REPORT-OPTIMIZED.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geo-v8-batch-optimization-results
+          path: benchmark-results
