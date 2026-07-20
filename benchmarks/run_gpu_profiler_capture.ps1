@@ -20,8 +20,9 @@ if (-not (Test-Path $ProfileExe)) {
 
 $Nsys = Require-Command "nsys"
 $Ncu = Require-Command "ncu"
+$IsWindowsHost = $env:OS -eq "Windows_NT"
+$NsysTrace = if ($IsWindowsHost) { "cuda,nvtx" } else { "cuda,nvtx,osrt" }
 
-Remove-Item $OutDir -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 
 @(
@@ -29,6 +30,7 @@ New-Item -ItemType Directory -Force $OutDir | Out-Null
     "iterations=$Iterations",
     "nsys=$Nsys",
     "ncu=$Ncu",
+    "nsys_trace=$NsysTrace",
     "source_sha=$(git rev-parse HEAD)"
 ) | Set-Content (Join-Path $OutDir "profile-environment.txt")
 
@@ -41,46 +43,72 @@ $Cases = @(
 
 foreach ($Case in $Cases) {
     $Prefix = Join-Path $OutDir $Case.Name
-    Write-Host "Profiling $($Case.Name) with Nsight Systems"
+    $NsysReport = "$Prefix.nsys-rep"
+    $NcuReport = "$Prefix-ncu.ncu-rep"
 
-    & $Nsys profile `
-        --force-overwrite=true `
-        --trace=cuda,nvtx,osrt `
-        --sample=none `
-        --stats=true `
-        --output=$Prefix `
-        $ProfileExe `
-        $Case.Dimension `
-        $Case.Batch `
-        $Case.Backend `
-        $Case.Mode `
-        $Iterations `
-        2>&1 | Tee-Object "$Prefix-nsys.log"
+    if (Test-Path $NsysReport) {
+        Write-Host "Skipping existing Nsight Systems report for $($Case.Name)"
+    } else {
+        Write-Host "Profiling $($Case.Name) with Nsight Systems"
 
-    if ($LASTEXITCODE -ne 0) {
-        throw "Nsight Systems failed for $($Case.Name)"
+        & $Nsys profile `
+            --force-overwrite=true `
+            --trace=$NsysTrace `
+            --sample=none `
+            --stats=true `
+            --output=$Prefix `
+            $ProfileExe `
+            $Case.Dimension `
+            $Case.Batch `
+            $Case.Backend `
+            $Case.Mode `
+            $Iterations `
+            2>&1 | Tee-Object "$Prefix-nsys.log"
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Nsight Systems failed for $($Case.Name)"
+        }
     }
 
-    Write-Host "Profiling $($Case.Name) with Nsight Compute"
+    if (Test-Path $NcuReport) {
+        Write-Host "Skipping existing Nsight Compute report for $($Case.Name)"
+    } else {
+        Write-Host "Profiling $($Case.Name) with Nsight Compute"
 
-    & $Ncu `
-        --force-overwrite `
-        --set full `
-        --target-processes all `
-        --launch-skip 20 `
-        --launch-count 1 `
-        --export "$Prefix-ncu" `
-        $ProfileExe `
-        $Case.Dimension `
-        $Case.Batch `
-        $Case.Backend `
-        $Case.Mode `
-        $Iterations `
-        2>&1 | Tee-Object "$Prefix-ncu.log"
+        & $Ncu `
+            --force-overwrite `
+            --set full `
+            --target-processes all `
+            --launch-skip 20 `
+            --launch-count 1 `
+            --export "$Prefix-ncu" `
+            $ProfileExe `
+            $Case.Dimension `
+            $Case.Batch `
+            $Case.Backend `
+            $Case.Mode `
+            $Iterations `
+            2>&1 | Tee-Object "$Prefix-ncu.log"
 
-    if ($LASTEXITCODE -ne 0) {
-        throw "Nsight Compute failed for $($Case.Name)"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Nsight Compute failed for $($Case.Name)"
+        }
     }
+}
+
+$Missing = @()
+foreach ($Case in $Cases) {
+    $Prefix = Join-Path $OutDir $Case.Name
+    foreach ($Required in @("$Prefix.nsys-rep", "$Prefix-ncu.ncu-rep")) {
+        if (-not (Test-Path $Required)) {
+            $Missing += $Required
+        }
+    }
+}
+
+if ($Missing.Count -gt 0) {
+    $Missing | ForEach-Object { Write-Error "Missing profiler report: $_" }
+    throw "Profiler capture incomplete."
 }
 
 Get-ChildItem $OutDir -Recurse -File |
