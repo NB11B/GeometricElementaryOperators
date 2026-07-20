@@ -4,8 +4,13 @@ on:
   pull_request:
     paths:
       - "benchmarks/bench_v8_full_cycle.c"
+      - "benchmarks/bench_v8_batch_gp.c"
       - "benchmarks/bench_pytorch_full_cycle.py"
       - "benchmarks/compare_v8_pytorch.py"
+      - "benchmarks/compare_v8_optimized.py"
+      - "include/geo/batch_gp.h"
+      - "src/batch_gp.c"
+      - "tests/test_batch_gp.c"
       - "src/full_cycle_v8.c"
       - "include/geo/full_cycle_v8.h"
       - "CMakeLists.txt"
@@ -28,12 +33,17 @@ jobs:
         run: >-
           cmake -S . -B build/bench
           -DCMAKE_BUILD_TYPE=Release
-          -DGEO_BUILD_TESTS=OFF
+          -DGEO_BUILD_TESTS=ON
           -DGEO_BUILD_TOOLS=OFF
           -DGEO_BUILD_BENCHMARKS=ON
           -DGEO_USE_DOUBLE=ON
-      - name: Build GEO benchmark
-        run: cmake --build build/bench --target bench_v8_full_cycle --parallel 2
+      - name: Build GEO benchmarks and batch tests
+        run: >-
+          cmake --build build/bench
+          --target bench_v8_full_cycle bench_v8_batch_gp test_batch_gp
+          --parallel 2
+      - name: Run batch correctness gate
+        run: ctest --test-dir build/bench --output-on-failure -R "^batch_gp$"
       - name: Record environment
         run: |
           mkdir -p benchmark-results
@@ -45,22 +55,33 @@ jobs:
           print("torch", torch.__version__)
           print("torch_threads", torch.get_num_threads())
           PY
-          ls -lh build/bench/bench_v8_full_cycle | tee -a benchmark-results/environment.txt
-      - name: Run GEO V8 benchmark
-        run: ./build/bench/bench_v8_full_cycle benchmark-results/geo.csv
+          ls -lh build/bench/bench_v8_full_cycle build/bench/bench_v8_batch_gp | tee -a benchmark-results/environment.txt
+      - name: Run baseline GEO V8 benchmark
+        run: ./build/bench/bench_v8_full_cycle benchmark-results/geo-baseline.csv
+      - name: Run optimized batch GEO benchmark
+        run: ./build/bench/bench_v8_batch_gp benchmark-results/geo-optimized.csv
       - name: Run PyTorch eager benchmark
         run: python benchmarks/bench_pytorch_full_cycle.py --out benchmark-results/pytorch.csv
-      - name: Compare and render report
+      - name: Render original comparison
         run: >-
           python benchmarks/compare_v8_pytorch.py
-          --geo benchmark-results/geo.csv
+          --geo benchmark-results/geo-baseline.csv
           --pytorch benchmark-results/pytorch.csv
-          --csv benchmark-results/comparison.csv
-          --json benchmark-results/comparison.json
-          --markdown benchmark-results/REPORT.md
-      - name: Print report
-        run: cat benchmark-results/REPORT.md
+          --csv benchmark-results/comparison-baseline.csv
+          --json benchmark-results/comparison-baseline.json
+          --markdown benchmark-results/REPORT-BASELINE.md
+      - name: Render optimized comparison
+        run: >-
+          python benchmarks/compare_v8_optimized.py
+          --baseline benchmark-results/geo-baseline.csv
+          --optimized benchmark-results/geo-optimized.csv
+          --pytorch benchmark-results/pytorch.csv
+          --csv benchmark-results/comparison-optimized.csv
+          --json benchmark-results/comparison-optimized.json
+          --markdown benchmark-results/REPORT-OPTIMIZED.md
+      - name: Print optimized report
+        run: cat benchmark-results/REPORT-OPTIMIZED.md
       - uses: actions/upload-artifact@v4
         with:
-          name: geo-v8-vs-pytorch-cpu-results
+          name: geo-v8-batch-optimization-results
           path: benchmark-results
