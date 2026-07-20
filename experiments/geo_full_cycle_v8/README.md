@@ -81,11 +81,9 @@ python tools/geo_model.py compile model.json model.geoir
 geo_cycle check model.geoir
 geo_cycle train model.geoir train.csv checkpoint
 geo_cycle train model.geoir train.csv resumed-checkpoint checkpoint
-g eo_cycle predict model.geoir checkpoint input.csv output.csv
+geo_cycle predict model.geoir checkpoint input.csv output.csv
 geo_cycle export-c model.geoir checkpoint model.h model_symbol
 ```
-
-The extra space in `g eo_cycle` above should not be used; the actual command is `geo_cycle predict`. It is shown separately here to avoid accidental command execution in rendered documentation.
 
 ## Examples
 
