@@ -1,0 +1,66 @@
+name: GEO V8 vs PyTorch CPU benchmark
+
+on:
+  pull_request:
+    paths:
+      - "benchmarks/bench_v8_full_cycle.c"
+      - "benchmarks/bench_pytorch_full_cycle.py"
+      - "benchmarks/compare_v8_pytorch.py"
+      - "src/full_cycle_v8.c"
+      - "include/geo/full_cycle_v8.h"
+      - "CMakeLists.txt"
+      - ".github/workflows/geo-v8-vs-pytorch-benchmark.yml"
+  workflow_dispatch:
+
+jobs:
+  cpu-comparison:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PyTorch CPU
+        run: python -m pip install --upgrade pip torch
+      - name: Configure GEO release benchmark
+        env:
+          CC: gcc
+        run: >-
+          cmake -S . -B build/bench
+          -DCMAKE_BUILD_TYPE=Release
+          -DGEO_BUILD_TESTS=OFF
+          -DGEO_BUILD_TOOLS=OFF
+          -DGEO_BUILD_BENCHMARKS=ON
+          -DGEO_USE_DOUBLE=ON
+      - name: Build GEO benchmark
+        run: cmake --build build/bench --target bench_v8_full_cycle --parallel 2
+      - name: Record environment
+        run: |
+          mkdir -p benchmark-results
+          uname -a | tee benchmark-results/environment.txt
+          lscpu | tee -a benchmark-results/environment.txt
+          python - <<'PY' | tee -a benchmark-results/environment.txt
+          import platform, torch
+          print("python", platform.python_version())
+          print("torch", torch.__version__)
+          print("torch_threads", torch.get_num_threads())
+          PY
+          ls -lh build/bench/bench_v8_full_cycle | tee -a benchmark-results/environment.txt
+      - name: Run GEO V8 benchmark
+        run: ./build/bench/bench_v8_full_cycle benchmark-results/geo.csv
+      - name: Run PyTorch eager benchmark
+        run: python benchmarks/bench_pytorch_full_cycle.py --out benchmark-results/pytorch.csv
+      - name: Compare and render report
+        run: >-
+          python benchmarks/compare_v8_pytorch.py
+          --geo benchmark-results/geo.csv
+          --pytorch benchmark-results/pytorch.csv
+          --csv benchmark-results/comparison.csv
+          --json benchmark-results/comparison.json
+          --markdown benchmark-results/REPORT.md
+      - name: Print report
+        run: cat benchmark-results/REPORT.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geo-v8-vs-pytorch-cpu-results
+          path: benchmark-results
