@@ -359,7 +359,8 @@ static geo_v8_status_t v8_reserve_one(
     if (program->node_count == program->node_capacity) {
         next_capacity = program->node_capacity == 0u ? 16u :
             (size_t)program->node_capacity * 2u;
-        if (next_capacity <= (size_t)program->node_capacity) {
+        if (next_capacity <= (size_t)program->node_capacity ||
+            next_capacity > (size_t)UINT32_MAX) {
             return GEO_V8_ALLOCATION_FAILURE;
         }
         status = geo_v8_program_reserve(program, next_capacity);
@@ -741,7 +742,7 @@ geo_v8_status_t geo_v8_backward(
     cursor = program->node_count;
     while (cursor > 0u) {
         geo_v8_node_t *node;
-        const geo_v8_node_kind_t kind;
+        geo_v8_node_kind_t kind;
         --cursor;
         node = &program->nodes[cursor];
         kind = (geo_v8_node_kind_t)node->kind;
