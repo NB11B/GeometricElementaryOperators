@@ -16,6 +16,7 @@ get_filename_component(GEO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 add_library(geo_v8_cuda STATIC
     "${GEO_ROOT}/src/batch_gp.c"
     "${GEO_ROOT}/src/batch_gp_cuda.cu"
+    "${GEO_ROOT}/src/hand_cuda_comparator.cu"
 )
 
 target_include_directories(geo_v8_cuda PUBLIC "${GEO_ROOT}/include")
