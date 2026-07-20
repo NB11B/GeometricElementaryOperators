@@ -67,10 +67,19 @@ def main() -> int:
         "",
         "Matched float64 CPU workloads, one thread. The optimized path precomputes blade routing/signs and executes batch-major native forward/VJP/SGD kernels.",
         "",
+        "## Primary aggregate results",
+        "",
         f"- Optimized GEO / baseline GEO inference geometric mean: **{geomean(inf_gain):.2f}x**",
         f"- Optimized GEO / baseline GEO training geometric mean: **{geomean(train_gain):.2f}x**",
-        f"- Optimized GEO / PyTorch inference geometric mean: **{geomean(inf_opt):.2f}x**",
-        f"- Optimized GEO / PyTorch training geometric mean: **{geomean(train_opt):.2f}x**",
+        f"- Optimized GEO / PyTorch eager inference geometric mean: **{geomean(inf_opt):.2f}x**",
+        f"- Optimized GEO / PyTorch eager training geometric mean: **{geomean(train_opt):.2f}x**",
+        "",
+        "## Complete-matrix range",
+        "",
+        f"- Optimized GEO / PyTorch eager inference minimum: **{min(inf_opt):.2f}x**; maximum: **{max(inf_opt):.2f}x**",
+        f"- Optimized GEO / PyTorch eager training minimum: **{min(train_opt):.2f}x**; maximum: **{max(train_opt):.2f}x**",
+        "",
+        "Peak ratios are secondary observations and must not replace geometric means in summaries.",
         "",
         "| Mode | n | Batch | Baseline GEO/s | Optimized GEO/s | PyTorch/s | Opt/Base | Opt/PyTorch |",
         "|---|---:|---:|---:|---:|---:|---:|---:|",
@@ -87,14 +96,14 @@ def main() -> int:
     lines += ["", "## Dimension-6 training crossover"]
     for row in n6_train:
         lines.append(
-            f"- batch {row['batch']}: optimized GEO / PyTorch = "
+            f"- batch {row['batch']}: optimized GEO / PyTorch eager = "
             f"**{float(row['optimized_over_pytorch']):.2f}x**"
         )
     lines += [
         "",
         "## Claim boundary",
         "",
-        "This tests one specialized geometric-product/MSE/SGD path. It does not establish universal speedup for arbitrary V8 graphs, GPUs, compiled PyTorch, or vendor-tuned kernels.",
+        "This is a CPU benchmark against PyTorch eager for one specialized geometric-product/MSE/SGD path. It does not establish universal speedup for arbitrary V8 graphs, GPUs, torch.compile, JAX/XLA, oneDNN-tuned kernels, or hand-written C++/CUDA. Workload semantics, precision, thread counts, reduction rules, and timing classes must remain matched.",
     ]
     args.markdown.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(
