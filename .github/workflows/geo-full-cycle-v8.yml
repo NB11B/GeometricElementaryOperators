@@ -1,0 +1,173 @@
+name: GEO full-cycle V8
+
+on:
+  pull_request:
+    paths:
+      - "include/geo/full_cycle_v8.h"
+      - "src/full_cycle_v8.c"
+      - "tools/geo_model.py"
+      - "tools/geo_cycle*.c"
+      - "tools/geo_cycle_internal.h"
+      - "tests/test_full_cycle_v8.c"
+      - "tests/test_geo_cycle_v8.py"
+      - "examples/geo_v8/**"
+      - "experiments/geo_full_cycle_v8/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/geo-full-cycle-v8.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: geo-full-cycle-v8-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-matrix:
+    name: ${{ matrix.compiler }} ${{ matrix.build_type }} V8
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        build_type: [Release, Debug]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure
+        env:
+          CC: ${{ matrix.compiler }}
+        run: >-
+          cmake -S . -B build/${{ matrix.compiler }}-${{ matrix.build_type }}
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_TOOLS=ON
+          -DGEO_USE_DOUBLE=ON
+      - name: Build V8 and native regression targets
+        run: >-
+          cmake --build build/${{ matrix.compiler }}-${{ matrix.build_type }}
+          --target geo_cycle test_full_cycle_v8 test_geo_grad_validation_v7_2
+          test_autodiff_v7 test_operator_gradients
+          --parallel 2
+      - name: Run V8 and native regression tests
+        run: >-
+          ctest --test-dir build/${{ matrix.compiler }}-${{ matrix.build_type }}
+          --output-on-failure
+          -R "^(operator_gradients|autodiff_v7|geo_grad_validation_v7_2|full_cycle_v8|geo_cycle_v8_cli)$"
+      - name: Compile and check examples
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/examples
+          for model in examples/geo_v8/*.json; do
+            stem="$(basename "$model" .json)"
+            python tools/geo_model.py validate "$model"
+            python tools/geo_model.py compile "$model" "build/examples/${stem}.geoir"
+            "build/${{ matrix.compiler }}-${{ matrix.build_type }}/geo_cycle" check "build/examples/${stem}.geoir"
+          done
+
+  sanitizers:
+    name: GCC ASan UBSan V8
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure sanitizers
+        env:
+          CC: gcc
+        run: >-
+          cmake -S . -B build/sanitizers
+          -DCMAKE_BUILD_TYPE=Debug
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_TOOLS=ON
+          -DGEO_USE_DOUBLE=ON
+          -DGEO_ENABLE_SANITIZERS=ON
+      - name: Build V8 targets
+        run: >-
+          cmake --build build/sanitizers
+          --target geo_cycle test_full_cycle_v8
+          --parallel 2
+      - name: Run under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: >-
+          ctest --test-dir build/sanitizers
+          --output-on-failure
+          -R "^(full_cycle_v8|geo_cycle_v8_cli)$"
+
+  valgrind:
+    name: Valgrind V8 runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Valgrind
+        run: sudo apt-get update && sudo apt-get install -y valgrind
+      - name: Configure
+        env:
+          CC: gcc
+        run: >-
+          cmake -S . -B build/valgrind
+          -DCMAKE_BUILD_TYPE=Debug
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_TOOLS=ON
+      - name: Build V8 core test
+        run: cmake --build build/valgrind --target test_full_cycle_v8 --parallel 2
+      - name: Run Valgrind
+        run: >-
+          valgrind --error-exitcode=99 --leak-check=full --show-leak-kinds=all
+          ./build/valgrind/test_full_cycle_v8
+
+  windows-msvc:
+    name: Windows MSVC V8
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure
+        run: >-
+          cmake -S . -B build/windows
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_TOOLS=ON
+          -DGEO_USE_DOUBLE=ON
+      - name: Build V8 targets
+        run: >-
+          cmake --build build/windows
+          --config Release
+          --target geo_cycle test_full_cycle_v8
+          --parallel 2
+      - name: Run V8 tests
+        run: >-
+          ctest --test-dir build/windows -C Release --output-on-failure
+          -R "^(full_cycle_v8|geo_cycle_v8_cli)$"
+
+  full-host-regression:
+    name: Full host regression V8
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure
+        env:
+          CC: gcc
+        run: >-
+          cmake -S . -B build/full
+          -DCMAKE_BUILD_TYPE=Release
+          -DGEO_BUILD_TESTS=ON
+          -DGEO_BUILD_BENCHMARKS=OFF
+          -DGEO_BUILD_TOOLS=ON
+          -DGEO_USE_DOUBLE=ON
+      - name: Build all host targets
+        run: cmake --build build/full --parallel 2
+      - name: Run complete host suite
+        run: ctest --test-dir build/full --output-on-failure

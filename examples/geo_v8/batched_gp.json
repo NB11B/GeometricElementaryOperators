@@ -1,0 +1,31 @@
+{
+  "version": 8,
+  "dimension": 2,
+  "signature": [1, 1],
+  "seed": 7,
+  "nodes": [
+    {"name": "x", "op": "input"},
+    {"name": "target", "op": "target"},
+    {"name": "weight", "op": "parameter", "init": "zeros"},
+    {"name": "prediction", "op": "gp", "inputs": ["x", "weight"]},
+    {"name": "negative_target", "op": "scale", "input": "target", "scalar": -1.0},
+    {"name": "residual", "op": "add", "inputs": ["prediction", "negative_target"]},
+    {"name": "loss", "op": "squared_norm", "input": "residual"}
+  ],
+  "loss": "loss",
+  "output": "prediction",
+  "optimizer": {
+    "type": "adam",
+    "learning_rate": 0.03
+  },
+  "training": {
+    "epochs": 100,
+    "batch_size": 16
+  },
+  "dataset": {
+    "reset_column": false
+  },
+  "metadata": {
+    "description": "Batched multivector geometric-product learner"
+  }
+}

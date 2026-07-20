@@ -1,0 +1,42 @@
+{
+  "version": 8,
+  "dimension": 2,
+  "signature": [1, 1],
+  "seed": 11,
+  "nodes": [
+    {"name": "token", "op": "input"},
+    {"name": "target", "op": "target"},
+    {"name": "memory", "op": "state", "init": "zeros"},
+    {"name": "input_weight", "op": "parameter", "init": "random:11:0.05"},
+    {"name": "memory_weight", "op": "parameter", "init": "random:13:0.05"},
+    {"name": "output_weight", "op": "parameter", "init": "random:17:0.05"},
+    {"name": "input_path", "op": "gp", "inputs": ["token", "input_weight"]},
+    {"name": "memory_path", "op": "gp", "inputs": ["memory", "memory_weight"]},
+    {"name": "preactivation", "op": "add", "inputs": ["input_path", "memory_path"]},
+    {"name": "next_memory", "op": "tanh", "input": "preactivation"},
+    {"name": "prediction", "op": "gp", "inputs": ["next_memory", "output_weight"]},
+    {"name": "negative_target", "op": "scale", "input": "target", "scalar": -1.0},
+    {"name": "residual", "op": "add", "inputs": ["prediction", "negative_target"]},
+    {"name": "loss", "op": "squared_norm", "input": "residual"}
+  ],
+  "loss": "loss",
+  "output": "prediction",
+  "state_updates": {
+    "memory": "next_memory"
+  },
+  "optimizer": {
+    "type": "adam",
+    "learning_rate": 0.01
+  },
+  "training": {
+    "epochs": 200,
+    "batch_size": 1,
+    "reset_state_each_epoch": true
+  },
+  "dataset": {
+    "reset_column": true
+  },
+  "metadata": {
+    "description": "Stateful geometric grammar cell with truncated one-step recurrence"
+  }
+}
