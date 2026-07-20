@@ -41,6 +41,14 @@ static void compare(const std::vector<double> &expected, const std::vector<doubl
     std::printf("%s max_abs=%.3e\n", label, max_abs);
 }
 
+static void compare_loss(double expected, double loss_sum, size_t batch, const char *label) {
+    const double actual = loss_sum / (double)batch;
+    if (std::fabs(expected - actual) > 1.0e-9 * (1.0 + std::fabs(expected))) {
+        std::fprintf(stderr, "%s mismatch expected=%.17g actual=%.17g\n", label, expected, actual);
+        std::exit(9);
+    }
+}
+
 int main(void) {
     const size_t batches[] = {1u, 16u, 64u, 256u};
     size_t cases = 0u;
@@ -94,43 +102,57 @@ int main(void) {
                     check_cuda(cudaMemcpy(d_inputs, inputs.data(), count * sizeof(double), cudaMemcpyHostToDevice), "copy inputs");
                     check_cuda(cudaMemcpy(d_targets, targets.data(), count * sizeof(double), cudaMemcpyHostToDevice), "copy targets");
                     check_cuda(cudaMemcpy(d_cotangents, cotangents.data(), count * sizeof(double), cudaMemcpyHostToDevice), "copy cotangents");
-                    check_cuda(cudaMemcpy(d_parameter, parameter.data(), blades * sizeof(double), cudaMemcpyHostToDevice), "copy parameter");
 
+                    check_cuda(cudaMemcpy(d_parameter, parameter.data(), blades * sizeof(double), cudaMemcpyHostToDevice), "copy parameter");
                     check_status(geo_batch_gp_cuda_reference_forward_f64(&device_plan, d_inputs, batch, d_parameter,
                         parameter_on_left, d_outputs, 0), "reference forward");
-                    check_cuda(cudaDeviceSynchronize(), "sync reference");
+                    check_cuda(cudaDeviceSynchronize(), "sync reference forward");
                     std::vector<double> gpu_reference(count);
-                    check_cuda(cudaMemcpy(gpu_reference.data(), d_outputs, count * sizeof(double), cudaMemcpyDeviceToHost), "copy reference");
+                    check_cuda(cudaMemcpy(gpu_reference.data(), d_outputs, count * sizeof(double), cudaMemcpyDeviceToHost), "copy reference forward");
                     compare(cpu_forward, gpu_reference, "cuda_reference_forward");
 
                     check_status(geo_batch_gp_cuda_planned_forward_f64(&device_plan, d_inputs, batch, d_parameter,
                         parameter_on_left, d_outputs, 0), "planned forward");
-                    check_cuda(cudaDeviceSynchronize(), "sync planned");
+                    check_cuda(cudaDeviceSynchronize(), "sync planned forward");
                     std::vector<double> gpu_forward(count);
-                    check_cuda(cudaMemcpy(gpu_forward.data(), d_outputs, count * sizeof(double), cudaMemcpyDeviceToHost), "copy planned");
+                    check_cuda(cudaMemcpy(gpu_forward.data(), d_outputs, count * sizeof(double), cudaMemcpyDeviceToHost), "copy planned forward");
                     compare(cpu_forward, gpu_forward, "cuda_planned_forward");
 
-                    check_status(geo_batch_gp_cuda_parameter_vjp_f64(&device_plan, d_inputs, d_cotangents, batch,
-                        parameter_on_left, d_gradient, 0), "parameter vjp");
-                    check_cuda(cudaDeviceSynchronize(), "sync vjp");
-                    std::vector<double> gpu_gradient(blades);
-                    check_cuda(cudaMemcpy(gpu_gradient.data(), d_gradient, blades * sizeof(double), cudaMemcpyDeviceToHost), "copy gradient");
-                    compare(cpu_gradient, gpu_gradient, "cuda_parameter_vjp");
+                    check_status(geo_batch_gp_cuda_reference_parameter_vjp_f64(&device_plan, d_inputs, d_cotangents, batch,
+                        parameter_on_left, d_gradient, 0), "reference vjp");
+                    check_cuda(cudaDeviceSynchronize(), "sync reference vjp");
+                    std::vector<double> gpu_reference_gradient(blades);
+                    check_cuda(cudaMemcpy(gpu_reference_gradient.data(), d_gradient, blades * sizeof(double), cudaMemcpyDeviceToHost), "copy reference gradient");
+                    compare(cpu_gradient, gpu_reference_gradient, "cuda_reference_parameter_vjp");
 
-                    check_cuda(cudaMemcpy(d_parameter, parameter.data(), blades * sizeof(double), cudaMemcpyHostToDevice), "reset parameter");
+                    check_status(geo_batch_gp_cuda_parameter_vjp_f64(&device_plan, d_inputs, d_cotangents, batch,
+                        parameter_on_left, d_gradient, 0), "planned vjp");
+                    check_cuda(cudaDeviceSynchronize(), "sync planned vjp");
+                    std::vector<double> gpu_gradient(blades);
+                    check_cuda(cudaMemcpy(gpu_gradient.data(), d_gradient, blades * sizeof(double), cudaMemcpyDeviceToHost), "copy planned gradient");
+                    compare(cpu_gradient, gpu_gradient, "cuda_planned_parameter_vjp");
+
+                    check_cuda(cudaMemcpy(d_parameter, parameter.data(), blades * sizeof(double), cudaMemcpyHostToDevice), "reset reference parameter");
+                    check_status(geo_batch_gp_cuda_reference_mse_sgd_step_f64(&device_plan, d_inputs, d_targets, batch, 0.001,
+                        parameter_on_left, d_parameter, d_outputs, d_gradient, d_loss, 0), "reference mse sgd");
+                    check_cuda(cudaDeviceSynchronize(), "sync reference sgd");
+                    std::vector<double> gpu_reference_parameter(blades);
+                    double gpu_reference_loss_sum = 0.0;
+                    check_cuda(cudaMemcpy(gpu_reference_parameter.data(), d_parameter, blades * sizeof(double), cudaMemcpyDeviceToHost), "copy reference parameter");
+                    check_cuda(cudaMemcpy(&gpu_reference_loss_sum, d_loss, sizeof(double), cudaMemcpyDeviceToHost), "copy reference loss");
+                    compare(cpu_parameter, gpu_reference_parameter, "cuda_reference_mse_sgd_parameter");
+                    compare_loss(cpu_loss, gpu_reference_loss_sum, batch, "cuda_reference_loss");
+
+                    check_cuda(cudaMemcpy(d_parameter, parameter.data(), blades * sizeof(double), cudaMemcpyHostToDevice), "reset planned parameter");
                     check_status(geo_batch_gp_cuda_mse_sgd_step_f64(&device_plan, d_inputs, d_targets, batch, 0.001,
-                        parameter_on_left, d_parameter, d_outputs, d_gradient, d_loss, 0), "mse sgd");
-                    check_cuda(cudaDeviceSynchronize(), "sync sgd");
+                        parameter_on_left, d_parameter, d_outputs, d_gradient, d_loss, 0), "planned mse sgd");
+                    check_cuda(cudaDeviceSynchronize(), "sync planned sgd");
                     std::vector<double> gpu_parameter(blades);
                     double gpu_loss_sum = 0.0;
-                    check_cuda(cudaMemcpy(gpu_parameter.data(), d_parameter, blades * sizeof(double), cudaMemcpyDeviceToHost), "copy updated parameter");
-                    check_cuda(cudaMemcpy(&gpu_loss_sum, d_loss, sizeof(double), cudaMemcpyDeviceToHost), "copy loss");
-                    compare(cpu_parameter, gpu_parameter, "cuda_mse_sgd_parameter");
-                    const double gpu_mean_loss = gpu_loss_sum / (double)batch;
-                    if (std::fabs(cpu_loss - gpu_mean_loss) > 1.0e-9 * (1.0 + std::fabs(cpu_loss))) {
-                        std::fprintf(stderr, "loss mismatch cpu=%.17g gpu=%.17g\n", cpu_loss, gpu_mean_loss);
-                        return 9;
-                    }
+                    check_cuda(cudaMemcpy(gpu_parameter.data(), d_parameter, blades * sizeof(double), cudaMemcpyDeviceToHost), "copy planned parameter");
+                    check_cuda(cudaMemcpy(&gpu_loss_sum, d_loss, sizeof(double), cudaMemcpyDeviceToHost), "copy planned loss");
+                    compare(cpu_parameter, gpu_parameter, "cuda_planned_mse_sgd_parameter");
+                    compare_loss(cpu_loss, gpu_loss_sum, batch, "cuda_planned_loss");
 
                     cudaFree(d_inputs); cudaFree(d_targets); cudaFree(d_cotangents); cudaFree(d_parameter);
                     cudaFree(d_outputs); cudaFree(d_gradient); cudaFree(d_loss);
@@ -140,6 +162,6 @@ int main(void) {
             geo_batch_gp_cuda_plan_destroy(&device_plan);
         }
     }
-    std::printf("GEO_V8_CUDA_CORRECTNESS: PASS cases=%zu dimensions=2-6 batches=1,16,64,256 sides=2\n", cases);
+    std::printf("GEO_V8_CUDA_CORRECTNESS: PASS cases=%zu dimensions=2-6 batches=1,16,64,256 sides=2 reference_and_planned=1\n", cases);
     return 0;
 }
