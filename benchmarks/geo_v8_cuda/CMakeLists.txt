@@ -35,15 +35,15 @@ endif()
 
 add_executable(test_v8_cuda_correctness "${GEO_ROOT}/tests/test_batch_gp_cuda.cu")
 target_link_libraries(test_v8_cuda_correctness PRIVATE geo_v8_cuda)
-set_target_properties(test_v8_cuda_correctness PROPERTIES
-    CUDA_RUNTIME_LIBRARY Shared
-)
+set_target_properties(test_v8_cuda_correctness PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
 
 add_executable(bench_v8_cuda "${GEO_ROOT}/benchmarks/bench_v8_cuda.cu")
 target_link_libraries(bench_v8_cuda PRIVATE geo_v8_cuda)
-set_target_properties(bench_v8_cuda PROPERTIES
-    CUDA_RUNTIME_LIBRARY Shared
-)
+set_target_properties(bench_v8_cuda PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
+
+add_executable(profile_v8_cuda "${GEO_ROOT}/benchmarks/profile_v8_cuda.cu")
+target_link_libraries(profile_v8_cuda PRIVATE geo_v8_cuda)
+set_target_properties(profile_v8_cuda PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
 
 enable_testing()
 add_test(NAME v8_cuda_correctness COMMAND test_v8_cuda_correctness)
