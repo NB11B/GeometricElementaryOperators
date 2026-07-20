@@ -6,7 +6,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <string>
 #include <vector>
 
 static void die_cuda(cudaError_t status, const char *what) {
@@ -62,25 +61,37 @@ static void upload(DeviceBuffers &b, const std::vector<double> &inputs,
 
 static void launch(const char *backend, const char *mode, const geo_batch_gp_cuda_plan_t &plan,
                    DeviceBuffers &b, size_t batch) {
+    const bool reference = std::strcmp(backend, "geo_cuda_reference") == 0;
     if (std::strcmp(mode, "inference") == 0) {
-        if (std::strcmp(backend, "geo_cuda_reference") == 0) {
-            die_geo(geo_batch_gp_cuda_reference_forward_f64(&plan, b.inputs, batch, b.parameter, 0, b.outputs, 0), "reference forward");
+        if (reference) {
+            die_geo(geo_batch_gp_cuda_reference_forward_f64(
+                &plan, b.inputs, batch, b.parameter, 0, b.outputs, 0), "reference forward");
         } else {
-            die_geo(geo_batch_gp_cuda_planned_forward_f64(&plan, b.inputs, batch, b.parameter, 0, b.outputs, 0), "planned forward");
+            die_geo(geo_batch_gp_cuda_planned_forward_f64(
+                &plan, b.inputs, batch, b.parameter, 0, b.outputs, 0), "planned forward");
         }
+    } else if (reference) {
+        die_geo(geo_batch_gp_cuda_reference_mse_sgd_step_f64(
+            &plan, b.inputs, b.targets, batch, 0.0001, 0,
+            b.parameter, b.outputs, b.gradient, b.loss, 0), "reference training step");
     } else {
-        die_geo(geo_batch_gp_cuda_mse_sgd_step_f64(&plan, b.inputs, b.targets, batch, 0.0001, 0,
-            b.parameter, b.outputs, b.gradient, b.loss, 0), "training step");
+        die_geo(geo_batch_gp_cuda_mse_sgd_step_f64(
+            &plan, b.inputs, b.targets, batch, 0.0001, 0,
+            b.parameter, b.outputs, b.gradient, b.loss, 0), "planned training step");
     }
 }
 
-static double checksum(DeviceBuffers &b, size_t values, size_t blades, const char *mode) {
+static double checksum_values(const std::vector<double> &values) {
+    double sum = 0.0;
+    for (size_t i = 0; i < values.size(); ++i) sum += values[i] * (double)(i + 1u);
+    return sum;
+}
+
+static double checksum_device(DeviceBuffers &b, size_t values, size_t blades, const char *mode) {
     std::vector<double> host(std::strcmp(mode, "inference") == 0 ? values : blades);
     const double *source = std::strcmp(mode, "inference") == 0 ? b.outputs : b.parameter;
     die_cuda(cudaMemcpy(host.data(), source, host.size() * sizeof(double), cudaMemcpyDeviceToHost), "checksum copy");
-    double sum = 0.0;
-    for (size_t i = 0; i < host.size(); ++i) sum += host[i] * (double)(i + 1u);
-    return sum;
+    return checksum_values(host);
 }
 
 static double resident_seconds(const char *backend, const char *mode,
@@ -117,7 +128,8 @@ static double transfer_seconds(const char *backend, const char *mode,
 static double end_to_end_seconds(const char *backend, const char *mode,
                                  const geo_batch_gp_cuda_plan_t &plan,
                                  const std::vector<double> &inputs, const std::vector<double> &targets,
-                                 const std::vector<double> &parameter, size_t batch, int iterations) {
+                                 const std::vector<double> &parameter, size_t batch, int iterations,
+                                 double *checksum_out) {
     const size_t values = inputs.size();
     const size_t blades = parameter.size();
     std::vector<double> result(std::strcmp(mode, "inference") == 0 ? values : blades);
@@ -131,6 +143,7 @@ static double end_to_end_seconds(const char *backend, const char *mode,
         free_buffers(b);
     }
     die_cuda(cudaDeviceSynchronize(), "end-to-end sync");
+    *checksum_out = checksum_values(result);
     return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
 
@@ -145,9 +158,8 @@ int main(int argc, char **argv) {
     if (out == nullptr) return 1;
     std::fprintf(out, "backend,mode,timing_class,dimension,batch,samples_per_second,checksum\n");
 
-    int device = 0;
     cudaDeviceProp props{};
-    die_cuda(cudaGetDeviceProperties(&props, device), "device properties");
+    die_cuda(cudaGetDeviceProperties(&props, 0), "device properties");
     std::printf("GEO_CUDA_DEVICE=%s capability=%d.%d\n", props.name, props.major, props.minor);
 
     const size_t batches[] = {1u, 16u, 64u, 256u, 1024u};
@@ -172,22 +184,25 @@ int main(int argc, char **argv) {
             }
             for (size_t i = 0; i < blades; ++i) parameter[i] = deterministic_value(i, dimension + 5);
             DeviceBuffers b = allocate_buffers(values, blades);
-            upload(b, inputs, targets, parameter);
 
             for (const char *backend : backends) {
                 for (const char *mode : modes) {
                     for (const char *timing : timings) {
                         upload(b, inputs, targets, parameter);
                         double seconds = 0.0;
+                        double sum = 0.0;
                         if (std::strcmp(timing, "resident") == 0) {
                             seconds = resident_seconds(backend, mode, plan, b, batch, iterations);
+                            sum = checksum_device(b, values, blades, mode);
                         } else if (std::strcmp(timing, "transfer_compute") == 0) {
-                            seconds = transfer_seconds(backend, mode, plan, b, inputs, targets, parameter, batch, iterations);
+                            seconds = transfer_seconds(backend, mode, plan, b,
+                                inputs, targets, parameter, batch, iterations);
+                            sum = checksum_device(b, values, blades, mode);
                         } else {
-                            seconds = end_to_end_seconds(backend, mode, plan, inputs, targets, parameter, batch, iterations);
+                            seconds = end_to_end_seconds(backend, mode, plan,
+                                inputs, targets, parameter, batch, iterations, &sum);
                         }
                         const double rate = (double)(batch * (size_t)iterations) / seconds;
-                        const double sum = checksum(b, values, blades, mode);
                         std::fprintf(out, "%s,%s,%s,%u,%zu,%.17g,%.17g\n",
                             backend, mode, timing, (unsigned)dimension, batch, rate, sum);
                     }
