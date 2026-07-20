@@ -49,17 +49,20 @@ def truth_vector(n: int) -> list[float]:
     return [((i * 17 + n * 11) % 23 - 11) / 13.0 for i in range(1 << n)]
 
 
-def write_dataset(path: pathlib.Path, n: int, q: int, side: str) -> list[float]:
+def write_dataset(path: pathlib.Path, input_path: pathlib.Path, n: int, q: int, side: str) -> list[float]:
     sig = [1] * (n - q) + [-1] * q
     count = 1 << n
     truth = truth_vector(n)
     rows = []
+    input_rows = []
     for basis in range(count):
         x = [0.0] * count
         x[basis] = 1.0
         y = gp(x, truth, sig) if side == "right" else gp(truth, x, sig)
         rows.append(",".join(format(v, ".17g") for v in x + y))
+        input_rows.append(",".join(format(v, ".17g") for v in x))
     path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    input_path.write_text("\n".join(input_rows) + "\n", encoding="utf-8")
     return truth
 
 
@@ -86,19 +89,26 @@ def exhaustive_matrix(exe: pathlib.Path, root: pathlib.Path) -> int:
         for q in range(n + 1):
             for side in ("left", "right"):
                 stem = f"cl_{n-q}_{q}_{side}"
-                model, data = root / f"{stem}.geo", root / f"{stem}.csv"
+                model, data, inputs = root / f"{stem}.geo", root / f"{stem}.csv", root / f"{stem}.input.csv"
                 checkpoint, predictions, header = root / f"{stem}.checkpoint", root / f"{stem}.pred.csv", root / f"{stem}.h"
                 write_model(model, n, q, side)
-                truth = write_dataset(data, n, q, side)
+                truth = write_dataset(data, inputs, n, q, side)
                 if "GEO_GRAD_CHECK: PASS" not in run(exe, "check", str(model)).stdout:
                     raise AssertionError(stem)
                 if "GEO_GRAD_TRAIN: PASS" not in run(exe, "train", str(model), str(data), str(checkpoint)).stdout:
                     raise AssertionError(stem)
                 coeffs = [float(v) for v in parse_checkpoint(checkpoint)["coefficients"].split(",")]
                 assert_close(coeffs, truth)
-                run(exe, "predict", str(model), str(checkpoint), str(data), str(predictions))
-                if len(predictions.read_text(encoding="utf-8").strip().splitlines()) != 1 << n:
+                run(exe, "predict", str(model), str(checkpoint), str(inputs), str(predictions))
+                predicted_rows = [[float(v) for v in line.split(",")] for line in predictions.read_text(encoding="utf-8").strip().splitlines()]
+                if len(predicted_rows) != 1 << n:
                     raise AssertionError(stem)
+                sig = [1] * (n - q) + [-1] * q
+                for basis, predicted in enumerate(predicted_rows):
+                    x = [0.0] * (1 << n)
+                    x[basis] = 1.0
+                    expected = gp(x, truth, sig) if side == "right" else gp(truth, x, sig)
+                    assert_close(predicted, expected)
                 run(exe, "export-c", str(model), str(checkpoint), str(header), f"geo_{n}_{q}_{side}")
                 text = header.read_text(encoding="utf-8")
                 if "static const double" not in text or f"BLADE_COUNT {1 << n}u" not in text:
@@ -110,9 +120,10 @@ def exhaustive_matrix(exe: pathlib.Path, root: pathlib.Path) -> int:
 def adversarial_cases(exe: pathlib.Path, root: pathlib.Path) -> int:
     valid = root / "valid.geo"
     data = root / "valid.csv"
+    inputs = root / "valid.input.csv"
     checkpoint = root / "valid.checkpoint"
     write_model(valid, 2, 0, "right")
-    write_dataset(data, 2, 0, "right")
+    write_dataset(data, inputs, 2, 0, "right")
     run(exe, "train", str(valid), str(data), str(checkpoint))
     bad_models = {
         "empty": "", "missing_dimension": "version=7.1\nmodel=multivector_gp\nsignature=1,1\n",
@@ -138,7 +149,7 @@ def adversarial_cases(exe: pathlib.Path, root: pathlib.Path) -> int:
     bad_datasets = {
         "empty": "", "short": "1,0,0\n", "long": "1,0,0,0,0,0,0,0,9\n",
         "nan": "1,0,nan,0,0,0,0,0\n", "inf": "1,0,inf,0,0,0,0,0\n",
-        "text": "hello,world\n", "trailing_comma": "1,0,0,0,0,0,0,0,\n",
+        "text": "hello,world\n", "embedded_text": "1,0,0,0,0,0,0,nope\n",
     }
     for name, text in bad_datasets.items():
         path = root / f"bad_{name}.csv"
@@ -166,9 +177,9 @@ def adversarial_cases(exe: pathlib.Path, root: pathlib.Path) -> int:
 
 
 def deterministic_replay(exe: pathlib.Path, root: pathlib.Path) -> None:
-    model, data = root / "det.geo", root / "det.csv"
+    model, data, inputs = root / "det.geo", root / "det.csv", root / "det.input.csv"
     write_model(model, 4, 2, "left", optimizer="adam", epochs=40)
-    write_dataset(data, 4, 2, "left")
+    write_dataset(data, inputs, 4, 2, "left")
     a, b = root / "a.checkpoint", root / "b.checkpoint"
     run(exe, "train", str(model), str(data), str(a))
     run(exe, "train", str(model), str(data), str(b))
