@@ -42,6 +42,7 @@ add_library(geo_kernel STATIC
     src/native_generated.c
     src/operator_kernel.c
     src/autodiff_v7.c
+    src/full_cycle_v8.c
 )
 
 target_include_directories(geo_kernel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -85,6 +86,18 @@ find_package(Python3 COMPONENTS Interpreter)
 if(GEO_BUILD_TOOLS)
     add_executable(geo_grad tools/geo_grad.c)
     geo_link_target(geo_grad)
+
+    add_executable(geo_cycle
+        tools/geo_cycle.c
+        tools/geo_cycle_common.c
+        tools/geo_cycle_loader.c
+        tools/geo_cycle_io.c
+    )
+    set_source_files_properties(tools/geo_cycle_common.c PROPERTIES
+        COMPILE_DEFINITIONS geo_cycle_load_model=geo_cycle_load_model_legacy
+    )
+    target_include_directories(geo_cycle PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+    geo_link_target(geo_cycle)
 endif()
 
 if(GEO_BUILD_TESTS)
@@ -118,6 +131,7 @@ if(GEO_BUILD_TESTS)
         operator_gradients
         autodiff_v7
         geo_grad_validation_v7_2
+        full_cycle_v8
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})
@@ -147,6 +161,15 @@ if(GEO_BUILD_TESTS)
                     --exe $<TARGET_FILE:geo_grad>
             )
             set_tests_properties(geo_grad_validation_v7_2_cli PROPERTIES TIMEOUT 300)
+
+            add_test(
+                NAME geo_cycle_v8_cli
+                COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_geo_cycle_v8.py
+                    --compiler ${CMAKE_CURRENT_SOURCE_DIR}/tools/geo_model.py
+                    --runner $<TARGET_FILE:geo_cycle>
+            )
+            set_tests_properties(geo_cycle_v8_cli PROPERTIES TIMEOUT 600)
         endif()
     endif()
 endif()
