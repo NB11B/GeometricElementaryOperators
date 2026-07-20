@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PYTHON = sys.executable
 
 
-def run(*args: str, cwd: Path | None = None) -> None:
-    subprocess.run(args, cwd=cwd, check=True)
+def run(*args: str, cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
+    subprocess.run(args, cwd=cwd, env=env, check=True)
 
 
 def compiler_command() -> tuple[list[str], bool]:
@@ -38,17 +38,40 @@ def find_vsdevcmd(compiler_path: str) -> Path | None:
     return None
 
 
+def capture_msvc_environment(vsdevcmd: Path) -> dict[str, str]:
+    environment = os.environ.copy()
+    with tempfile.TemporaryDirectory(prefix="geo-vsenv-") as directory:
+        script = Path(directory) / "capture-vs-environment.cmd"
+        script.write_text(
+            "@echo off\r\n"
+            f'call "{vsdevcmd}" -arch=x64 -host_arch=x64 >nul\r\n'
+            "if errorlevel 1 exit /b %errorlevel%\r\n"
+            "set\r\n",
+            encoding="utf-8",
+        )
+        completed = subprocess.run(
+            ["cmd.exe", "/d", "/c", str(script)],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    for line in completed.stdout.splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if key:
+            environment[key] = value
+    return environment
+
+
 def run_msvc(compiler: list[str], arguments: list[str]) -> None:
     vsdevcmd = find_vsdevcmd(compiler[0])
-    if vsdevcmd is None:
-        run(*compiler, *arguments)
-        return
-    compile_command = subprocess.list2cmdline([*compiler, *arguments])
-    command = (
-        f'call "{vsdevcmd}" -arch=x64 -host_arch=x64 >nul '
-        f'&& {compile_command}'
-    )
-    run("cmd.exe", "/d", "/s", "/c", command)
+    environment = os.environ.copy()
+    if vsdevcmd is not None:
+        environment = capture_msvc_environment(vsdevcmd)
+    run(*compiler, *arguments, env=environment)
 
 
 def test_clpq(temp: Path) -> None:
