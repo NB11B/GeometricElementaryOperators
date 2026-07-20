@@ -1,63 +1,100 @@
 # Geometric Elementary Operators
 
-Portable C11 reference and embedded kernel for the unified geometric elementary operator architecture:
+Geometric Elementary Operators (GEO) is a portable, geometry-native execution system that compiles geometric relationships into explicit routing, sign, and transformation plans.
+
+The project began as an embedded C11 kernel for preserving mathematical meaning under microcontroller constraints. It now includes exact operator specialization, native gradients, a dynamically sized training runtime, CPU and CUDA execution, independent validation, benchmarking, profiling, and reproducible evidence packaging.
+
+## Core idea
+
+For basis blades, the geometric product can be represented as
+
+\[
+e_i e_j = s_{ij} e_{i \oplus j},
+\]
+
+where `i XOR j` selects the output blade and `s_ij` captures permutation parity and metric signature.
+
+GEO builds this relationship once as an executable plan rather than repeatedly rediscovering it through generic dense tensor machinery. The same mathematical plan can then be lowered to embedded C, optimized CPU code, CUDA kernels, or future hardware schedules.
+
+The original unified operator architecture remains:
 
 \[
 \Omega((s,X),(t,Y))=(\exp(s)-\log(t),XY).
 \]
 
-The implementation is designed for microcontrollers and eventual hardware realization:
-
-- fixed-size C11 data structures;
-- no heap allocation in the kernel;
-- no recursion in the execution path;
-- fully unrolled `Cl(2,0)` geometric product;
-- opposite-lane propagation for reversion;
-- unipotent addition encoding;
-- shared ordered products and Hadamard dot/wedge mixing;
-- algebraic `M2(R)` routing control;
-- projective scale metadata and deferred normalization;
-- scalar EML lane;
-- flat instruction programs;
-- physically separate scalar, geometric, and unified register banks;
-- compile-time constant folding, lane pruning, scale propagation, and routing elision.
-
 ## Current status
 
-The repository contains a complete reference reconstruction of the frozen GEB-36 basis:
+The accepted development line now includes:
 
-- 6 targets execute as direct compiled Omega trees;
-- 30 targets execute through compiler-visible enlarged-representation programs;
-- all 36 are compared against the direct GEB-36 C reference API;
-- the original classification remains 29 exact, 5 projective/scaled, and 2 exact with a supplied transformation.
+- portable C11 embedded and host kernels;
+- exact `Cl(2,0)` and dimensions 1 through 6;
+- all canonical non-degenerate diagonal signatures in the supported dimension range;
+- fixed-blade and sparse fixed-multivector specialization;
+- stable allocation-free operator APIs;
+- independently verified operator certificates;
+- native JVP and VJP primitives;
+- GEO-owned reverse-mode differentiation;
+- native SGD and Adam;
+- dynamically sized arbitrary DAG execution;
+- minibatch accumulation, parameter constraints, recurrence, checkpointing, prediction, and C export;
+- CPU and CUDA full-cycle geometric-product learning workloads;
+- independent hand-written CUDA control kernels;
+- nine-trial PyTorch eager and `torch.compile` comparisons;
+- Nsight Systems and Nsight Compute capture automation;
+- hashed acceptance archives and manifest verification.
 
-The preserved Milestone W package did not contain the original complete per-target witness corpus. The repository therefore distinguishes imported evidence from reconstructed executable witnesses. The reconstruction catalog is stored in `artifacts/geb_witness_catalog.json`.
+## Accepted CPU benchmark
 
-## Implemented layers
+On the recorded optimized CPU benchmark, geometric-mean throughput ratios were:
 
-1. Exact `Cl(2,0)` microkernel.
-2. Opposite-lane state and reversion propagation.
-3. Unified scalar/geometric Omega state.
-4. Flat nonrecursive Omega interpreter.
-5. Unipotent addition representation.
-6. Shared `ab`/`ba` products and exact/projective Hadamard mixing.
-7. Deferred projective normalization and vector metric helpers.
-8. Generative control algebra `Gc(X,Y)=XY-X` over `M2(R)`.
-9. Complete GEB-36 reference API and manifest.
-10. Witness-tree validation and lowering.
-11. Reachability pruning and lane-liveness propagation.
-12. Duplicate-subtree elimination and register compaction.
-13. Constant folding.
-14. Typed and physically banked register allocation.
-15. Rational projective-scale propagation.
-16. Routing-state elision.
-17. Complete 36-target reconstructed execution coverage.
-18. Portable cycle/timer abstraction and benchmark API.
-19. Static type-size and bank-memory reporting.
-20. ESP-IDF component and ESP32-S3 timing adapter.
-21. Configurable Q-format fixed-point arithmetic and fixed `Cl(2,0)` product.
+| Comparison | Inference | Training |
+|---|---:|---:|
+| Optimized GEO vs baseline GEO | 8.32x | 9.10x |
+| Optimized GEO vs PyTorch eager | 71.77x | 59.55x |
+
+These results are workload- and environment-specific. Geometric means are primary; peak cases are descriptive only.
+
+## Accepted CUDA benchmark
+
+Physical validation was completed on an NVIDIA GeForce RTX 5070 Laptop GPU using float64, dimensions 2 through 6, and batches 1, 16, 64, 256, and 1024.
+
+| Comparator | Mode | Resident | Transfer + compute | End-to-end |
+|---|---|---:|---:|---:|
+| PyTorch eager CUDA | Inference | 8.63x | 3.96x | 2.52x |
+| PyTorch eager CUDA | Training | 1.88x | 1.73x | 1.46x |
+| PyTorch compile CUDA | Inference | 9.46x | 4.32x | 2.75x |
+| PyTorch compile CUDA | Training | 1.75x | 1.86x | 1.46x |
+
+The independent `hand_cuda_same_plan` control used separate native CUDA kernels for forward, VJP, loss, and SGD while retaining the same mathematical routing/sign plan. It produced only modest inference gains over PyTorch and was slower for training. This control shows that native CUDA alone did not reproduce the optimized GEO result.
+
+The defensible conclusion is limited to the tested hardware, software stack, precision, dimensions, batches, modes, and timing classes.
+
+## CUDA acceptance evidence
+
+The accepted CUDA package includes:
+
+- physical correctness across all declared signatures, both multiplication sides, and batches 1/16/64/256;
+- reference, planned GEO, and independent hand-written CUDA paths;
+- nine measured trials for GEO, PyTorch eager, and PyTorch compile;
+- per-trial CSV, aggregate CSV, and raw JSON;
+- stable numerical checksums;
+- four Nsight Systems reports;
+- four Nsight Compute reports;
+- generated Markdown and CSV acceptance reports;
+- a verified SHA-256 manifest.
+
+Final archive record:
+
+```text
+MANIFEST_VERIFICATION: PASS files=85
+GEO_GPU_EVIDENCE_ARCHIVE: PASS
+SHA256=79AE425C841846B5BD6E248C43BE502B0B6861E17C983242A182F97CA594B740
+Bytes=196671292
+```
 
 ## Build and test
+
+### Host C11 build
 
 ```sh
 cmake -S . -B build
@@ -73,7 +110,7 @@ cmake --build build-float
 ctest --test-dir build-float --output-on-failure
 ```
 
-## Host benchmarks
+### Host benchmarks
 
 ```sh
 cmake -S . -B build-bench \
@@ -83,75 +120,80 @@ cmake --build build-bench --config Release
 ./build-bench/bench_host
 ```
 
-The host benchmark currently reports:
+### CUDA V8 build on Windows
 
-- `geo_real_t`, `geo_cl20_t`, opposite-state, unified-state, and banked-register sizes;
-- flat and banked instruction sizes;
-- structured-register size;
-- `Cl(2,0)` product time;
-- direct rotor-action time.
+From a PowerShell session with `nvcc` available:
 
-The benchmark API also accepts banked and structured programs, so direct-versus-compiled comparisons can use the same timing source.
+```powershell
+cmake -S .\benchmarks\geo_v8_cuda `
+    -B .\build\geo-v8-cuda `
+    -G "Visual Studio 17 2022" `
+    -A x64 `
+    -DCMAKE_BUILD_TYPE=Release `
+    -DCMAKE_CUDA_ARCHITECTURES=120
 
-## Flash, map, and stack reporting
+cmake --build .\build\geo-v8-cuda `
+    --config Release `
+    --parallel
 
-Generate GCC/Clang stack-usage files and a benchmark linker map:
-
-```sh
-cmake -S . -B build-report \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DGEO_USE_DOUBLE=OFF \
-  -DGEO_ENABLE_STACK_USAGE=ON \
-  -DGEO_ENABLE_LINK_MAP=ON
-cmake --build build-report
+ctest `
+    --test-dir .\build\geo-v8-cuda `
+    -C Release `
+    --output-on-failure
 ```
 
-This emits:
+Expected CUDA correctness marker:
 
-- compiler `.su` files for per-function static stack estimates;
-- `build-report/bench_host.map` for section and symbol accounting;
-- the normal benchmark memory report for runtime data structures.
+```text
+GEO_V8_CUDA_CORRECTNESS: PASS
+```
 
-Standard platform tools such as `size`, `nm`, and `objdump` can then be applied to `bench_host` and `libgeo_kernel.a`.
+See `benchmarks/geo_v8_cuda/README.md` for the full benchmark, profiler, report, and packaging workflow.
 
-## ESP32-S3 / ESP-IDF
+## Embedded targets
 
-The `ports/esp32` directory is an ESP-IDF component. Add it to an ESP-IDF project's component search path, include `geo_esp32.h`, and call:
+The kernel retains its embedded design constraints:
+
+- fixed-size C11 data structures where required;
+- no heap allocation in embedded execution paths;
+- no recursion;
+- flat instruction programs;
+- typed and physically banked registers;
+- configurable Q-format fixed-point arithmetic;
+- ESP-IDF integration and ESP32 timing support;
+- compiler-visible lowering, pruning, scale propagation, and routing elision.
+
+The `ports/esp32` directory is an ESP-IDF component. Typical entry points are:
 
 ```c
 geo_esp32_print_memory_report();
 geo_esp32_run_smoke_benchmarks(100000);
 ```
 
-The ESP32 adapter uses `esp_timer_get_time()` as a 1 MHz monotonic timing source and reports microseconds per operation through `ESP_LOGI`.
+## Repository map
 
-## Fixed-point backend
+- `include/geo/` — public C and CUDA interfaces;
+- `src/` — host, gradient, runtime, and CUDA implementations;
+- `tests/` — host and physical CUDA correctness suites;
+- `benchmarks/` — CPU, CUDA, PyTorch, profiler, reporting, and packaging tools;
+- `tools/` — standalone GEO model, training, prediction, and export utilities;
+- `ports/` — embedded platform integrations;
+- `experiments/` — accepted milestone records and scientific boundaries;
+- `artifacts/` — reconstructed witness and supporting catalogs.
 
-`include/geo/fixed.h` provides a configurable signed 32-bit Q-format backend. The default is Q16.16:
+## Scientific claim boundary
 
-```c
-#define GEO_FIXED_FRACTION_BITS 16
-```
+GEO has demonstrated that geometry-aware execution can provide a measurable and repeatable advantage on the tested CPU and GPU geometric-product workloads. The evidence does not establish universal superiority over tensor methods, all model architectures, all precisions, all devices, or unrelated workloads.
 
-The current fixed-point layer includes:
+Current follow-on research includes:
 
-- conversion to and from `double`;
-- checked multiply and divide;
-- overflow and divide-by-zero status;
-- a complete fixed-point `Cl(2,0)` geometric product;
-- basis-product tests for `e1*e2=e12` and `e2*e1=-e12`.
+- structured replacement and compression of trained neural-network layers;
+- mixed-precision and tensor-core implementations;
+- NPU, FPGA, ASIC, and analog mappings;
+- larger grammar-driven models;
+- workload-level embedded validation;
+- direct integration into application models.
 
-## Performance phase
+## Design principle
 
-The next measurement expansion is workload-level rather than architectural:
-
-1. Add benchmark fixtures for all major GEB operation families.
-2. Compare direct functions, unified Omega bytecode, structured bytecode, and banked execution on identical inputs.
-3. Record flash, static RAM, stack, cycles, and normalization counts on ESP32-S3.
-4. Add ARM Cortex-M DWT cycle-counter support.
-5. Quantify float versus Q-format error and throughput.
-6. Generate RTL-oriented operation schedules from the optimized instruction stream.
-
-## Design constraints
-
-The kernel intentionally avoids exceptions, RTTI, virtual dispatch, recursive execution, and generic dense matrix arithmetic. The proof-level product-space representation is preserved where needed and lowered to sparse, typed, fixed-routing microkernels for embedded targets.
+GEO does not treat geometry as decorative metadata around dense arithmetic. It preserves geometric relationships as executable structure and lowers that structure into sparse, typed, fixed-routing computation suitable for the target hardware.
