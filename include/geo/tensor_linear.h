@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-#include "geo/types.h"
+#include "geo/cl20.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,9 +30,9 @@ typedef struct geo_tensor_linear_shape {
  * This API is intentionally allocation-free. The caller owns every buffer.
  */
 geo_tensor_status geo_tensor_linear_forward(
-    const geo_real *x,
-    const geo_real *weight,
-    geo_real *y,
+    const geo_real_t *x,
+    const geo_real_t *weight,
+    geo_real_t *y,
     geo_tensor_linear_shape shape
 );
 
@@ -44,11 +44,11 @@ geo_tensor_status geo_tensor_linear_forward(
  * grad_x and grad_weight are overwritten, not accumulated.
  */
 geo_tensor_status geo_tensor_linear_vjp(
-    const geo_real *x,
-    const geo_real *weight,
-    const geo_real *grad_y,
-    geo_real *grad_x,
-    geo_real *grad_weight,
+    const geo_real_t *x,
+    const geo_real_t *weight,
+    const geo_real_t *grad_y,
+    geo_real_t *grad_x,
+    geo_real_t *grad_weight,
     geo_tensor_linear_shape shape
 );
 
