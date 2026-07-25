@@ -148,10 +148,6 @@ __global__ void causal_attention_vjp_kernel(
         const size_t outer = row / tokens;
         const size_t query = row - outer * tokens;
 
-        for (size_t dim = 0u; dim < head_dim; ++dim) {
-            grad_q[data_index(outer, query, dim, tokens, head_dim)] = 0.0f;
-        }
-
         float softmax_dot = 0.0f;
         for (size_t key = 0u; key <= query; ++key) {
             const float d_probability = dot_tokens(
@@ -162,24 +158,60 @@ __global__ void causal_attention_vjp_kernel(
             ] * d_probability;
         }
 
-        for (size_t key = 0u; key <= query; ++key) {
-            const float probability = probabilities[
-                probability_index(outer, query, key, tokens)
-            ];
-            const float d_probability = dot_tokens(
-                grad_out, query, v, key, outer, tokens, head_dim
-            );
-            const float d_score = probability * (d_probability - softmax_dot);
-
-            for (size_t dim = 0u; dim < head_dim; ++dim) {
-                const size_t query_index =
-                    data_index(outer, query, dim, tokens, head_dim);
-                const size_t key_index =
-                    data_index(outer, key, dim, tokens, head_dim);
-                grad_q[query_index] += scale * d_score * k[key_index];
-                atomicAdd(&grad_k[key_index], scale * d_score * q[query_index]);
-                atomicAdd(&grad_v[key_index], probability * grad_out[query_index]);
+        for (size_t dim = 0u; dim < head_dim; ++dim) {
+            float sum_q = 0.0f;
+            for (size_t key = 0u; key <= query; ++key) {
+                const float probability = probabilities[
+                    probability_index(outer, query, key, tokens)
+                ];
+                const float d_probability = dot_tokens(
+                    grad_out, query, v, key, outer, tokens, head_dim
+                );
+                const float d_score = probability * (d_probability - softmax_dot);
+                sum_q += scale * d_score * k[data_index(outer, key, dim, tokens, head_dim)];
             }
+            grad_q[data_index(outer, query, dim, tokens, head_dim)] = sum_q;
+        }
+    }
+
+    for (size_t row = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+         row < rows;
+         row += stride) {
+        const size_t outer = row / tokens;
+        const size_t key = row - outer * tokens;
+
+        for (size_t dim = 0u; dim < head_dim; ++dim) {
+            float sum_k = 0.0f;
+            float sum_v = 0.0f;
+
+            for (size_t query = key; query < tokens; ++query) {
+                const float probability = probabilities[
+                    probability_index(outer, query, key, tokens)
+                ];
+
+                float softmax_dot = 0.0f;
+                for (size_t k_idx = 0u; k_idx <= query; ++k_idx) {
+                    const float d_prob_k = dot_tokens(
+                        grad_out, query, v, k_idx, outer, tokens, head_dim
+                    );
+                    softmax_dot += probabilities[
+                        probability_index(outer, query, k_idx, tokens)
+                    ] * d_prob_k;
+                }
+
+                const float d_probability = dot_tokens(
+                    grad_out, query, v, key, outer, tokens, head_dim
+                );
+                const float d_score = probability * (d_probability - softmax_dot);
+
+                const size_t query_dim_idx = data_index(outer, query, dim, tokens, head_dim);
+                sum_k += scale * d_score * q[query_dim_idx];
+                sum_v += probability * grad_out[query_dim_idx];
+            }
+
+            const size_t key_dim_idx = data_index(outer, key, dim, tokens, head_dim);
+            grad_k[key_dim_idx] = sum_k;
+            grad_v[key_dim_idx] = sum_v;
         }
     }
 }
