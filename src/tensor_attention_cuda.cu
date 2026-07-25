@@ -118,12 +118,13 @@ __global__ void causal_attention_forward_kernel(
     }
 }
 
-// Kernel 1: Compute dP and dS matrix into workspace
+// Kernel 1: Compute dP and write both dS and transposed dS_t into workspace
 __global__ void attention_vjp_kernel_dp_ds(
     const float *probabilities,
     const float *grad_out,
     const float *v,
     float *ds_workspace,
+    float *ds_workspace_t,
     size_t outer_count,
     size_t tokens,
     size_t head_dim
@@ -151,12 +152,18 @@ __global__ void attention_vjp_kernel_dp_ds(
 
         for (size_t key = 0u; key <= query; ++key) {
             const size_t p_idx = probability_index(outer, query, key, tokens);
+            const size_t pt_idx = probability_index(outer, key, query, tokens);
             const float p = probabilities[p_idx];
             const float d_prob = ds_workspace[p_idx];
-            ds_workspace[p_idx] = p * (d_prob - softmax_dot);
+            const float ds_val = p * (d_prob - softmax_dot);
+            ds_workspace[p_idx] = ds_val;
+            ds_workspace_t[pt_idx] = ds_val;
         }
         for (size_t key = query + 1; key < tokens; ++key) {
-            ds_workspace[probability_index(outer, query, key, tokens)] = 0.0f;
+            const size_t p_idx = probability_index(outer, query, key, tokens);
+            const size_t pt_idx = probability_index(outer, key, query, tokens);
+            ds_workspace[p_idx] = 0.0f;
+            ds_workspace_t[pt_idx] = 0.0f;
         }
     }
 }
@@ -191,9 +198,9 @@ __global__ void attention_vjp_kernel_dq(
     }
 }
 
-// Kernel 3: Compute grad_k and grad_v
+// Kernel 3: Compute grad_k and grad_v using coalesced transposed ds_workspace_t
 __global__ void attention_vjp_kernel_dk_dv(
-    const float *ds_workspace,
+    const float *ds_workspace_t,
     const float *probabilities,
     const float *q,
     const float *grad_out,
@@ -218,7 +225,7 @@ __global__ void attention_vjp_kernel_dk_dv(
             float sum_v = 0.0f;
 
             for (size_t query = key; query < tokens; ++query) {
-                const float ds = ds_workspace[probability_index(outer, query, key, tokens)];
+                const float ds = ds_workspace_t[probability_index(outer, key, query, tokens)];
                 const float p = probabilities[probability_index(outer, query, key, tokens)];
 
                 sum_k += ds * q[data_index(outer, query, dim, tokens, head_dim)];
@@ -290,11 +297,14 @@ extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_vjp(
     bool allocated_ws = false;
 
     if (ds_ptr == nullptr) {
-        if (cudaMallocAsync(&ds_ptr, matrix_elems * sizeof(float), custream) != cudaSuccess) {
+        if (cudaMallocAsync(&ds_ptr, 2 * matrix_elems * sizeof(float), custream) != cudaSuccess) {
             return GEO_TENSOR_CUDA_ERROR;
         }
         allocated_ws = true;
     }
+
+    float *ds_workspace = ds_ptr;
+    float *ds_workspace_t = ds_ptr + matrix_elems;
 
     cudaEvent_t ev_start, ev_ds, ev_dq, ev_dk;
     bool do_timing = (timings != nullptr);
@@ -306,21 +316,21 @@ extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_vjp(
         cudaEventRecord(ev_start, custream);
     }
 
-    // Step 1: Compute dP and dS matrix
+    // Step 1: Compute dP and write both dS and transposed dS_t
     attention_vjp_kernel_dp_ds<<<launch_blocks(rows), GEO_ATTENTION_BLOCK_SIZE, 0, custream>>>(
-        probabilities, grad_out, v, ds_ptr, shape.outer, shape.tokens, shape.head_dim
+        probabilities, grad_out, v, ds_workspace, ds_workspace_t, shape.outer, shape.tokens, shape.head_dim
     );
     if (do_timing) cudaEventRecord(ev_ds, custream);
 
     // Step 2: Compute grad_q
     attention_vjp_kernel_dq<<<launch_blocks(rows), GEO_ATTENTION_BLOCK_SIZE, 0, custream>>>(
-        ds_ptr, k, grad_q, shape.outer, shape.tokens, shape.head_dim
+        ds_workspace, k, grad_q, shape.outer, shape.tokens, shape.head_dim
     );
     if (do_timing) cudaEventRecord(ev_dq, custream);
 
-    // Step 3: Compute grad_k and grad_v
+    // Step 3: Compute grad_k and grad_v using coalesced ds_workspace_t
     attention_vjp_kernel_dk_dv<<<launch_blocks(rows), GEO_ATTENTION_BLOCK_SIZE, 0, custream>>>(
-        ds_ptr, probabilities, q, grad_out, grad_k, grad_v, shape.outer, shape.tokens, shape.head_dim
+        ds_workspace_t, probabilities, q, grad_out, grad_k, grad_v, shape.outer, shape.tokens, shape.head_dim
     );
     if (do_timing) cudaEventRecord(ev_dk, custream);
 
