@@ -1,0 +1,108 @@
+spec_version: 0.1.0
+registry_id: geo.deep_learning_runtime.v1
+runtime_abi_version: 1
+backend: GeometricElementaryOperators
+policy:
+  silent_fallback: forbidden
+  native_backward_required: true
+  descriptor_does_not_override_abi: true
+operators:
+  - capability: linear
+    operator_id: geo.tensor_linear
+    descriptor: geo_tensor_linear.operator.yaml
+    cpu_source: src/tensor_linear.c
+    cuda_source: src/tensor_linear_cuda.cu
+    host_test: tests/test_tensor_linear.c
+    differentiation: exact_vjp
+  - capability: add
+    operator_id: geo.tensor_add
+    descriptor_status: pending
+    cpu_source: src/tensor_core.c
+    cuda_source: src/tensor_core_cuda.cu
+    host_test: tests/test_tensor_core.c
+    differentiation: exact_vjp
+  - capability: mul
+    operator_id: geo.tensor_mul
+    descriptor_status: pending
+    cpu_source: src/tensor_core.c
+    cuda_source: src/tensor_core_cuda.cu
+    host_test: tests/test_tensor_core.c
+    differentiation: exact_vjp
+  - capability: scale
+    operator_id: geo.tensor_scale
+    descriptor_status: pending
+    cpu_source: src/tensor_core.c
+    cuda_source: src/tensor_core_cuda.cu
+    host_test: tests/test_tensor_core.c
+    differentiation: exact_vjp
+  - capability: rms_norm
+    operator_id: geo.rms_norm
+    descriptor_status: pending
+    cpu_source: src/tensor_core.c
+    cuda_source: src/tensor_core_cuda.cu
+    host_test: tests/test_tensor_core.c
+    differentiation: exact_vjp
+  - capability: gelu
+    operator_id: geo.gelu_exact
+    descriptor_status: pending
+    cpu_source: src/tensor_activation.c
+    cuda_source: src/tensor_activation_cuda.cu
+    host_test: tests/test_tensor_activation.c
+    differentiation: exact_vjp
+  - capability: silu_mul
+    operator_id: geo.silu_multiply
+    descriptor_status: pending
+    cpu_source: src/tensor_activation.c
+    cuda_source: src/tensor_activation_cuda.cu
+    host_test: tests/test_tensor_activation.c
+    differentiation: exact_vjp
+  - capability: build_rope
+    operator_id: geo.rope_table
+    descriptor_status: pending
+    cpu_source: src/tensor_rope.c
+    cuda_source: src/tensor_rope_cuda.cu
+    host_test: tests/test_tensor_rope.c
+    differentiation: nondifferentiable
+  - capability: apply_rope
+    operator_id: geo.rope_split_half
+    descriptor_status: pending
+    cpu_source: src/tensor_rope.c
+    cuda_source: src/tensor_rope_cuda.cu
+    host_test: tests/test_tensor_rope.c
+    differentiation: exact_vjp
+  - capability: causal_attention
+    operator_id: geo.causal_attention
+    descriptor_status: pending
+    cpu_source: src/tensor_attention.c
+    cuda_source: src/tensor_attention_cuda.cu
+    host_test: tests/test_tensor_attention.c
+    differentiation: exact_vjp
+  - capability: cross_entropy
+    operator_id: geo.cross_entropy_mean
+    descriptor_status: pending
+    cpu_source: src/tensor_loss.c
+    cuda_source: src/tensor_loss_cuda.cu
+    host_test: tests/test_tensor_loss.c
+    differentiation: exact_vjp
+  - capability: embedding
+    operator_id: geo.embedding_lookup
+    descriptor_status: pending
+    cpu_source: src/tensor_embedding.c
+    cuda_source: src/tensor_embedding_cuda.cu
+    host_test: tests/test_tensor_embedding.c
+    differentiation: exact_vjp
+  - capability: adamw
+    operator_id: geo.adamw_global_clip
+    descriptor_status: pending
+    cpu_source: src/tensor_optimizer.c
+    cuda_source: src/tensor_optimizer_cuda.cu
+    host_test: tests/test_tensor_optimizer.c
+    differentiation: optimizer_update
+acceptance:
+  required_runtime_stage: training
+  target_gpu: NVIDIA RTX 5070
+  target_compute_capability: '12.0'
+  target_toolkit: CUDA 13.x
+  instructions_repository: NB11B/Geo-Deep-Learning-Runtim
+  instructions_path: docs/CUDA_ACCEPTANCE.md
+  harness_path: scripts/cuda_acceptance.ps1
