@@ -1,34 +1,27 @@
 #include "geo/tensor_attention_cuda.h"
 
 #include <cuda_runtime.h>
-#include <math_constants.h>
-#include <stdint.h>
+
+#ifndef CUDART_INF_F
+#define CUDART_INF_F __int_as_float(0x7f800000)
+#endif
 
 namespace {
 
-constexpr unsigned int GEO_ATTENTION_BLOCK_SIZE = 128u;
-constexpr unsigned int GEO_ATTENTION_MAX_BLOCKS = 65535u;
+enum {
+    GEO_ATTENTION_BLOCK_SIZE = 256,
+};
 
-bool valid_shape(geo_tensor_attention_shape shape) {
-    if (shape.outer == 0u || shape.tokens == 0u || shape.head_dim == 0u) {
-        return false;
+size_t launch_blocks(size_t total_elements) {
+    if (total_elements == 0u) {
+        return 1u;
     }
-    if (shape.outer > SIZE_MAX / shape.tokens) {
-        return false;
-    }
-    const size_t rows = shape.outer * shape.tokens;
-    if (rows > SIZE_MAX / shape.head_dim || rows > SIZE_MAX / shape.tokens) {
-        return false;
-    }
-    return true;
+    const size_t block_size = static_cast<size_t>(GEO_ATTENTION_BLOCK_SIZE);
+    return (total_elements + block_size - 1u) / block_size;
 }
 
-unsigned int launch_blocks(size_t rows) {
-    size_t blocks = (rows + GEO_ATTENTION_BLOCK_SIZE - 1u) / GEO_ATTENTION_BLOCK_SIZE;
-    if (blocks > GEO_ATTENTION_MAX_BLOCKS) {
-        blocks = GEO_ATTENTION_MAX_BLOCKS;
-    }
-    return static_cast<unsigned int>(blocks);
+bool valid_shape(geo_tensor_attention_shape shape) {
+    return shape.outer > 0u && shape.tokens > 0u && shape.head_dim > 0u;
 }
 
 __device__ size_t data_index(
@@ -125,15 +118,54 @@ __global__ void causal_attention_forward_kernel(
     }
 }
 
-__global__ void causal_attention_vjp_kernel(
-    const float *q,
-    const float *k,
-    const float *v,
+// Kernel 1: Compute dP and dS matrix into workspace
+__global__ void attention_vjp_kernel_dp_ds(
     const float *probabilities,
     const float *grad_out,
+    const float *v,
+    float *ds_workspace,
+    size_t outer_count,
+    size_t tokens,
+    size_t head_dim
+) {
+    const size_t rows = outer_count * tokens;
+    const size_t stride = static_cast<size_t>(blockDim.x) * gridDim.x;
+
+    for (size_t row = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+         row < rows;
+         row += stride) {
+        const size_t outer = row / tokens;
+        const size_t query = row - outer * tokens;
+
+        float softmax_dot = 0.0f;
+        for (size_t key = 0u; key <= query; ++key) {
+            float d_prob = 0.0f;
+            for (size_t dim = 0u; dim < head_dim; ++dim) {
+                d_prob += grad_out[data_index(outer, query, dim, tokens, head_dim)] *
+                          v[data_index(outer, key, dim, tokens, head_dim)];
+            }
+            const float p = probabilities[probability_index(outer, query, key, tokens)];
+            ds_workspace[probability_index(outer, query, key, tokens)] = d_prob;
+            softmax_dot += p * d_prob;
+        }
+
+        for (size_t key = 0u; key <= query; ++key) {
+            const size_t p_idx = probability_index(outer, query, key, tokens);
+            const float p = probabilities[p_idx];
+            const float d_prob = ds_workspace[p_idx];
+            ds_workspace[p_idx] = p * (d_prob - softmax_dot);
+        }
+        for (size_t key = query + 1; key < tokens; ++key) {
+            ds_workspace[probability_index(outer, query, key, tokens)] = 0.0f;
+        }
+    }
+}
+
+// Kernel 2: Compute grad_q
+__global__ void attention_vjp_kernel_dq(
+    const float *ds_workspace,
+    const float *k,
     float *grad_q,
-    float *grad_k,
-    float *grad_v,
     size_t outer_count,
     size_t tokens,
     size_t head_dim
@@ -148,31 +180,32 @@ __global__ void causal_attention_vjp_kernel(
         const size_t outer = row / tokens;
         const size_t query = row - outer * tokens;
 
-        float softmax_dot = 0.0f;
-        for (size_t key = 0u; key <= query; ++key) {
-            const float d_probability = dot_tokens(
-                grad_out, query, v, key, outer, tokens, head_dim
-            );
-            softmax_dot += probabilities[
-                probability_index(outer, query, key, tokens)
-            ] * d_probability;
-        }
-
         for (size_t dim = 0u; dim < head_dim; ++dim) {
             float sum_q = 0.0f;
             for (size_t key = 0u; key <= query; ++key) {
-                const float probability = probabilities[
-                    probability_index(outer, query, key, tokens)
-                ];
-                const float d_probability = dot_tokens(
-                    grad_out, query, v, key, outer, tokens, head_dim
-                );
-                const float d_score = probability * (d_probability - softmax_dot);
-                sum_q += scale * d_score * k[data_index(outer, key, dim, tokens, head_dim)];
+                const float ds = ds_workspace[probability_index(outer, query, key, tokens)];
+                sum_q += ds * k[data_index(outer, key, dim, tokens, head_dim)];
             }
-            grad_q[data_index(outer, query, dim, tokens, head_dim)] = sum_q;
+            grad_q[data_index(outer, query, dim, tokens, head_dim)] = scale * sum_q;
         }
     }
+}
+
+// Kernel 3: Compute grad_k and grad_v
+__global__ void attention_vjp_kernel_dk_dv(
+    const float *ds_workspace,
+    const float *probabilities,
+    const float *q,
+    const float *grad_out,
+    float *grad_k,
+    float *grad_v,
+    size_t outer_count,
+    size_t tokens,
+    size_t head_dim
+) {
+    const size_t rows = outer_count * tokens;
+    const size_t stride = static_cast<size_t>(blockDim.x) * gridDim.x;
+    const float scale = rsqrtf(static_cast<float>(head_dim));
 
     for (size_t row = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
          row < rows;
@@ -185,32 +218,15 @@ __global__ void causal_attention_vjp_kernel(
             float sum_v = 0.0f;
 
             for (size_t query = key; query < tokens; ++query) {
-                const float probability = probabilities[
-                    probability_index(outer, query, key, tokens)
-                ];
+                const float ds = ds_workspace[probability_index(outer, query, key, tokens)];
+                const float p = probabilities[probability_index(outer, query, key, tokens)];
 
-                float softmax_dot = 0.0f;
-                for (size_t k_idx = 0u; k_idx <= query; ++k_idx) {
-                    const float d_prob_k = dot_tokens(
-                        grad_out, query, v, k_idx, outer, tokens, head_dim
-                    );
-                    softmax_dot += probabilities[
-                        probability_index(outer, query, k_idx, tokens)
-                    ] * d_prob_k;
-                }
-
-                const float d_probability = dot_tokens(
-                    grad_out, query, v, key, outer, tokens, head_dim
-                );
-                const float d_score = probability * (d_probability - softmax_dot);
-
-                const size_t query_dim_idx = data_index(outer, query, dim, tokens, head_dim);
-                sum_k += scale * d_score * q[query_dim_idx];
-                sum_v += probability * grad_out[query_dim_idx];
+                sum_k += ds * q[data_index(outer, query, dim, tokens, head_dim)];
+                sum_v += p * grad_out[data_index(outer, query, dim, tokens, head_dim)];
             }
 
             const size_t key_dim_idx = data_index(outer, key, dim, tokens, head_dim);
-            grad_k[key_dim_idx] = sum_k;
+            grad_k[key_dim_idx] = scale * sum_k;
             grad_v[key_dim_idx] = sum_v;
         }
     }
@@ -255,30 +271,74 @@ extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_vjp(
     float *grad_q,
     float *grad_k,
     float *grad_v,
+    float *workspace_dp_ds,
+    geo_attention_backward_timings *timings,
     geo_tensor_attention_shape shape,
     void *stream
 ) {
     if (q == nullptr || k == nullptr || v == nullptr || probabilities == nullptr ||
-        grad_out == nullptr || grad_q == nullptr || grad_k == nullptr || grad_v == nullptr ||
-        !valid_shape(shape)) {
+        grad_out == nullptr || grad_q == nullptr || grad_k == nullptr ||
+        grad_v == nullptr || !valid_shape(shape)) {
         return GEO_TENSOR_INVALID_ARGUMENT;
     }
 
-    cudaStream_t cuda_stream = reinterpret_cast<cudaStream_t>(stream);
-    const size_t data_count = shape.outer * shape.tokens * shape.head_dim;
-    const size_t bytes = data_count * sizeof(float);
-    if (cudaMemsetAsync(grad_k, 0, bytes, cuda_stream) != cudaSuccess ||
-        cudaMemsetAsync(grad_v, 0, bytes, cuda_stream) != cudaSuccess) {
-        return GEO_TENSOR_CUDA_ERROR;
+    cudaStream_t custream = reinterpret_cast<cudaStream_t>(stream);
+    const size_t rows = shape.outer * shape.tokens;
+    const size_t matrix_elems = shape.outer * shape.tokens * shape.tokens;
+
+    float *ds_ptr = workspace_dp_ds;
+    bool allocated_ws = false;
+
+    if (ds_ptr == nullptr) {
+        if (cudaMallocAsync(&ds_ptr, matrix_elems * sizeof(float), custream) != cudaSuccess) {
+            return GEO_TENSOR_CUDA_ERROR;
+        }
+        allocated_ws = true;
     }
 
-    const size_t rows = shape.outer * shape.tokens;
-    causal_attention_vjp_kernel<<<
-        launch_blocks(rows), GEO_ATTENTION_BLOCK_SIZE, 0, cuda_stream
-    >>>(
-        q, k, v, probabilities, grad_out,
-        grad_q, grad_k, grad_v,
-        shape.outer, shape.tokens, shape.head_dim
+    cudaEvent_t ev_start, ev_ds, ev_dq, ev_dk;
+    bool do_timing = (timings != nullptr);
+    if (do_timing) {
+        cudaEventCreate(&ev_start);
+        cudaEventCreate(&ev_ds);
+        cudaEventCreate(&ev_dq);
+        cudaEventCreate(&ev_dk);
+        cudaEventRecord(ev_start, custream);
+    }
+
+    // Step 1: Compute dP and dS matrix
+    attention_vjp_kernel_dp_ds<<<launch_blocks(rows), GEO_ATTENTION_BLOCK_SIZE, 0, custream>>>(
+        probabilities, grad_out, v, ds_ptr, shape.outer, shape.tokens, shape.head_dim
     );
+    if (do_timing) cudaEventRecord(ev_ds, custream);
+
+    // Step 2: Compute grad_q
+    attention_vjp_kernel_dq<<<launch_blocks(rows), GEO_ATTENTION_BLOCK_SIZE, 0, custream>>>(
+        ds_ptr, k, grad_q, shape.outer, shape.tokens, shape.head_dim
+    );
+    if (do_timing) cudaEventRecord(ev_dq, custream);
+
+    // Step 3: Compute grad_k and grad_v
+    attention_vjp_kernel_dk_dv<<<launch_blocks(rows), GEO_ATTENTION_BLOCK_SIZE, 0, custream>>>(
+        ds_ptr, probabilities, q, grad_out, grad_k, grad_v, shape.outer, shape.tokens, shape.head_dim
+    );
+    if (do_timing) cudaEventRecord(ev_dk, custream);
+
+    if (do_timing) {
+        cudaEventSynchronize(ev_dk);
+        cudaEventElapsedTime(&timings->t_dp_ds_ms, ev_start, ev_ds);
+        cudaEventElapsedTime(&timings->t_dq_ms, ev_ds, ev_dq);
+        cudaEventElapsedTime(&timings->t_dk_dv_ms, ev_dq, ev_dk);
+        cudaEventElapsedTime(&timings->t_total_ms, ev_start, ev_dk);
+        cudaEventDestroy(ev_start);
+        cudaEventDestroy(ev_ds);
+        cudaEventDestroy(ev_dq);
+        cudaEventDestroy(ev_dk);
+    }
+
+    if (allocated_ws) {
+        cudaFreeAsync(ds_ptr, custream);
+    }
+
     return launch_status();
 }
