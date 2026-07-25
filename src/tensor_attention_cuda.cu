@@ -1,6 +1,7 @@
 #include "geo/tensor_attention_cuda.h"
 
 #include <cuda_runtime.h>
+#include <math_constants.h>
 #include <stdint.h>
 
 namespace {
