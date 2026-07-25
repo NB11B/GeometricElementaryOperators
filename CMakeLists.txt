@@ -46,6 +46,7 @@ add_library(geo_kernel STATIC
     src/batch_gp.c
     src/tensor_linear.c
     src/tensor_core.c
+    src/tensor_activation.c
 )
 
 target_include_directories(geo_kernel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -138,6 +139,7 @@ if(GEO_BUILD_TESTS)
         batch_gp
         tensor_linear
         tensor_core
+        tensor_activation
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})
