@@ -23,28 +23,28 @@ geo_tensor_status geo_tensor_linear_forward(
     const geo_real_t *x,
     const geo_real_t *weight,
     geo_real_t *y,
-    geo_tensor_linear_shape shape
+    const geo_tensor_linear_shape *shape
 ) {
     geo_tensor_status status;
     size_t row;
     size_t out;
     size_t in;
 
-    if (x == NULL || weight == NULL || y == NULL) {
+    if (x == NULL || weight == NULL || y == NULL || shape == NULL) {
         return GEO_TENSOR_INVALID_ARGUMENT;
     }
-    status = geo_tensor_validate_shape(shape);
+    status = geo_tensor_validate_shape(*shape);
     if (status != GEO_TENSOR_OK) {
         return status;
     }
 
-    for (row = 0u; row < shape.rows; ++row) {
-        const geo_real_t *x_row = x + row * shape.in_features;
-        geo_real_t *y_row = y + row * shape.out_features;
-        for (out = 0u; out < shape.out_features; ++out) {
-            const geo_real_t *w_row = weight + out * shape.in_features;
+    for (row = 0u; row < shape->rows; ++row) {
+        const geo_real_t *x_row = x + row * shape->in_features;
+        geo_real_t *y_row = y + row * shape->out_features;
+        for (out = 0u; out < shape->out_features; ++out) {
+            const geo_real_t *w_row = weight + out * shape->in_features;
             geo_real_t sum = (geo_real_t)0;
-            for (in = 0u; in < shape.in_features; ++in) {
+            for (in = 0u; in < shape->in_features; ++in) {
                 sum += x_row[in] * w_row[in];
             }
             y_row[out] = sum;
@@ -59,7 +59,7 @@ geo_tensor_status geo_tensor_linear_vjp(
     const geo_real_t *grad_y,
     geo_real_t *grad_x,
     geo_real_t *grad_weight,
-    geo_tensor_linear_shape shape
+    const geo_tensor_linear_shape *shape
 ) {
     geo_tensor_status status;
     size_t row;
@@ -68,28 +68,28 @@ geo_tensor_status geo_tensor_linear_vjp(
     size_t grad_x_count;
     size_t grad_weight_count;
 
-    if (x == NULL || weight == NULL || grad_y == NULL || grad_x == NULL || grad_weight == NULL) {
+    if (x == NULL || weight == NULL || grad_y == NULL || grad_x == NULL || grad_weight == NULL || shape == NULL) {
         return GEO_TENSOR_INVALID_ARGUMENT;
     }
-    status = geo_tensor_validate_shape(shape);
+    status = geo_tensor_validate_shape(*shape);
     if (status != GEO_TENSOR_OK) {
         return status;
     }
 
-    grad_x_count = shape.rows * shape.in_features;
-    grad_weight_count = shape.out_features * shape.in_features;
+    grad_x_count = shape->rows * shape->in_features;
+    grad_weight_count = shape->out_features * shape->in_features;
     memset(grad_x, 0, grad_x_count * sizeof(*grad_x));
     memset(grad_weight, 0, grad_weight_count * sizeof(*grad_weight));
 
-    for (row = 0u; row < shape.rows; ++row) {
-        const geo_real_t *x_row = x + row * shape.in_features;
-        const geo_real_t *gy_row = grad_y + row * shape.out_features;
-        geo_real_t *gx_row = grad_x + row * shape.in_features;
-        for (out = 0u; out < shape.out_features; ++out) {
+    for (row = 0u; row < shape->rows; ++row) {
+        const geo_real_t *x_row = x + row * shape->in_features;
+        const geo_real_t *gy_row = grad_y + row * shape->out_features;
+        geo_real_t *gx_row = grad_x + row * shape->in_features;
+        for (out = 0u; out < shape->out_features; ++out) {
             const geo_real_t gy = gy_row[out];
-            const geo_real_t *w_row = weight + out * shape.in_features;
-            geo_real_t *gw_row = grad_weight + out * shape.in_features;
-            for (in = 0u; in < shape.in_features; ++in) {
+            const geo_real_t *w_row = weight + out * shape->in_features;
+            geo_real_t *gw_row = grad_weight + out * shape->in_features;
+            for (in = 0u; in < shape->in_features; ++in) {
                 gx_row[in] += gy * w_row[in];
                 gw_row[in] += gy * x_row[in];
             }

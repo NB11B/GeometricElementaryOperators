@@ -33,7 +33,7 @@ geo_tensor_status geo_tensor_linear_forward(
     const geo_real_t *x,
     const geo_real_t *weight,
     geo_real_t *y,
-    geo_tensor_linear_shape shape
+    const geo_tensor_linear_shape *shape
 );
 
 /*
@@ -49,7 +49,7 @@ geo_tensor_status geo_tensor_linear_vjp(
     const geo_real_t *grad_y,
     geo_real_t *grad_x,
     geo_real_t *grad_weight,
-    geo_tensor_linear_shape shape
+    const geo_tensor_linear_shape *shape
 );
 
 const char *geo_tensor_status_string(geo_tensor_status status);
