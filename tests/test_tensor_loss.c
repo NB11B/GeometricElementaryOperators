@@ -40,8 +40,8 @@ static geo_real_t compute_loss(
     geo_tensor_cross_entropy_shape shape
 ) {
     geo_real_t probabilities[12];
-    geo_real_t loss;
-    geo_real_t normalizer;
+    geo_real_t loss = (geo_real_t)0;
+    geo_real_t normalizer = (geo_real_t)0;
     assert(geo_tensor_cross_entropy_forward(
         logits, targets, ignore_index, &loss, probabilities, &normalizer, shape
     ) == GEO_TENSOR_OK);
