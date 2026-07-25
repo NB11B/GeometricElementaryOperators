@@ -48,6 +48,7 @@ add_library(geo_kernel STATIC
     src/tensor_core.c
     src/tensor_activation.c
     src/tensor_rope.c
+    src/tensor_attention.c
 )
 
 target_include_directories(geo_kernel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -142,6 +143,7 @@ if(GEO_BUILD_TESTS)
         tensor_core
         tensor_activation
         tensor_rope
+        tensor_attention
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})
