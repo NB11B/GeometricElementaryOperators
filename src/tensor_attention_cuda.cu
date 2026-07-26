@@ -455,6 +455,31 @@ extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_forward(
     return launch_status();
 }
 
+extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_forward_recompute(
+    const float *q,
+    const float *k,
+    const float *v,
+    float *out,
+    float *probabilities,
+    geo_tensor_attention_shape shape,
+    void *stream
+) {
+    g_n_backward_probability_recompute_calls++;
+    if (q == nullptr || k == nullptr || v == nullptr || out == nullptr ||
+        probabilities == nullptr || !valid_shape(shape)) {
+        return GEO_TENSOR_INVALID_ARGUMENT;
+    }
+    const size_t rows = shape.outer * shape.tokens;
+    causal_attention_forward_kernel<<<
+        launch_blocks(rows), GEO_ATTENTION_BLOCK_SIZE, 0,
+        reinterpret_cast<cudaStream_t>(stream)
+    >>>(
+        q, k, v, out, probabilities,
+        shape.outer, shape.tokens, shape.head_dim
+    );
+    return launch_status();
+}
+
 extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_vjp(
     const float *q,
     const float *k,

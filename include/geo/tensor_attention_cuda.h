@@ -37,6 +37,16 @@ geo_tensor_status geo_tensor_causal_attention_cuda_forward(
     void *stream
 );
 
+geo_tensor_status geo_tensor_causal_attention_cuda_forward_recompute(
+    const float *q,
+    const float *k,
+    const float *v,
+    float *out,
+    float *probabilities,
+    geo_tensor_attention_shape shape,
+    void *stream
+);
+
 geo_tensor_status geo_tensor_causal_attention_cuda_forward_no_probs(
     const float *q,
     const float *k,
