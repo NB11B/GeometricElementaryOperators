@@ -14,6 +14,17 @@ typedef struct geo_attention_backward_timings {
     float t_total_ms;
 } geo_attention_backward_timings;
 
+typedef struct geo_attention_backend_counters {
+    unsigned long long n_save_forward_calls;
+    unsigned long long n_recompute_forward_calls;
+    unsigned long long n_streaming_forward_calls;
+    unsigned long long n_backward_calls;
+} geo_attention_backend_counters;
+
+void geo_tensor_causal_attention_get_counters(geo_attention_backend_counters *out);
+void geo_tensor_causal_attention_reset_counters(void);
+void geo_tensor_causal_attention_set_perturbation(float delta);
+
 geo_tensor_status geo_tensor_causal_attention_cuda_forward(
     const float *q,
     const float *k,

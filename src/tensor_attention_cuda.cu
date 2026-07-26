@@ -288,7 +288,40 @@ __global__ void causal_attention_forward_no_probs_kernel(
     }
 }
 
+static unsigned long long g_n_save_forward_calls = 0;
+static unsigned long long g_n_recompute_forward_calls = 0;
+static unsigned long long g_n_streaming_forward_calls = 0;
+static unsigned long long g_n_backward_calls = 0;
+__device__ static float g_perturbation_delta_dev = 0.0f;
+static float g_perturbation_delta_host = 0.0f;
+
+__global__ void apply_perturbation_kernel(float *out, float delta) {
+    if (threadIdx.x == 0 && blockIdx.x == 0) {
+        out[0] += delta;
+    }
+}
+
 }  // namespace
+
+extern "C" void geo_tensor_causal_attention_get_counters(geo_attention_backend_counters *out) {
+    if (out) {
+        out->n_save_forward_calls = g_n_save_forward_calls;
+        out->n_recompute_forward_calls = g_n_recompute_forward_calls;
+        out->n_streaming_forward_calls = g_n_streaming_forward_calls;
+        out->n_backward_calls = g_n_backward_calls;
+    }
+}
+
+extern "C" void geo_tensor_causal_attention_reset_counters(void) {
+    g_n_save_forward_calls = 0;
+    g_n_recompute_forward_calls = 0;
+    g_n_streaming_forward_calls = 0;
+    g_n_backward_calls = 0;
+}
+
+extern "C" void geo_tensor_causal_attention_set_perturbation(float delta) {
+    g_perturbation_delta_host = delta;
+}
 
 extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_streaming_forward(
     const float *q,
@@ -298,7 +331,12 @@ extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_streaming_forward(
     geo_tensor_attention_shape shape,
     void *stream
 ) {
-    return geo_tensor_causal_attention_cuda_forward_no_probs(q, k, v, out, shape, stream);
+    g_n_streaming_forward_calls++;
+    geo_tensor_status status = geo_tensor_causal_attention_cuda_forward_no_probs(q, k, v, out, shape, stream);
+    if (status == GEO_TENSOR_OK && g_perturbation_delta_host != 0.0f) {
+        apply_perturbation_kernel<<<1, 1, 0, reinterpret_cast<cudaStream_t>(stream)>>>(out, g_perturbation_delta_host);
+    }
+    return status;
 }
 
 extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_forward_no_probs(
@@ -309,6 +347,7 @@ extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_forward_no_probs(
     geo_tensor_attention_shape shape,
     void *stream
 ) {
+    g_n_recompute_forward_calls++;
     if (q == nullptr || k == nullptr || v == nullptr || out == nullptr || !valid_shape(shape)) {
         return GEO_TENSOR_INVALID_ARGUMENT;
     }
@@ -332,6 +371,7 @@ extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_forward(
     geo_tensor_attention_shape shape,
     void *stream
 ) {
+    g_n_save_forward_calls++;
     if (q == nullptr || k == nullptr || v == nullptr || out == nullptr ||
         probabilities == nullptr || !valid_shape(shape)) {
         return GEO_TENSOR_INVALID_ARGUMENT;
@@ -361,6 +401,7 @@ extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_vjp(
     geo_tensor_attention_shape shape,
     void *stream
 ) {
+    g_n_backward_calls++;
     if (q == nullptr || k == nullptr || v == nullptr || probabilities == nullptr ||
         grad_out == nullptr || grad_q == nullptr || grad_k == nullptr ||
         grad_v == nullptr || !valid_shape(shape)) {
