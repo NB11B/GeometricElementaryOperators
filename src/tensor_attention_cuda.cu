@@ -290,6 +290,17 @@ __global__ void causal_attention_forward_no_probs_kernel(
 
 }  // namespace
 
+extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_streaming_forward(
+    const float *q,
+    const float *k,
+    const float *v,
+    float *out,
+    geo_tensor_attention_shape shape,
+    void *stream
+) {
+    return geo_tensor_causal_attention_cuda_forward_no_probs(q, k, v, out, shape, stream);
+}
+
 extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_forward_no_probs(
     const float *q,
     const float *k,
