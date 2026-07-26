@@ -288,6 +288,143 @@ __global__ void causal_attention_forward_no_probs_kernel(
     }
 }
 
+__global__ void causal_attention_streaming_vjp_kernel_di(
+    const float *out,
+    const float *grad_out,
+    float *d_i_out,
+    size_t outer_count,
+    size_t tokens,
+    size_t head_dim
+) {
+    const size_t rows = outer_count * tokens;
+    const size_t stride = static_cast<size_t>(blockDim.x) * gridDim.x;
+
+    for (size_t row = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+         row < rows;
+         row += stride) {
+        const size_t outer = row / tokens;
+        const size_t query = row - outer * tokens;
+
+        float val = 0.0f;
+        for (size_t dim = 0u; dim < head_dim; ++dim) {
+            val += grad_out[data_index(outer, query, dim, tokens, head_dim)] *
+                   out[data_index(outer, query, dim, tokens, head_dim)];
+        }
+        d_i_out[row] = val;
+    }
+}
+
+__global__ void causal_attention_streaming_vjp_kernel_dq(
+    const float *q,
+    const float *k,
+    const float *v,
+    const float *grad_out,
+    const float *d_i_in,
+    float *grad_q,
+    size_t outer_count,
+    size_t tokens,
+    size_t head_dim
+) {
+    const size_t rows = outer_count * tokens;
+    const size_t stride = static_cast<size_t>(blockDim.x) * gridDim.x;
+    const float scale = rsqrtf(static_cast<float>(head_dim));
+
+    for (size_t row = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+         row < rows;
+         row += stride) {
+        const size_t outer = row / tokens;
+        const size_t query = row - outer * tokens;
+        const float D_i = d_i_in[row];
+
+        float max_score = -CUDART_INF_F;
+        for (size_t key = 0u; key <= query; ++key) {
+            const float score = dot_tokens(q, query, k, key, outer, tokens, head_dim) * scale;
+            max_score = fmaxf(max_score, score);
+        }
+
+        float normalizer = 0.0f;
+        for (size_t key = 0u; key <= query; ++key) {
+            const float score = dot_tokens(q, query, k, key, outer, tokens, head_dim) * scale;
+            normalizer += expf(score - max_score);
+        }
+        const float inv_normalizer = (normalizer > 0.0f) ? (1.0f / normalizer) : 0.0f;
+
+        for (size_t dim = 0u; dim < head_dim; ++dim) {
+            float gq_val = 0.0f;
+            for (size_t key = 0u; key <= query; ++key) {
+                const float score = dot_tokens(q, query, k, key, outer, tokens, head_dim) * scale;
+                const float p = expf(score - max_score) * inv_normalizer;
+
+                float grad_out_dot_v = 0.0f;
+                for (size_t d = 0u; d < head_dim; ++d) {
+                    grad_out_dot_v += grad_out[data_index(outer, query, d, tokens, head_dim)] *
+                                      v[data_index(outer, key, d, tokens, head_dim)];
+                }
+
+                const float ds = p * (grad_out_dot_v - D_i);
+                gq_val += ds * k[data_index(outer, key, dim, tokens, head_dim)] * scale;
+            }
+            grad_q[data_index(outer, query, dim, tokens, head_dim)] = gq_val;
+        }
+    }
+}
+
+__global__ void causal_attention_streaming_vjp_kernel_dk_dv(
+    const float *q,
+    const float *k,
+    const float *v,
+    const float *grad_out,
+    const float *d_i_in,
+    float *grad_k,
+    float *grad_v,
+    size_t outer_count,
+    size_t tokens,
+    size_t head_dim
+) {
+    const size_t rows = outer_count * tokens;
+    const size_t stride = static_cast<size_t>(blockDim.x) * gridDim.x;
+    const float scale = rsqrtf(static_cast<float>(head_dim));
+
+    for (size_t row = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+         row < rows;
+         row += stride) {
+        const size_t outer = row / tokens;
+        const size_t query = row - outer * tokens;
+        const float D_i = d_i_in[row];
+
+        float max_score = -CUDART_INF_F;
+        for (size_t key = 0u; key <= query; ++key) {
+            const float score = dot_tokens(q, query, k, key, outer, tokens, head_dim) * scale;
+            max_score = fmaxf(max_score, score);
+        }
+
+        float normalizer = 0.0f;
+        for (size_t key = 0u; key <= query; ++key) {
+            const float score = dot_tokens(q, query, k, key, outer, tokens, head_dim) * scale;
+            normalizer += expf(score - max_score);
+        }
+        const float inv_normalizer = (normalizer > 0.0f) ? (1.0f / normalizer) : 0.0f;
+
+        for (size_t key = 0u; key <= query; ++key) {
+            const float score = dot_tokens(q, query, k, key, outer, tokens, head_dim) * scale;
+            const float p = expf(score - max_score) * inv_normalizer;
+
+            float grad_out_dot_v = 0.0f;
+            for (size_t dim = 0u; dim < head_dim; ++dim) {
+                grad_out_dot_v += grad_out[data_index(outer, query, dim, tokens, head_dim)] *
+                                  v[data_index(outer, key, dim, tokens, head_dim)];
+            }
+
+            const float ds = p * (grad_out_dot_v - D_i);
+
+            for (size_t dim = 0u; dim < head_dim; ++dim) {
+                atomicAdd(&grad_k[data_index(outer, key, dim, tokens, head_dim)], ds * q[data_index(outer, query, dim, tokens, head_dim)] * scale);
+                atomicAdd(&grad_v[data_index(outer, key, dim, tokens, head_dim)], p * grad_out[data_index(outer, query, dim, tokens, head_dim)]);
+            }
+        }
+    }
+}
+
 __global__ void causal_attention_streaming_vjp_kernel(
     const float *q,
     const float *k,
@@ -599,5 +736,82 @@ extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_streaming_vjp(
         shape.outer, shape.tokens, shape.head_dim
     );
 
+    return launch_status();
+}
+
+extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_streaming_vjp_profiled(
+    const float *q,
+    const float *k,
+    const float *v,
+    const float *out,
+    const float *grad_out,
+    float *grad_q,
+    float *grad_k,
+    float *grad_v,
+    geo_attention_streaming_vjp_timings *timings,
+    geo_tensor_attention_shape shape,
+    void *stream
+) {
+    g_n_streaming_vjp_calls++;
+    if (q == nullptr || k == nullptr || v == nullptr || out == nullptr ||
+        grad_out == nullptr || grad_q == nullptr || grad_k == nullptr ||
+        grad_v == nullptr || !valid_shape(shape)) {
+        return GEO_TENSOR_INVALID_ARGUMENT;
+    }
+
+    cudaStream_t custream = reinterpret_cast<cudaStream_t>(stream);
+    const size_t total_elements = shape.outer * shape.tokens * shape.head_dim;
+    const size_t rows = shape.outer * shape.tokens;
+
+    float *d_i_buf = nullptr;
+    if (cudaMallocAsync(&d_i_buf, rows * sizeof(float), custream) != cudaSuccess) {
+        return GEO_TENSOR_CUDA_ERROR;
+    }
+
+    cudaMemsetAsync(grad_k, 0, total_elements * sizeof(float), custream);
+    cudaMemsetAsync(grad_v, 0, total_elements * sizeof(float), custream);
+
+    cudaEvent_t ev_start, ev_di, ev_dq, ev_dk_dv;
+    bool do_timing = (timings != nullptr);
+    if (do_timing) {
+        cudaEventCreate(&ev_start);
+        cudaEventCreate(&ev_di);
+        cudaEventCreate(&ev_dq);
+        cudaEventCreate(&ev_dk_dv);
+        cudaEventRecord(ev_start, custream);
+    }
+
+    // Step 1: Compute D_i
+    causal_attention_streaming_vjp_kernel_di<<<launch_blocks(rows), GEO_ATTENTION_BLOCK_SIZE, 0, custream>>>(
+        out, grad_out, d_i_buf, shape.outer, shape.tokens, shape.head_dim
+    );
+    if (do_timing) cudaEventRecord(ev_di, custream);
+
+    // Step 2: Compute grad_q (No atomics!)
+    causal_attention_streaming_vjp_kernel_dq<<<launch_blocks(rows), GEO_ATTENTION_BLOCK_SIZE, 0, custream>>>(
+        q, k, v, grad_out, d_i_buf, grad_q, shape.outer, shape.tokens, shape.head_dim
+    );
+    if (do_timing) cudaEventRecord(ev_dq, custream);
+
+    // Step 3: Compute grad_k and grad_v (With global atomics)
+    causal_attention_streaming_vjp_kernel_dk_dv<<<launch_blocks(rows), GEO_ATTENTION_BLOCK_SIZE, 0, custream>>>(
+        q, k, v, grad_out, d_i_buf, grad_k, grad_v, shape.outer, shape.tokens, shape.head_dim
+    );
+    if (do_timing) cudaEventRecord(ev_dk_dv, custream);
+
+    if (do_timing) {
+        cudaEventSynchronize(ev_dk_dv);
+        cudaEventElapsedTime(&timings->t_di_ms, ev_start, ev_di);
+        cudaEventElapsedTime(&timings->t_dq_ms, ev_di, ev_dq);
+        cudaEventElapsedTime(&timings->t_dk_dv_atomic_ms, ev_dq, ev_dk_dv);
+        cudaEventElapsedTime(&timings->t_total_ms, ev_start, ev_dk_dv);
+        timings->t_score_recompute_ms = timings->t_dq_ms;
+        cudaEventDestroy(ev_start);
+        cudaEventDestroy(ev_di);
+        cudaEventDestroy(ev_dq);
+        cudaEventDestroy(ev_dk_dv);
+    }
+
+    cudaFreeAsync(d_i_buf, custream);
     return launch_status();
 }

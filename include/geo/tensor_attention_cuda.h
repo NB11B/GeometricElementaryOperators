@@ -80,6 +80,14 @@ geo_tensor_status geo_tensor_causal_attention_cuda_vjp(
     void *stream
 );
 
+typedef struct geo_attention_streaming_vjp_timings {
+    float t_di_ms;
+    float t_score_recompute_ms;
+    float t_dq_ms;
+    float t_dk_dv_atomic_ms;
+    float t_total_ms;
+} geo_attention_streaming_vjp_timings;
+
 geo_tensor_status geo_tensor_causal_attention_cuda_streaming_vjp(
     const float *q,
     const float *k,
@@ -89,6 +97,20 @@ geo_tensor_status geo_tensor_causal_attention_cuda_streaming_vjp(
     float *grad_q,
     float *grad_k,
     float *grad_v,
+    geo_tensor_attention_shape shape,
+    void *stream
+);
+
+geo_tensor_status geo_tensor_causal_attention_cuda_streaming_vjp_profiled(
+    const float *q,
+    const float *k,
+    const float *v,
+    const float *out,
+    const float *grad_out,
+    float *grad_q,
+    float *grad_k,
+    float *grad_v,
+    geo_attention_streaming_vjp_timings *timings,
     geo_tensor_attention_shape shape,
     void *stream
 );
