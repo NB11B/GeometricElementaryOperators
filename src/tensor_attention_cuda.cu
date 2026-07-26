@@ -349,22 +349,20 @@ __global__ void causal_attention_streaming_vjp_kernel_dq(
         }
         const float inv_normalizer = (normalizer > 0.0f) ? (1.0f / normalizer) : 0.0f;
 
-        for (size_t dim = 0u; dim < head_dim; ++dim) {
-            float gq_val = 0.0f;
-            for (size_t key = 0u; key <= query; ++key) {
-                const float score = dot_tokens(q, query, k, key, outer, tokens, head_dim) * scale;
-                const float p = expf(score - max_score) * inv_normalizer;
+        for (size_t key = 0u; key <= query; ++key) {
+            const float score = dot_tokens(q, query, k, key, outer, tokens, head_dim) * scale;
+            const float p = expf(score - max_score) * inv_normalizer;
 
-                float grad_out_dot_v = 0.0f;
-                for (size_t d = 0u; d < head_dim; ++d) {
-                    grad_out_dot_v += grad_out[data_index(outer, query, d, tokens, head_dim)] *
-                                      v[data_index(outer, key, d, tokens, head_dim)];
-                }
-
-                const float ds = p * (grad_out_dot_v - D_i);
-                gq_val += ds * k[data_index(outer, key, dim, tokens, head_dim)] * scale;
+            float grad_out_dot_v = 0.0f;
+            for (size_t d = 0u; d < head_dim; ++d) {
+                grad_out_dot_v += grad_out[data_index(outer, query, d, tokens, head_dim)] *
+                                  v[data_index(outer, key, d, tokens, head_dim)];
             }
-            grad_q[data_index(outer, query, dim, tokens, head_dim)] = gq_val;
+
+            const float ds = p * (grad_out_dot_v - D_i);
+            for (size_t dim = 0u; dim < head_dim; ++dim) {
+                atomicAdd(&grad_q[data_index(outer, query, dim, tokens, head_dim)], ds * k[data_index(outer, key, dim, tokens, head_dim)] * scale);
+            }
         }
     }
 }
