@@ -32,6 +32,18 @@ geo_tensor_status geo_tensor_adamw_cuda_step(
     void *stream
 );
 
+geo_tensor_status geo_tensor_adamw_cuda_step_fused(
+    float **parameters,
+    const float **gradients,
+    float **first_moments,
+    float **second_moments,
+    const size_t *counts,
+    size_t num_tensors,
+    const float *clip_scale,
+    geo_tensor_adamw_config config,
+    void *stream
+);
+
 #ifdef __cplusplus
 }
 #endif
