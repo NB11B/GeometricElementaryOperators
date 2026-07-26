@@ -144,6 +144,61 @@ __global__ void cross_entropy_vjp_parallel_kernel(
     }
 }
 
+__global__ void cross_entropy_forward_serial_kernel(
+    const float *logits,
+    const int64_t *targets,
+    int64_t ignore_index,
+    float *loss_sum,
+    float *probabilities,
+    float *valid_count,
+    size_t rows,
+    size_t classes
+) {
+    const size_t stride = static_cast<size_t>(blockDim.x) * gridDim.x;
+    for (size_t row = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+         row < rows;
+         row += stride) {
+        const size_t base = row * classes;
+        const int64_t target = targets[row];
+        if (target == ignore_index) {
+            for (size_t c = 0u; c < classes; ++c) {
+                probabilities[base + c] = 0.0f;
+            }
+            continue;
+        }
+        if (target < 0 || static_cast<uint64_t>(target) >= static_cast<uint64_t>(classes)) {
+            const float nan_val = nanf("");
+            atomicExch(loss_sum, nan_val);
+            atomicExch(valid_count, nan_val);
+            for (size_t c = 0u; c < classes; ++c) {
+                probabilities[base + c] = nan_val;
+            }
+            continue;
+        }
+
+        float max_logit = logits[base];
+        for (size_t c = 1u; c < classes; ++c) {
+            max_logit = fmaxf(max_logit, logits[base + c]);
+        }
+
+        float exp_sum = 0.0f;
+        for (size_t c = 0u; c < classes; ++c) {
+            const float exp_val = expf(logits[base + c] - max_logit);
+            probabilities[base + c] = exp_val;
+            exp_sum += exp_val;
+        }
+
+        const float inv_exp_sum = 1.0f / exp_sum;
+        for (size_t c = 0u; c < classes; ++c) {
+            probabilities[base + c] *= inv_exp_sum;
+        }
+
+        const float row_loss = max_logit + logf(exp_sum) - logits[base + static_cast<size_t>(target)];
+        atomicAdd(loss_sum, row_loss);
+        atomicAdd(valid_count, 1.0f);
+    }
+}
+
 geo_tensor_status launch_status() {
     return cudaGetLastError() == cudaSuccess ? GEO_TENSOR_OK : GEO_TENSOR_CUDA_ERROR;
 }
@@ -170,14 +225,25 @@ extern "C" geo_tensor_status geo_tensor_cross_entropy_cuda_forward(
     cudaMemsetAsync(loss, 0, sizeof(float), custream);
     cudaMemsetAsync(normalizer, 0, sizeof(float), custream);
 
-    // Each blockIdx.x handles 1 row in parallel
-    dim3 grid(static_cast<unsigned int>(shape.rows));
-    dim3 block(GEO_LOSS_BLOCK_SIZE);
+    if (shape.classes <= 512u) {
+        // Small vocabulary <= 512: 1D serial row kernel
+        const size_t work_items = shape.rows;
+        const unsigned int block_size = 128u;
+        const unsigned int grid_size = static_cast<unsigned int>((work_items + block_size - 1u) / block_size);
+        cross_entropy_forward_serial_kernel<<<grid_size, block_size, 0, custream>>>(
+            logits, targets, ignore_index, loss, probabilities, normalizer,
+            shape.rows, shape.classes
+        );
+    } else {
+        // Medium/Large vocabulary > 512: 2D parallel block reduction grid
+        dim3 grid(static_cast<unsigned int>(shape.rows));
+        dim3 block(GEO_LOSS_BLOCK_SIZE);
 
-    cross_entropy_forward_parallel_kernel<<<grid, block, 0, custream>>>(
-        logits, targets, ignore_index, loss, probabilities, normalizer,
-        shape.rows, shape.classes
-    );
+        cross_entropy_forward_parallel_kernel<<<grid, block, 0, custream>>>(
+            logits, targets, ignore_index, loss, probabilities, normalizer,
+            shape.rows, shape.classes
+        );
+    }
 
     cross_entropy_finalize_kernel<<<1, 1, 0, custream>>>(loss, normalizer);
     return launch_status();

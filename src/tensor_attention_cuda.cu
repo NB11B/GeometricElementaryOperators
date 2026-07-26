@@ -243,7 +243,74 @@ geo_tensor_status launch_status() {
     return cudaGetLastError() == cudaSuccess ? GEO_TENSOR_OK : GEO_TENSOR_CUDA_ERROR;
 }
 
+__global__ void causal_attention_forward_no_probs_kernel(
+    const float *q,
+    const float *k,
+    const float *v,
+    float *out,
+    size_t outer_count,
+    size_t tokens,
+    size_t head_dim
+) {
+    const size_t rows = outer_count * tokens;
+    const size_t stride = static_cast<size_t>(blockDim.x) * gridDim.x;
+    const float scale = rsqrtf(static_cast<float>(head_dim));
+
+    for (size_t row = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+         row < rows;
+         row += stride) {
+        const size_t outer = row / tokens;
+        const size_t query = row - outer * tokens;
+
+        float max_score = -CUDART_INF_F;
+        for (size_t key = 0u; key <= query; ++key) {
+            const float score = dot_tokens(q, query, k, key, outer, tokens, head_dim) * scale;
+            max_score = fmaxf(max_score, score);
+        }
+
+        float normalizer = 0.0f;
+        for (size_t key = 0u; key <= query; ++key) {
+            const float score = dot_tokens(q, query, k, key, outer, tokens, head_dim) * scale;
+            normalizer += expf(score - max_score);
+        }
+
+        const float inv_normalizer = 1.0f / normalizer;
+
+        for (size_t dim = 0u; dim < head_dim; ++dim) {
+            float value = 0.0f;
+            for (size_t key = 0u; key <= query; ++key) {
+                const float score = dot_tokens(q, query, k, key, outer, tokens, head_dim) * scale;
+                const float p = expf(score - max_score) * inv_normalizer;
+                value += p * v[data_index(outer, key, dim, tokens, head_dim)];
+            }
+            out[data_index(outer, query, dim, tokens, head_dim)] = value;
+        }
+    }
+}
+
 }  // namespace
+
+extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_forward_no_probs(
+    const float *q,
+    const float *k,
+    const float *v,
+    float *out,
+    geo_tensor_attention_shape shape,
+    void *stream
+) {
+    if (q == nullptr || k == nullptr || v == nullptr || out == nullptr || !valid_shape(shape)) {
+        return GEO_TENSOR_INVALID_ARGUMENT;
+    }
+    const size_t rows = shape.outer * shape.tokens;
+    causal_attention_forward_no_probs_kernel<<<
+        launch_blocks(rows), GEO_ATTENTION_BLOCK_SIZE, 0,
+        reinterpret_cast<cudaStream_t>(stream)
+    >>>(
+        q, k, v, out,
+        shape.outer, shape.tokens, shape.head_dim
+    );
+    return launch_status();
+}
 
 extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_forward(
     const float *q,
