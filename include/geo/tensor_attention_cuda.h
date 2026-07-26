@@ -15,10 +15,12 @@ typedef struct geo_attention_backward_timings {
 } geo_attention_backward_timings;
 
 typedef struct geo_attention_backend_counters {
-    unsigned long long n_save_forward_calls;
-    unsigned long long n_recompute_forward_calls;
+    unsigned long long n_forward_with_probs_calls;
+    unsigned long long n_forward_no_probs_calls;
     unsigned long long n_streaming_forward_calls;
-    unsigned long long n_backward_calls;
+    unsigned long long n_backward_probability_recompute_calls;
+    unsigned long long n_attention_vjp_calls;
+    unsigned long long n_streaming_vjp_calls;
 } geo_attention_backend_counters;
 
 void geo_tensor_causal_attention_get_counters(geo_attention_backend_counters *out);
@@ -64,6 +66,19 @@ geo_tensor_status geo_tensor_causal_attention_cuda_vjp(
     float *grad_v,
     float *workspace_dp_ds,  /* Optional workspace buffer of size [outer * tokens * tokens] */
     geo_attention_backward_timings *timings, /* Optional internal timing output */
+    geo_tensor_attention_shape shape,
+    void *stream
+);
+
+geo_tensor_status geo_tensor_causal_attention_cuda_streaming_vjp(
+    const float *q,
+    const float *k,
+    const float *v,
+    const float *out,
+    const float *grad_out,
+    float *grad_q,
+    float *grad_k,
+    float *grad_v,
     geo_tensor_attention_shape shape,
     void *stream
 );

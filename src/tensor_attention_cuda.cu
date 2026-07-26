@@ -288,11 +288,75 @@ __global__ void causal_attention_forward_no_probs_kernel(
     }
 }
 
-static unsigned long long g_n_save_forward_calls = 0;
-static unsigned long long g_n_recompute_forward_calls = 0;
+__global__ void causal_attention_streaming_vjp_kernel(
+    const float *q,
+    const float *k,
+    const float *v,
+    const float *out,
+    const float *grad_out,
+    float *grad_q,
+    float *grad_k,
+    float *grad_v,
+    size_t outer_count,
+    size_t tokens,
+    size_t head_dim
+) {
+    const size_t rows = outer_count * tokens;
+    const size_t stride = static_cast<size_t>(blockDim.x) * gridDim.x;
+    const float scale = rsqrtf(static_cast<float>(head_dim));
+
+    for (size_t row = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+         row < rows;
+         row += stride) {
+        const size_t outer = row / tokens;
+        const size_t query = row - outer * tokens;
+
+        float max_score = -CUDART_INF_F;
+        for (size_t key = 0u; key <= query; ++key) {
+            const float score = dot_tokens(q, query, k, key, outer, tokens, head_dim) * scale;
+            max_score = fmaxf(max_score, score);
+        }
+
+        float normalizer = 0.0f;
+        for (size_t key = 0u; key <= query; ++key) {
+            const float score = dot_tokens(q, query, k, key, outer, tokens, head_dim) * scale;
+            normalizer += expf(score - max_score);
+        }
+        const float inv_normalizer = (normalizer > 0.0f) ? (1.0f / normalizer) : 0.0f;
+
+        float D_i = 0.0f;
+        for (size_t dim = 0u; dim < head_dim; ++dim) {
+            D_i += grad_out[data_index(outer, query, dim, tokens, head_dim)] *
+                   out[data_index(outer, query, dim, tokens, head_dim)];
+        }
+
+        for (size_t key = 0u; key <= query; ++key) {
+            const float score = dot_tokens(q, query, k, key, outer, tokens, head_dim) * scale;
+            const float p = expf(score - max_score) * inv_normalizer;
+
+            float grad_out_dot_v = 0.0f;
+            for (size_t dim = 0u; dim < head_dim; ++dim) {
+                grad_out_dot_v += grad_out[data_index(outer, query, dim, tokens, head_dim)] *
+                                  v[data_index(outer, key, dim, tokens, head_dim)];
+            }
+
+            const float ds = p * (grad_out_dot_v - D_i);
+
+            for (size_t dim = 0u; dim < head_dim; ++dim) {
+                atomicAdd(&grad_q[data_index(outer, query, dim, tokens, head_dim)], ds * k[data_index(outer, key, dim, tokens, head_dim)] * scale);
+                atomicAdd(&grad_k[data_index(outer, key, dim, tokens, head_dim)], ds * q[data_index(outer, query, dim, tokens, head_dim)] * scale);
+                atomicAdd(&grad_v[data_index(outer, key, dim, tokens, head_dim)], p * grad_out[data_index(outer, query, dim, tokens, head_dim)]);
+            }
+        }
+    }
+}
+
+static unsigned long long g_n_forward_with_probs_calls = 0;
+static unsigned long long g_n_forward_no_probs_calls = 0;
 static unsigned long long g_n_streaming_forward_calls = 0;
-static unsigned long long g_n_backward_calls = 0;
-__device__ static float g_perturbation_delta_dev = 0.0f;
+static unsigned long long g_n_backward_probability_recompute_calls = 0;
+static unsigned long long g_n_attention_vjp_calls = 0;
+static unsigned long long g_n_streaming_vjp_calls = 0;
 static float g_perturbation_delta_host = 0.0f;
 
 __global__ void apply_perturbation_kernel(float *out, float delta) {
@@ -305,18 +369,22 @@ __global__ void apply_perturbation_kernel(float *out, float delta) {
 
 extern "C" void geo_tensor_causal_attention_get_counters(geo_attention_backend_counters *out) {
     if (out) {
-        out->n_save_forward_calls = g_n_save_forward_calls;
-        out->n_recompute_forward_calls = g_n_recompute_forward_calls;
+        out->n_forward_with_probs_calls = g_n_forward_with_probs_calls;
+        out->n_forward_no_probs_calls = g_n_forward_no_probs_calls;
         out->n_streaming_forward_calls = g_n_streaming_forward_calls;
-        out->n_backward_calls = g_n_backward_calls;
+        out->n_backward_probability_recompute_calls = g_n_backward_probability_recompute_calls;
+        out->n_attention_vjp_calls = g_n_attention_vjp_calls;
+        out->n_streaming_vjp_calls = g_n_streaming_vjp_calls;
     }
 }
 
 extern "C" void geo_tensor_causal_attention_reset_counters(void) {
-    g_n_save_forward_calls = 0;
-    g_n_recompute_forward_calls = 0;
+    g_n_forward_with_probs_calls = 0;
+    g_n_forward_no_probs_calls = 0;
     g_n_streaming_forward_calls = 0;
-    g_n_backward_calls = 0;
+    g_n_backward_probability_recompute_calls = 0;
+    g_n_attention_vjp_calls = 0;
+    g_n_streaming_vjp_calls = 0;
 }
 
 extern "C" void geo_tensor_causal_attention_set_perturbation(float delta) {
@@ -347,7 +415,7 @@ extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_forward_no_probs(
     geo_tensor_attention_shape shape,
     void *stream
 ) {
-    g_n_recompute_forward_calls++;
+    g_n_forward_no_probs_calls++;
     if (q == nullptr || k == nullptr || v == nullptr || out == nullptr || !valid_shape(shape)) {
         return GEO_TENSOR_INVALID_ARGUMENT;
     }
@@ -371,7 +439,7 @@ extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_forward(
     geo_tensor_attention_shape shape,
     void *stream
 ) {
-    g_n_save_forward_calls++;
+    g_n_forward_with_probs_calls++;
     if (q == nullptr || k == nullptr || v == nullptr || out == nullptr ||
         probabilities == nullptr || !valid_shape(shape)) {
         return GEO_TENSOR_INVALID_ARGUMENT;
@@ -401,7 +469,7 @@ extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_vjp(
     geo_tensor_attention_shape shape,
     void *stream
 ) {
-    g_n_backward_calls++;
+    g_n_attention_vjp_calls++;
     if (q == nullptr || k == nullptr || v == nullptr || probabilities == nullptr ||
         grad_out == nullptr || grad_q == nullptr || grad_k == nullptr ||
         grad_v == nullptr || !valid_shape(shape)) {
@@ -468,6 +536,43 @@ extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_vjp(
     if (allocated_ws) {
         cudaFreeAsync(ds_ptr, custream);
     }
+
+    return launch_status();
+}
+
+extern "C" geo_tensor_status geo_tensor_causal_attention_cuda_streaming_vjp(
+    const float *q,
+    const float *k,
+    const float *v,
+    const float *out,
+    const float *grad_out,
+    float *grad_q,
+    float *grad_k,
+    float *grad_v,
+    geo_tensor_attention_shape shape,
+    void *stream
+) {
+    g_n_streaming_vjp_calls++;
+    if (q == nullptr || k == nullptr || v == nullptr || out == nullptr ||
+        grad_out == nullptr || grad_q == nullptr || grad_k == nullptr ||
+        grad_v == nullptr || !valid_shape(shape)) {
+        return GEO_TENSOR_INVALID_ARGUMENT;
+    }
+
+    cudaStream_t custream = reinterpret_cast<cudaStream_t>(stream);
+    const size_t total_elements = shape.outer * shape.tokens * shape.head_dim;
+
+    cudaMemsetAsync(grad_q, 0, total_elements * sizeof(float), custream);
+    cudaMemsetAsync(grad_k, 0, total_elements * sizeof(float), custream);
+    cudaMemsetAsync(grad_v, 0, total_elements * sizeof(float), custream);
+
+    const size_t rows = shape.outer * shape.tokens;
+    causal_attention_streaming_vjp_kernel<<<
+        launch_blocks(rows), GEO_ATTENTION_BLOCK_SIZE, 0, custream
+    >>>(
+        q, k, v, out, grad_out, grad_q, grad_k, grad_v,
+        shape.outer, shape.tokens, shape.head_dim
+    );
 
     return launch_status();
 }
