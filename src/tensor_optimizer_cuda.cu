@@ -43,6 +43,44 @@ __global__ void grad_square_kernel(
     atomicAdd(sum_square, local);
 }
 
+__global__ void grad_square_fused_kernel(
+    const float **gradients,
+    const size_t *counts,
+    size_t num_tensors,
+    float *sum_square
+) {
+    __shared__ float sdata[GEO_OPTIMIZER_BLOCK_SIZE];
+    const unsigned int tid = threadIdx.x;
+    float local_sum = 0.0f;
+
+    for (size_t t = blockIdx.y; t < num_tensors; t += gridDim.y) {
+        const float *grad_arr = gradients[t];
+        const size_t count = counts[t];
+        const size_t stride = static_cast<size_t>(blockDim.x) * gridDim.x;
+
+        for (size_t index = static_cast<size_t>(blockIdx.x) * blockDim.x + tid;
+             index < count;
+             index += stride) {
+            const float val = grad_arr[index];
+            local_sum += val * val;
+        }
+    }
+
+    sdata[tid] = local_sum;
+    __syncthreads();
+
+    for (unsigned int s = blockDim.x / 2u; s > 0u; s >>= 1u) {
+        if (tid < s) {
+            sdata[tid] += sdata[tid + s];
+        }
+        __syncthreads();
+    }
+
+    if (tid == 0u) {
+        atomicAdd(sum_square, sdata[0]);
+    }
+}
+
 __global__ void grad_clip_finalize_kernel(
     const float *sum_square,
     float max_grad_norm,
@@ -135,6 +173,25 @@ geo_tensor_status launch_status() {
 }
 
 }  // namespace
+
+extern "C" geo_tensor_status geo_tensor_grad_square_cuda_accumulate_fused(
+    const float **gradients,
+    const size_t *counts,
+    size_t num_tensors,
+    float *sum_square,
+    void *stream
+) {
+    if (gradients == nullptr || counts == nullptr || sum_square == nullptr || num_tensors == 0u) {
+        return GEO_TENSOR_INVALID_ARGUMENT;
+    }
+    cudaStream_t custream = reinterpret_cast<cudaStream_t>(stream);
+    dim3 grid(128u, static_cast<unsigned int>(num_tensors));
+    dim3 block(GEO_OPTIMIZER_BLOCK_SIZE);
+    grad_square_fused_kernel<<<grid, block, 0, custream>>>(
+        gradients, counts, num_tensors, sum_square
+    );
+    return launch_status();
+}
 
 extern "C" geo_tensor_status geo_tensor_grad_square_cuda_accumulate(
     const float *gradient,

@@ -14,6 +14,14 @@ geo_tensor_status geo_tensor_grad_square_cuda_accumulate(
     void *stream
 );
 
+geo_tensor_status geo_tensor_grad_square_cuda_accumulate_fused(
+    const float **gradients,
+    const size_t *counts,
+    size_t num_tensors,
+    float *sum_square,
+    void *stream
+);
+
 geo_tensor_status geo_tensor_grad_clip_cuda_finalize(
     const float *sum_square,
     float max_grad_norm,
