@@ -202,9 +202,11 @@ extern "C" geo_tensor_status geo_implicit_linear_cuda_forward(
 
     cudaStream_t stream = (cudaStream_t)stream_ptr;
 
-    // Allocate temporary compact H buffer [N, R]
     float *h_buffer = nullptr;
-    cudaMallocAsync(&h_buffer, N * R * sizeof(float), stream);
+    cudaError_t alloc_err = cudaMallocAsync(&h_buffer, N * R * sizeof(float), stream);
+    if (alloc_err != cudaSuccess) {
+        return GEO_TENSOR_CUDA_ERROR;
+    }
 
     dim3 threads_h(16, 4);
     dim3 blocks_h((N + threads_h.x - 1) / threads_h.x,
@@ -220,7 +222,11 @@ extern "C" geo_tensor_status geo_implicit_linear_cuda_forward(
         u, alpha, h_buffer, y, N, D_out, R
     );
 
-    cudaFreeAsync(h_buffer, stream);
+    cudaError_t free_err = cudaFreeAsync(h_buffer, stream);
+    if (free_err != cudaSuccess) {
+        return GEO_TENSOR_CUDA_ERROR;
+    }
+
     cudaError_t err = cudaGetLastError();
     return (err == cudaSuccess) ? GEO_TENSOR_OK : GEO_TENSOR_CUDA_ERROR;
 }
@@ -252,11 +258,16 @@ extern "C" geo_tensor_status geo_implicit_linear_cuda_vjp(
 
     cudaStream_t stream = (cudaStream_t)stream_ptr;
 
-    // Allocate temporary compact H [N, R] and W [N, R] buffers
     float *h_buffer = nullptr;
     float *w_buffer = nullptr;
-    cudaMallocAsync(&h_buffer, N * R * sizeof(float), stream);
-    cudaMallocAsync(&w_buffer, N * R * sizeof(float), stream);
+    cudaError_t err_h = cudaMallocAsync(&h_buffer, N * R * sizeof(float), stream);
+    cudaError_t err_w = cudaMallocAsync(&w_buffer, N * R * sizeof(float), stream);
+
+    if (err_h != cudaSuccess || err_w != cudaSuccess) {
+        if (h_buffer) cudaFreeAsync(h_buffer, stream);
+        if (w_buffer) cudaFreeAsync(w_buffer, stream);
+        return GEO_TENSOR_CUDA_ERROR;
+    }
 
     // Compute H[N, R]
     dim3 threads_h(16, 4);
