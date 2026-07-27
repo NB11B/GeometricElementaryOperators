@@ -1,6 +1,7 @@
 #include "geo/tensor_linear_cuda.h"
 
 #include <cuda_runtime.h>
+#include <cublas_v2.h>
 #include <stdint.h>
 
 static int geo_cuda_mul_overflows(size_t a, size_t b) {
@@ -25,104 +26,54 @@ static geo_tensor_status geo_cuda_validate(
     return GEO_TENSOR_OK;
 }
 
-__global__ static void geo_tensor_linear_forward_kernel(
-    const geo_real_t *x,
-    const geo_real_t *weight,
-    geo_real_t *y,
-    size_t rows,
-    size_t in_features,
-    size_t out_features
-) {
-    const size_t linear_index = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total = rows * out_features;
-    if (linear_index >= total) {
-        return;
+static cublasHandle_t get_cublas_handle() {
+    thread_local cublasHandle_t handle = nullptr;
+    if (handle == nullptr) {
+        cublasCreate(&handle);
+        cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH);
     }
-
-    const size_t row = linear_index / out_features;
-    const size_t out = linear_index - row * out_features;
-    const geo_real_t *x_row = x + row * in_features;
-    const geo_real_t *w_row = weight + out * in_features;
-    geo_real_t sum = (geo_real_t)0;
-    size_t in;
-    for (in = 0u; in < in_features; ++in) {
-        sum += x_row[in] * w_row[in];
-    }
-    y[linear_index] = sum;
-}
-
-__global__ static void geo_tensor_linear_grad_x_kernel(
-    const geo_real_t *weight,
-    const geo_real_t *grad_y,
-    geo_real_t *grad_x,
-    size_t rows,
-    size_t in_features,
-    size_t out_features
-) {
-    const size_t linear_index = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total = rows * in_features;
-    if (linear_index >= total) {
-        return;
-    }
-
-    const size_t row = linear_index / in_features;
-    const size_t in = linear_index - row * in_features;
-    const geo_real_t *gy_row = grad_y + row * out_features;
-    geo_real_t sum = (geo_real_t)0;
-    size_t out;
-    for (out = 0u; out < out_features; ++out) {
-        sum += gy_row[out] * weight[out * in_features + in];
-    }
-    grad_x[linear_index] = sum;
-}
-
-__global__ static void geo_tensor_linear_grad_weight_kernel(
-    const geo_real_t *x,
-    const geo_real_t *grad_y,
-    geo_real_t *grad_weight,
-    size_t rows,
-    size_t in_features,
-    size_t out_features
-) {
-    const size_t linear_index = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t total = out_features * in_features;
-    if (linear_index >= total) {
-        return;
-    }
-
-    const size_t out = linear_index / in_features;
-    const size_t in = linear_index - out * in_features;
-    geo_real_t sum = (geo_real_t)0;
-    size_t row;
-    for (row = 0u; row < rows; ++row) {
-        sum += grad_y[row * out_features + out] * x[row * in_features + in];
-    }
-    grad_weight[linear_index] = sum;
-}
-
-static geo_tensor_status geo_cuda_launch_status(void) {
-    return cudaGetLastError() == cudaSuccess ? GEO_TENSOR_OK : GEO_TENSOR_CUDA_ERROR;
+    return handle;
 }
 
 extern "C" geo_tensor_status geo_tensor_linear_cuda_forward(
     const geo_real_t *x,
     const geo_real_t *weight,
     geo_real_t *y,
-    geo_tensor_linear_shape shape,
+    const geo_tensor_linear_shape *shape,
     void *stream_ptr
 ) {
-    const unsigned int threads = 256u;
-    const size_t total = shape.rows * shape.out_features;
-    const unsigned int blocks = (unsigned int)((total + threads - 1u) / threads);
-    cudaStream_t stream = (cudaStream_t)stream_ptr;
-    geo_tensor_status status = geo_cuda_validate(x, weight, y, shape);
+    if (shape == NULL) return GEO_TENSOR_INVALID_ARGUMENT;
+    geo_tensor_status status = geo_cuda_validate(x, weight, y, *shape);
     if (status != GEO_TENSOR_OK) {
         return status;
     }
-    geo_tensor_linear_forward_kernel<<<blocks, threads, 0, stream>>>(
-        x, weight, y, shape.rows, shape.in_features, shape.out_features
+    cudaStream_t stream = (cudaStream_t)stream_ptr;
+    cublasHandle_t handle = get_cublas_handle();
+    cublasSetStream(handle, stream);
+
+    const int m = static_cast<int>(shape->rows);
+    const int k = static_cast<int>(shape->in_features);
+    const int n = static_cast<int>(shape->out_features);
+
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
+
+    // Y = X * W^T
+    // Col-major equivalent: Y^T (N x M) = W (N x K) * X^T (K x M)
+    // op(W) = CUBLAS_OP_T -> W^T (K x N), lda = K
+    // op(X) = CUBLAS_OP_N -> X (K x M), ldb = K
+    cublasStatus_t stat = cublasSgemm(
+        handle,
+        CUBLAS_OP_T, CUBLAS_OP_N,
+        n, m, k,
+        &alpha,
+        weight, k,
+        x, k,
+        &beta,
+        y, n
     );
-    return geo_cuda_launch_status();
+
+    return stat == CUBLAS_STATUS_SUCCESS ? GEO_TENSOR_OK : GEO_TENSOR_CUDA_ERROR;
 }
 
 extern "C" geo_tensor_status geo_tensor_linear_cuda_vjp(
@@ -131,30 +82,125 @@ extern "C" geo_tensor_status geo_tensor_linear_cuda_vjp(
     const geo_real_t *grad_y,
     geo_real_t *grad_x,
     geo_real_t *grad_weight,
-    geo_tensor_linear_shape shape,
+    const geo_tensor_linear_shape *shape,
     void *stream_ptr
 ) {
-    const unsigned int threads = 256u;
-    const size_t grad_x_total = shape.rows * shape.in_features;
-    const size_t grad_weight_total = shape.out_features * shape.in_features;
-    const unsigned int grad_x_blocks = (unsigned int)((grad_x_total + threads - 1u) / threads);
-    const unsigned int grad_weight_blocks = (unsigned int)((grad_weight_total + threads - 1u) / threads);
-    cudaStream_t stream = (cudaStream_t)stream_ptr;
-    geo_tensor_status status = geo_cuda_validate(x, weight, grad_y, shape);
+    if (shape == NULL) return GEO_TENSOR_INVALID_ARGUMENT;
+    geo_tensor_status status = geo_cuda_validate(x, weight, grad_y, *shape);
     if (status != GEO_TENSOR_OK || grad_x == NULL || grad_weight == NULL) {
         return status == GEO_TENSOR_OK ? GEO_TENSOR_INVALID_ARGUMENT : status;
     }
+    cudaStream_t stream = (cudaStream_t)stream_ptr;
+    cublasHandle_t handle = get_cublas_handle();
+    cublasSetStream(handle, stream);
 
-    geo_tensor_linear_grad_x_kernel<<<grad_x_blocks, threads, 0, stream>>>(
-        weight, grad_y, grad_x, shape.rows, shape.in_features, shape.out_features
+    const int m = static_cast<int>(shape->rows);
+    const int k = static_cast<int>(shape->in_features);
+    const int n = static_cast<int>(shape->out_features);
+
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
+
+    // 1. grad_x = grad_y * weight
+    // Col-major equivalent: grad_x^T (K x M) = weight^T (K x N) * grad_y^T (N x M)
+    // op(weight) = CUBLAS_OP_N -> W (K x N), lda = K
+    // op(grad_y) = CUBLAS_OP_N -> dY (N x M), ldb = N
+    cublasStatus_t stat1 = cublasSgemm(
+        handle,
+        CUBLAS_OP_N, CUBLAS_OP_N,
+        k, m, n,
+        &alpha,
+        weight, k,
+        grad_y, n,
+        &beta,
+        grad_x, k
     );
-    status = geo_cuda_launch_status();
-    if (status != GEO_TENSOR_OK) {
-        return status;
+
+    if (stat1 != CUBLAS_STATUS_SUCCESS) return GEO_TENSOR_CUDA_ERROR;
+
+    // 2. grad_weight = grad_y^T * x
+    // Col-major equivalent: grad_weight^T (K x N) = x^T (K x M) * grad_y (M x N)
+    // op(x) = CUBLAS_OP_N -> X (K x M), lda = K
+    // op(grad_y) = CUBLAS_OP_T -> dY^T (N x M), ldb = N
+    cublasStatus_t stat2 = cublasSgemm(
+        handle,
+        CUBLAS_OP_N, CUBLAS_OP_T,
+        k, n, m,
+        &alpha,
+        x, k,
+        grad_y, n,
+        &beta,
+        grad_weight, k
+    );
+
+    return stat2 == CUBLAS_STATUS_SUCCESS ? GEO_TENSOR_OK : GEO_TENSOR_CUDA_ERROR;
+}
+
+extern "C" geo_tensor_status geo_tensor_linear_cuda_vjp_decomposed_profile(
+    const geo_real_t *x,
+    const geo_real_t *weight,
+    const geo_real_t *grad_y,
+    geo_real_t *grad_x,
+    geo_real_t *grad_weight,
+    const geo_tensor_linear_shape *shape,
+    float *dx_ms,
+    float *dw_ms,
+    void *stream_ptr
+) {
+    if (shape == NULL || dx_ms == NULL || dw_ms == NULL) return GEO_TENSOR_INVALID_ARGUMENT;
+    geo_tensor_status status = geo_cuda_validate(x, weight, grad_y, *shape);
+    if (status != GEO_TENSOR_OK || grad_x == NULL || grad_weight == NULL) {
+        return status == GEO_TENSOR_OK ? GEO_TENSOR_INVALID_ARGUMENT : status;
     }
+    cudaStream_t stream = (cudaStream_t)stream_ptr;
+    cublasHandle_t handle = get_cublas_handle();
+    cublasSetStream(handle, stream);
 
-    geo_tensor_linear_grad_weight_kernel<<<grad_weight_blocks, threads, 0, stream>>>(
-        x, grad_y, grad_weight, shape.rows, shape.in_features, shape.out_features
+    const int m = static_cast<int>(shape->rows);
+    const int k = static_cast<int>(shape->in_features);
+    const int n = static_cast<int>(shape->out_features);
+
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
+
+    cudaEvent_t ev0, ev1, ev2;
+    cudaEventCreate(&ev0);
+    cudaEventCreate(&ev1);
+    cudaEventCreate(&ev2);
+
+    cudaEventRecord(ev0, stream);
+    cublasStatus_t stat1 = cublasSgemm(
+        handle,
+        CUBLAS_OP_N, CUBLAS_OP_N,
+        k, m, n,
+        &alpha,
+        weight, k,
+        grad_y, n,
+        &beta,
+        grad_x, k
     );
-    return geo_cuda_launch_status();
+    cudaEventRecord(ev1, stream);
+
+    cublasStatus_t stat2 = cublasSgemm(
+        handle,
+        CUBLAS_OP_N, CUBLAS_OP_T,
+        k, n, m,
+        &alpha,
+        x, k,
+        grad_y, n,
+        &beta,
+        grad_weight, k
+    );
+    cudaEventRecord(ev2, stream);
+
+    cudaStreamSynchronize(stream);
+
+    cudaEventElapsedTime(dx_ms, ev0, ev1);
+    cudaEventElapsedTime(dw_ms, ev1, ev2);
+
+    cudaEventDestroy(ev0);
+    cudaEventDestroy(ev1);
+    cudaEventDestroy(ev2);
+
+    return (stat1 == CUBLAS_STATUS_SUCCESS && stat2 == CUBLAS_STATUS_SUCCESS) ? GEO_TENSOR_OK : GEO_TENSOR_CUDA_ERROR;
 }

@@ -51,7 +51,7 @@ int main(void) {
     geo_real_t grad_x[6];
     geo_real_t grad_weight[6];
 
-    if (geo_tensor_linear_forward(x, weight, y, shape) != GEO_TENSOR_OK) {
+    if (geo_tensor_linear_forward(x, weight, y, &shape) != GEO_TENSOR_OK) {
         fprintf(stderr, "forward returned failure\n");
         return 1;
     }
@@ -59,7 +59,7 @@ int main(void) {
         return 1;
     }
 
-    if (geo_tensor_linear_vjp(x, weight, grad_y, grad_x, grad_weight, shape) != GEO_TENSOR_OK) {
+    if (geo_tensor_linear_vjp(x, weight, grad_y, grad_x, grad_weight, &shape) != GEO_TENSOR_OK) {
         fprintf(stderr, "vjp returned failure\n");
         return 1;
     }
@@ -68,7 +68,7 @@ int main(void) {
         return 1;
     }
 
-    if (geo_tensor_linear_forward(NULL, weight, y, shape) != GEO_TENSOR_INVALID_ARGUMENT) {
+    if (geo_tensor_linear_forward(NULL, weight, y, &shape) != GEO_TENSOR_INVALID_ARGUMENT) {
         fprintf(stderr, "null argument was not rejected\n");
         return 1;
     }

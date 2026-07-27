@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.18.2
+    VERSION 0.19.0
     LANGUAGES C
 )
 
@@ -44,6 +44,12 @@ add_library(geo_kernel STATIC
     src/autodiff_v7.c
     src/full_cycle_v8.c
     src/batch_gp.c
+    src/tensor_linear.c
+    src/tensor_core.c
+    src/tensor_activation.c
+    src/tensor_rope.c
+    src/tensor_attention.c
+    src/tensor_loss.c
 )
 
 target_include_directories(geo_kernel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -134,6 +140,12 @@ if(GEO_BUILD_TESTS)
         geo_grad_validation_v7_2
         full_cycle_v8
         batch_gp
+        tensor_linear
+        tensor_core
+        tensor_activation
+        tensor_rope
+        tensor_attention
+        tensor_loss
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})
