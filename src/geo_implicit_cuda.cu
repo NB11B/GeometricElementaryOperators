@@ -316,8 +316,11 @@ extern "C" geo_tensor_status geo_implicit_linear_cuda_vjp(
         x, alpha, perm_indices, sign_masks, w_buffer, grad_v, N, D_in, R
     );
 
-    cudaFreeAsync(h_buffer, stream);
-    cudaFreeAsync(w_buffer, stream);
+    cudaError_t free_h_err = cudaFreeAsync(h_buffer, stream);
+    cudaError_t free_w_err = cudaFreeAsync(w_buffer, stream);
+    if (free_h_err != cudaSuccess || free_w_err != cudaSuccess) {
+        return GEO_TENSOR_CUDA_ERROR;
+    }
 
     cudaError_t err = cudaGetLastError();
     return (err == cudaSuccess) ? GEO_TENSOR_OK : GEO_TENSOR_CUDA_ERROR;
