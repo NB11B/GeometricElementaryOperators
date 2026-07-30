@@ -4,8 +4,7 @@ evaluate_source_shifted_transfer.py
 
 Phase 2: Evaluate frozen checkpoints on a source-shifted transfer set.
 STRICT FAIL-CLOSED ARCHITECTURE:
-Requires real checkpoint files and real transfer corpus documents.
-Does NOT generate synthetic document scores or mock transfer gates.
+Raises NotImplementedError to prevent unmeasured or synthetic output.
 """
 
 import os
@@ -34,7 +33,10 @@ def main():
     if not corpus_path.exists():
         raise FileNotFoundError(f"[FAIL-CLOSED] Transfer corpus missing: {corpus_path}")
 
-    print("Executing source-shifted transfer evaluation on real hardware and real documents...")
+    raise NotImplementedError(
+        "Real checkpoint evaluation is not implemented. "
+        "No scientific artifact was generated."
+    )
 
 if __name__ == "__main__":
     main()
