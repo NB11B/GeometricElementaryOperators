@@ -1,0 +1,23 @@
+{
+  "GeoCompactDecoder_r4": {
+    "geo_variant": "GeoCompactDecoder_r4",
+    "matched_low_rank_variant": "StandardLowRankDecoder_r4",
+    "geo_median_bpb": 1.4546275968830769,
+    "low_rank_median_bpb": 1.466509927649224,
+    "delta_bpb": -0.011882330766147087
+  },
+  "GeoCompactDecoder_r8": {
+    "geo_variant": "GeoCompactDecoder_r8",
+    "matched_low_rank_variant": "StandardLowRankDecoder_r8",
+    "geo_median_bpb": 1.4073171294386624,
+    "low_rank_median_bpb": 1.4083169904717399,
+    "delta_bpb": -0.000999861033077476
+  },
+  "GeoCompactDecoder_r16": {
+    "geo_variant": "GeoCompactDecoder_r16",
+    "matched_low_rank_variant": "StandardLowRankDecoder_r16",
+    "geo_median_bpb": 1.3749115557410596,
+    "low_rank_median_bpb": 1.357532934350315,
+    "delta_bpb": 0.01737862139074453
+  }
+}

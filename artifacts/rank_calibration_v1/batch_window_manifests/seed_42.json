@@ -1,0 +1,7 @@
+{
+  "seed": 42,
+  "num_windows": 7950,
+  "valid_token_count": 4070400,
+  "epoch_count": 3,
+  "batch_window_sha256": "8216b686af0f26b208fe72326b9a7f4ee756935fb1b4ca8399f4420c9e09db7c"
+}

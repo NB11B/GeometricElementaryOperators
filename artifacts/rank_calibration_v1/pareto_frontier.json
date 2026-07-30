@@ -1,0 +1,19 @@
+{
+  "quality_vs_trainable_parameters": [
+    {
+      "variant": "GeoCompactDecoder_r4",
+      "params": 8364976,
+      "bpb": 1.4546275968830769
+    },
+    {
+      "variant": "GeoCompactDecoder_r8",
+      "params": 8401888,
+      "bpb": 1.4073171294386624
+    },
+    {
+      "variant": "GeoCompactDecoder_r16",
+      "params": 8475712,
+      "bpb": 1.3749115557410596
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "GeoCompactDecoder_r4": {
+    "trainable_parameters": 8364976,
+    "mean_step_latency_sec": 0.13933013129237604,
+    "p50_step_latency_sec": 0.13776170008350164,
+    "p95_step_latency_sec": 0.1406033400679007,
+    "p99_step_latency_sec": 0.14199189596809447,
+    "tokens_per_second": 6990.677218095536,
+    "peak_allocated_vram_bytes": 424101376,
+    "peak_reserved_vram_bytes": 484442112,
+    "optimizer_memory_bytes": 68164992
+  },
+  "GeoCompactDecoder_r8": {
+    "trainable_parameters": 8401888,
+    "mean_step_latency_sec": 0.14047903246764523,
+    "p50_step_latency_sec": 0.13946679991204292,
+    "p95_step_latency_sec": 0.14248723997734486,
+    "p99_step_latency_sec": 0.144356543966569,
+    "tokens_per_second": 6926.143708242476,
+    "peak_allocated_vram_bytes": 425035264,
+    "peak_reserved_vram_bytes": 484442112,
+    "optimizer_memory_bytes": 69443328
+  },
+  "GeoCompactDecoder_r16": {
+    "trainable_parameters": 8475712,
+    "mean_step_latency_sec": 0.1434637066673116,
+    "p50_step_latency_sec": 0.14297169994097203,
+    "p95_step_latency_sec": 0.14601594002451748,
+    "p99_step_latency_sec": 0.14899309200234712,
+    "tokens_per_second": 6776.3408813909455,
+    "peak_allocated_vram_bytes": 426903040,
+    "peak_reserved_vram_bytes": 484442112,
+    "optimizer_memory_bytes": 72000000
+  }
+}

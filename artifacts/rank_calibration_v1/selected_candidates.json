@@ -1,0 +1,16 @@
+{
+  "quality_first_candidate": {
+    "geo_variant": "GeoCompactDecoder_r16",
+    "rank": 16,
+    "matched_low_rank": "StandardLowRankDecoder_r16",
+    "median_bpb": 1.3749115557410596,
+    "delta_dense_bpb": 0.10119802390270904
+  },
+  "efficiency_first_candidate": {
+    "geo_variant": "GeoCompactDecoder_r8",
+    "rank": 8,
+    "matched_low_rank": "StandardLowRankDecoder_r8",
+    "median_bpb": 1.4073171294386624,
+    "delta_dense_bpb": 0.13360359760031182
+  }
+}
