@@ -1,0 +1,93 @@
+{
+  "analysis_type": "valid_summary_only_posthoc",
+  "scientific_evidence": true,
+  "source": "measured_rank_calibration_runs",
+  "rank_summaries": {
+    "rank_4": {
+      "n_paired_seeds": 5,
+      "mean_paired_delta_bpb": -0.010239999999999982,
+      "median_paired_delta_bpb": -0.010299999999999976,
+      "min_delta_bpb": -0.010299999999999976,
+      "max_delta_bpb": -0.010099999999999998,
+      "variance_delta_bpb": 6.399999999998591e-09,
+      "sign_test_geo_wins": "5/5",
+      "seed_bootstrap_95_ci": [
+        -0.010299999999999976,
+        -0.010159999999999992
+      ],
+      "p_geo_wins_bootstrap": 1.0
+    },
+    "rank_8": {
+      "n_paired_seeds": 5,
+      "mean_paired_delta_bpb": 0.00019999999999997797,
+      "median_paired_delta_bpb": 0.00019999999999997797,
+      "min_delta_bpb": 9.999999999998899e-05,
+      "max_delta_bpb": 0.00039999999999995595,
+      "variance_delta_bpb": 1.1999999999997358e-08,
+      "sign_test_geo_wins": "0/5",
+      "seed_bootstrap_95_ci": [
+        0.00011999999999998679,
+        0.00029999999999996696
+      ],
+      "p_geo_wins_bootstrap": 0.0
+    },
+    "rank_16": {
+      "n_paired_seeds": 5,
+      "mean_paired_delta_bpb": 0.00905999999999998,
+      "median_paired_delta_bpb": 0.009099999999999886,
+      "min_delta_bpb": 0.008899999999999908,
+      "max_delta_bpb": 0.009200000000000097,
+      "variance_delta_bpb": 1.0400000000013695e-08,
+      "sign_test_geo_wins": "0/5",
+      "seed_bootstrap_95_ci": [
+        0.008959999999999945,
+        0.00914000000000006
+      ],
+      "p_geo_wins_bootstrap": 0.0
+    }
+  },
+  "parameter_efficiency_frontier": {
+    "Dense": {
+      "total_params": 125000000,
+      "param_reduction_pct": 0.0,
+      "mean_bpb": 1.391
+    },
+    "GEO_r4": {
+      "total_params": 116600000,
+      "param_reduction_pct": 6.72,
+      "mean_bpb": 1.425
+    },
+    "LowRank_r4": {
+      "total_params": 116600000,
+      "param_reduction_pct": 6.72,
+      "mean_bpb": 1.4352
+    },
+    "GEO_r8": {
+      "total_params": 117112500,
+      "param_reduction_pct": 6.31,
+      "mean_bpb": 1.4073
+    },
+    "LowRank_r8": {
+      "total_params": 117112500,
+      "param_reduction_pct": 6.31,
+      "mean_bpb": 1.4071
+    },
+    "GEO_r16": {
+      "total_params": 118137500,
+      "param_reduction_pct": 5.49,
+      "mean_bpb": 1.398
+    },
+    "LowRank_r16": {
+      "total_params": 118137500,
+      "param_reduction_pct": 5.49,
+      "mean_bpb": 1.389
+    }
+  },
+  "candidate_decisions": {
+    "primary_engineering_candidate": "GeoCompactDecoder_r8",
+    "primary_rationale": "Practical parity with ordinary low-rank at rank 8 (0.0003 BPB delta), balanced quality/efficiency, 6.31% parameter reduction.",
+    "secondary_research_candidate": "GeoCompactDecoder_r4",
+    "secondary_rationale": "Strong directional advantage (5/5 paired seed wins, -0.0102 BPB mean delta) under severe rank constraint.",
+    "retired_from_compute": "Rank 16"
+  }
+}

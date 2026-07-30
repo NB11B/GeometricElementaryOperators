@@ -1,0 +1,8 @@
+{
+    "artifact_type":  "synthetic_analysis_smoke_fixture",
+    "real_checkpoints_loaded":  false,
+    "real_documents_evaluated":  false,
+    "real_gpu_measurements":  false,
+    "purpose":  "pipeline-shape testing only",
+    "scientific_evidence":  false
+}
