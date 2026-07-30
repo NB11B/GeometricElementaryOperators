@@ -1,0 +1,7 @@
+{
+  "platform": "Windows-10-10.0.26200-SP0",
+  "python_version": "3.11.9",
+  "torch_version": "2.13.0+cu130",
+  "cuda_available": true,
+  "cuda_device_name": "NVIDIA GeForce RTX 5070 Laptop GPU"
+}

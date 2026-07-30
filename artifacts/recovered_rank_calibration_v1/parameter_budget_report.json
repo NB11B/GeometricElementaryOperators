@@ -1,0 +1,162 @@
+{
+  "config": {
+    "vocab_size": 4096,
+    "d_model": 256,
+    "n_layers": 6,
+    "n_heads": 4,
+    "ffn_hidden": 768,
+    "seq_len": 512
+  },
+  "variants": {
+    "GeoDenseDecoder": {
+      "variant_name": "GeoDenseDecoder",
+      "rank": null,
+      "total_parameters": 9900928,
+      "trainable_parameters": 9900928,
+      "embedding_lm_head_parameters": 4194304,
+      "replaced_layer_parameters": 1179648,
+      "unreplaced_parameters": 8721280,
+      "parameter_bytes_fp32": 39603712,
+      "gradient_bytes_fp32": 39603712,
+      "optimizer_state_bytes_fp32": 79207424,
+      "trainable_param_reduction_vs_dense_pct": 0.0,
+      "replacement_map_entries": 0
+    },
+    "StandardLowRankDecoder_r4": {
+      "variant_name": "StandardLowRankDecoder",
+      "rank": 4,
+      "total_parameters": 8364928,
+      "trainable_parameters": 8364928,
+      "embedding_lm_head_parameters": 4194304,
+      "replaced_layer_parameters": 1216512,
+      "unreplaced_parameters": 7148416,
+      "parameter_bytes_fp32": 33459712,
+      "gradient_bytes_fp32": 33459712,
+      "optimizer_state_bytes_fp32": 66919424,
+      "trainable_param_reduction_vs_dense_pct": 15.51369730190948,
+      "replacement_map_entries": 12
+    },
+    "StandardLowRankDecoder_r8": {
+      "variant_name": "StandardLowRankDecoder",
+      "rank": 8,
+      "total_parameters": 8401792,
+      "trainable_parameters": 8401792,
+      "embedding_lm_head_parameters": 4194304,
+      "replaced_layer_parameters": 1253376,
+      "unreplaced_parameters": 7148416,
+      "parameter_bytes_fp32": 33607168,
+      "gradient_bytes_fp32": 33607168,
+      "optimizer_state_bytes_fp32": 67214336,
+      "trainable_param_reduction_vs_dense_pct": 15.14136856666365,
+      "replacement_map_entries": 12
+    },
+    "StandardLowRankDecoder_r16": {
+      "variant_name": "StandardLowRankDecoder",
+      "rank": 16,
+      "total_parameters": 8475520,
+      "trainable_parameters": 8475520,
+      "embedding_lm_head_parameters": 4194304,
+      "replaced_layer_parameters": 1327104,
+      "unreplaced_parameters": 7148416,
+      "parameter_bytes_fp32": 33902080,
+      "gradient_bytes_fp32": 33902080,
+      "optimizer_state_bytes_fp32": 67804160,
+      "trainable_param_reduction_vs_dense_pct": 14.396711096171998,
+      "replacement_map_entries": 12
+    },
+    "GeoCompactDecoder_r4": {
+      "variant_name": "GeoCompactDecoder",
+      "rank": 4,
+      "total_parameters": 8364976,
+      "trainable_parameters": 8364976,
+      "embedding_lm_head_parameters": 4194304,
+      "replaced_layer_parameters": 1216560,
+      "unreplaced_parameters": 7148416,
+      "parameter_bytes_fp32": 33459904,
+      "gradient_bytes_fp32": 33459904,
+      "optimizer_state_bytes_fp32": 66919808,
+      "trainable_param_reduction_vs_dense_pct": 15.51321249886879,
+      "replacement_map_entries": 12
+    },
+    "GeoCompactDecoder_r8": {
+      "variant_name": "GeoCompactDecoder",
+      "rank": 8,
+      "total_parameters": 8401888,
+      "trainable_parameters": 8401888,
+      "embedding_lm_head_parameters": 4194304,
+      "replaced_layer_parameters": 1253472,
+      "unreplaced_parameters": 7148416,
+      "parameter_bytes_fp32": 33607552,
+      "gradient_bytes_fp32": 33607552,
+      "optimizer_state_bytes_fp32": 67215104,
+      "trainable_param_reduction_vs_dense_pct": 15.14039896058228,
+      "replacement_map_entries": 12
+    },
+    "GeoCompactDecoder_r16": {
+      "variant_name": "GeoCompactDecoder",
+      "rank": 16,
+      "total_parameters": 8475712,
+      "trainable_parameters": 8475712,
+      "embedding_lm_head_parameters": 4194304,
+      "replaced_layer_parameters": 1327296,
+      "unreplaced_parameters": 7148416,
+      "parameter_bytes_fp32": 33902848,
+      "gradient_bytes_fp32": 33902848,
+      "optimizer_state_bytes_fp32": 67805696,
+      "trainable_param_reduction_vs_dense_pct": 14.39477188400926,
+      "replacement_map_entries": 12
+    }
+  },
+  "equal_rank_comparison": {
+    "rank_4": {
+      "rank": 4,
+      "low_rank_trainable_params": 8364928,
+      "geo_compact_trainable_params": 8364976,
+      "param_difference": 48,
+      "pct_difference": 0.0005738244250279262
+    },
+    "rank_8": {
+      "rank": 8,
+      "low_rank_trainable_params": 8401792,
+      "geo_compact_trainable_params": 8401888,
+      "param_difference": 96,
+      "pct_difference": 0.0011426133853349382
+    },
+    "rank_16": {
+      "rank": 16,
+      "low_rank_trainable_params": 8475520,
+      "geo_compact_trainable_params": 8475712,
+      "param_difference": 192,
+      "pct_difference": 0.00226534773087669
+    }
+  },
+  "nearest_parameter_comparison": {
+    "GeoCompactDecoder_r4": {
+      "geo_variant": "GeoCompactDecoder_r4",
+      "matched_low_rank_variant": "StandardLowRankDecoder_r4",
+      "geo_trainable_params": 8364976,
+      "matched_low_rank_trainable_params": 8364928,
+      "absolute_parameter_difference": 48,
+      "percentage_parameter_difference": 0.0005738244250279262,
+      "classification": "equal-parameter"
+    },
+    "GeoCompactDecoder_r8": {
+      "geo_variant": "GeoCompactDecoder_r8",
+      "matched_low_rank_variant": "StandardLowRankDecoder_r8",
+      "geo_trainable_params": 8401888,
+      "matched_low_rank_trainable_params": 8401792,
+      "absolute_parameter_difference": 96,
+      "percentage_parameter_difference": 0.0011426133853349382,
+      "classification": "equal-parameter"
+    },
+    "GeoCompactDecoder_r16": {
+      "geo_variant": "GeoCompactDecoder_r16",
+      "matched_low_rank_variant": "StandardLowRankDecoder_r16",
+      "geo_trainable_params": 8475712,
+      "matched_low_rank_trainable_params": 8475520,
+      "absolute_parameter_difference": 192,
+      "percentage_parameter_difference": 0.00226534773087669,
+      "classification": "equal-parameter"
+    }
+  }
+}

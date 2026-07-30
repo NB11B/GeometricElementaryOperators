@@ -1,0 +1,153 @@
+{
+  "scientific_evidence": true,
+  "provenance": "measured_rank_calibration_v1_artifacts",
+  "synthetic_values_used": false,
+  "source_per_run_results_sha256": "ee9d699de1d561f132b50c4a61aa8eef2d139fef9604bf47d25c84eac2b73c64",
+  "source_parameter_report_sha256": "0cadde6c3656158f5e43f18e1502593f8ff578cd0f8bde24769c2351dd9d7fe8",
+  "measured_runs_loaded": 35,
+  "variant_metrics": {
+    "GeoDenseDecoder": {
+      "n_seeds": 5,
+      "median_bpb": 1.2737135318383506,
+      "mean_bpb": 1.2729354843758303,
+      "min_bpb": 1.2654993211493022,
+      "max_bpb": 1.2797446586242847,
+      "std_bpb": 0.005083294849553929,
+      "median_nll": 1.8445806135282372,
+      "trainable_parameters": 9900928
+    },
+    "StandardLowRankDecoder_r4": {
+      "n_seeds": 5,
+      "median_bpb": 1.466509927649224,
+      "mean_bpb": 1.4640065776597324,
+      "min_bpb": 1.4547598479715371,
+      "max_bpb": 1.470900154019379,
+      "std_bpb": 0.006622433965547224,
+      "median_nll": 2.123786639986616,
+      "trainable_parameters": 8364928
+    },
+    "StandardLowRankDecoder_r8": {
+      "n_seeds": 5,
+      "median_bpb": 1.4083169904717399,
+      "mean_bpb": 1.4112231513106632,
+      "min_bpb": 1.4050607615399897,
+      "max_bpb": 1.418715060673876,
+      "std_bpb": 0.006066151667125137,
+      "median_nll": 2.039512145699877,
+      "trainable_parameters": 8401792
+    },
+    "StandardLowRankDecoder_r16": {
+      "n_seeds": 5,
+      "median_bpb": 1.357532934350315,
+      "mean_bpb": 1.3623864580788445,
+      "min_bpb": 1.3542046064303253,
+      "max_bpb": 1.3776366402590468,
+      "std_bpb": 0.008441648136769443,
+      "median_nll": 1.965967127093763,
+      "trainable_parameters": 8475520
+    },
+    "GeoCompactDecoder_r4": {
+      "n_seeds": 5,
+      "median_bpb": 1.4546275968830769,
+      "mean_bpb": 1.4538288415540772,
+      "min_bpb": 1.445798780378738,
+      "max_bpb": 1.4599640911181895,
+      "std_bpb": 0.004707892986872592,
+      "median_nll": 2.1065787542046923,
+      "trainable_parameters": 8364976
+    },
+    "GeoCompactDecoder_r8": {
+      "n_seeds": 5,
+      "median_bpb": 1.4073171294386624,
+      "mean_bpb": 1.406173482819759,
+      "min_bpb": 1.4017571611572723,
+      "max_bpb": 1.4090091650794767,
+      "std_bpb": 0.0026063679988435197,
+      "median_nll": 2.0380641558405124,
+      "trainable_parameters": 8401888
+    },
+    "GeoCompactDecoder_r16": {
+      "n_seeds": 5,
+      "median_bpb": 1.3749115557410596,
+      "mean_bpb": 1.3743057985208738,
+      "min_bpb": 1.3661570984849405,
+      "max_bpb": 1.3799066247508278,
+      "std_bpb": 0.0049137093345517305,
+      "median_nll": 1.9911346920963489,
+      "trainable_parameters": 8475712
+    }
+  },
+  "paired_rank_comparisons": {
+    "rank_4": {
+      "n_paired_seeds": 5,
+      "paired_seeds": [
+        42,
+        43,
+        44,
+        45,
+        46
+      ],
+      "mean_paired_delta_bpb": -0.010177736105655333,
+      "median_paired_delta_bpb": -0.010936062901189425,
+      "sign_test_geo_wins": "5/5",
+      "seed_bootstrap": {
+        "mean": -0.010138041950487425,
+        "median": -0.010177736105655333,
+        "ci_95": [
+          -0.01406402062920864,
+          -0.0056974744353276655
+        ],
+        "p_geo_wins": 1.0
+      }
+    },
+    "rank_8": {
+      "n_paired_seeds": 5,
+      "paired_seeds": [
+        42,
+        43,
+        44,
+        45,
+        46
+      ],
+      "mean_paired_delta_bpb": -0.0050496684909040026,
+      "median_paired_delta_bpb": -0.000999861033077476,
+      "sign_test_geo_wins": "3/5",
+      "seed_bootstrap": {
+        "mean": -0.0050676029260009825,
+        "median": -0.0050496684909040026,
+        "ci_95": [
+          -0.01242253679882741,
+          0.0019690977104612093
+        ],
+        "p_geo_wins": 0.9215
+      }
+    },
+    "rank_16": {
+      "n_paired_seeds": 5,
+      "paired_seeds": [
+        42,
+        43,
+        44,
+        45,
+        46
+      ],
+      "mean_paired_delta_bpb": 0.011919340442029247,
+      "median_paired_delta_bpb": 0.011952492054615238,
+      "sign_test_geo_wins": "0/5",
+      "seed_bootstrap": {
+        "mean": 0.011936649893004057,
+        "median": 0.011919340442029247,
+        "ci_95": [
+          0.005397024833000641,
+          0.018362356689575775
+        ],
+        "p_geo_wins": 0.0
+      }
+    }
+  },
+  "candidate_selections": {
+    "primary_engineering_candidate": "GeoCompactDecoder_r8",
+    "secondary_research_candidate": "GeoCompactDecoder_r4",
+    "retired_from_compute": "Rank 16"
+  }
+}

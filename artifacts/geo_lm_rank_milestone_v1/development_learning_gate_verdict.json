@@ -1,0 +1,39 @@
+{
+  "gate_name": "Development Learning Gate",
+  "verdict": "FULL_PASS",
+  "reason": "All three architectures (GeoDenseDecoder, StandardLowRankDecoder, GeoCompactDecoder) satisfy all Development Learning Gate criteria and reliably outperform unigram and bigram baselines.",
+  "architectures": {
+    "GeoDenseDecoder": {
+      "finite_count": 5,
+      "beat_uniform_count": 5,
+      "beat_bigram_count": 5,
+      "median_general_nll": 1.7737782369857715,
+      "median_general_bpb": 1.2231058267861485,
+      "passes_criteria": true
+    },
+    "StandardLowRankDecoder": {
+      "finite_count": 5,
+      "beat_uniform_count": 5,
+      "beat_bigram_count": 5,
+      "median_general_nll": 1.9614480976809823,
+      "median_general_bpb": 1.3525132664210608,
+      "passes_criteria": true
+    },
+    "GeoCompactDecoder": {
+      "finite_count": 5,
+      "beat_uniform_count": 5,
+      "beat_bigram_count": 5,
+      "median_general_nll": 1.971885489739513,
+      "median_general_bpb": 1.3597103527180119,
+      "passes_criteria": true
+    }
+  },
+  "baselines": {
+    "uniform_nll": 8.317766166719343,
+    "unigram_nll": 4.960932731628418,
+    "bigram_nll": 3.620872974395752,
+    "uniform_bpb": 5.7374130638681935,
+    "unigram_bpb": 3.421942826104046,
+    "bigram_bpb": 2.4975943110834242
+  }
+}

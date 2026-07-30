@@ -1,0 +1,51 @@
+{
+  "contract_name": "Rank Efficiency Calibration Execution Contract v1",
+  "phase": "Rank Efficiency Calibration",
+  "corpus_hashes": {
+    "train_manifest_sha256": "f7d4d908ae0e9feb5585ee10b969c91d81c54517a95a943cd4fffdfd603f478a",
+    "domain_val_manifest_sha256": "8a263152a1f6424a5926ed5d197bd379b22652b9875a9c8a48f4451f76ea5ed9",
+    "general_val_manifest_sha256": "841f3becbfaf9522d9f4b02ea53062af0d63085c392cb031a1c8a3572a591f4f"
+  },
+  "tokenizer_hash": {
+    "tokenizer_sha256": "781fb2f16036aed5556b5649da058e199d47ab508e5e9faed06a292089ed94f6"
+  },
+  "baseline_hashes": {
+    "uniform_nll": 8.317766166719343,
+    "unigram_nll": 4.960932731628418,
+    "bigram_nll": 3.620872974395752,
+    "uniform_bpb": 5.7374130638681935,
+    "unigram_bpb": 3.421942826104046,
+    "bigram_bpb": 2.4975943110834242
+  },
+  "model_dimensions": {
+    "vocab_size": 4096,
+    "d_model": 256,
+    "n_layers": 6,
+    "n_heads": 4,
+    "ffn_hidden": 768,
+    "seq_len": 512
+  },
+  "training_hyperparameters": {
+    "batch_size": 2,
+    "learning_rate": 0.0003,
+    "epochs": 3,
+    "warmup_fraction": 0.1,
+    "cosine_scheduler": true,
+    "min_lr_ratio": 0.1,
+    "gradient_clip": 1.0,
+    "adamw_beta1": 0.9,
+    "adamw_beta2": 0.95,
+    "weight_decay": 0.01,
+    "checkpoint_rule": "lowest_domain_val_loss"
+  },
+  "seeds": [42, 43, 44, 45, 46],
+  "architectures": [
+    "GeoDenseDecoder",
+    "StandardLowRankDecoder_r4",
+    "StandardLowRankDecoder_r8",
+    "StandardLowRankDecoder_r16",
+    "GeoCompactDecoder_r4",
+    "GeoCompactDecoder_r8",
+    "GeoCompactDecoder_r16"
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "label": "SYSTEMS-ONLY RANDOM-WEIGHT BENCHMARK / NOT A MODEL-QUALITY RESULT",
+  "device": "cuda",
+  "results": {
+    "GeoDenseDecoder": {
+      "variant_name": "GeoDenseDecoder",
+      "rank": null,
+      "total_parameters": 4867584,
+      "forward_latency_ms": 8.870028001256287,
+      "forward_plus_backward_latency_ms": 26.654925998300314,
+      "tokens_per_second": 307335.3120741124,
+      "peak_allocated_vram_mb": 1073.8310546875,
+      "peak_reserved_vram_mb": 1270.0,
+      "parameter_bytes": 19470336,
+      "gradient_bytes": 19470336,
+      "optimizer_state_bytes": 38940672,
+      "native_geo_dispatch_count": 0,
+      "fallback_count": 0
+    },
+    "StandardLowRankDecoder_r8": {
+      "variant_name": "StandardLowRankDecoder",
+      "rank": 8,
+      "total_parameters": 4497408,
+      "forward_latency_ms": 8.77600000007078,
+      "forward_plus_backward_latency_ms": 25.272065999452025,
+      "tokens_per_second": 324152.3664973662,
+      "peak_allocated_vram_mb": 1071.0947265625,
+      "peak_reserved_vram_mb": 1270.0,
+      "parameter_bytes": 17989632,
+      "gradient_bytes": 17989632,
+      "optimizer_state_bytes": 35979264,
+      "native_geo_dispatch_count": 0,
+      "fallback_count": 0
+    },
+    "GeoCompactDecoder_r8": {
+      "variant_name": "GeoCompactDecoder",
+      "rank": 8,
+      "total_parameters": 4497408,
+      "forward_latency_ms": 8.858463999349624,
+      "forward_plus_backward_latency_ms": 25.33690799959004,
+      "tokens_per_second": 323322.7985092952,
+      "peak_allocated_vram_mb": 1071.0947265625,
+      "peak_reserved_vram_mb": 1270.0,
+      "parameter_bytes": 17989632,
+      "gradient_bytes": 17989632,
+      "optimizer_state_bytes": 35979264,
+      "native_geo_dispatch_count": 24,
+      "fallback_count": 0
+    }
+  }
+}

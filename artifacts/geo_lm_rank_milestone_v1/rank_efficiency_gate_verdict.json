@@ -1,0 +1,70 @@
+{
+  "gate_name": "Rank Efficiency Gate",
+  "verdict": "EFFICIENCY_PASS",
+  "reason": "GEO compact configurations satisfy systems thresholds but exhibit 0.10 < delta BPB <= 0.20.",
+  "equal_rank_results": {
+    "rank_4": {
+      "rank": 4,
+      "geo_compact_median_bpb": 1.4546275968830769,
+      "low_rank_median_bpb": 1.466509927649224,
+      "delta_geo_minus_lowrank_bpb": -0.011882330766147087,
+      "delta_dense_bpb": 0.1809140650447263,
+      "retention_classification": "Material degradation (\u0394BPB > 0.10)",
+      "paired_statistics": {
+        "n_seeds": 5,
+        "mean_paired_delta_bpb": -0.010177736105655333,
+        "median_paired_delta_bpb": -0.010936062901189425,
+        "min_delta_bpb": -0.015627714848255536,
+        "max_delta_bpb": -0.0012995299118612191,
+        "geo_win_count": 5,
+        "low_rank_win_count": 0,
+        "tie_count": 0,
+        "bootstrap_95_ci_lower": -0.015627714848255536,
+        "bootstrap_95_ci_upper": -0.0012995299118612191,
+        "exact_paired_sign_test_p_value": 0.0625
+      }
+    },
+    "rank_8": {
+      "rank": 8,
+      "geo_compact_median_bpb": 1.4073171294386624,
+      "low_rank_median_bpb": 1.4083169904717399,
+      "delta_geo_minus_lowrank_bpb": -0.000999861033077476,
+      "delta_dense_bpb": 0.13360359760031182,
+      "retention_classification": "Material degradation (\u0394BPB > 0.10)",
+      "paired_statistics": {
+        "n_seeds": 5,
+        "mean_paired_delta_bpb": -0.0050496684909040026,
+        "median_paired_delta_bpb": -0.000999861033077476,
+        "min_delta_bpb": -0.01695789951660376,
+        "max_delta_bpb": 0.003948403539487,
+        "geo_win_count": 3,
+        "low_rank_win_count": 2,
+        "tie_count": 0,
+        "bootstrap_95_ci_lower": -0.01695789951660376,
+        "bootstrap_95_ci_upper": 0.003948403539487,
+        "exact_paired_sign_test_p_value": 1.0
+      }
+    },
+    "rank_16": {
+      "rank": 16,
+      "geo_compact_median_bpb": 1.3749115557410596,
+      "low_rank_median_bpb": 1.357532934350315,
+      "delta_geo_minus_lowrank_bpb": 0.01737862139074453,
+      "delta_dense_bpb": 0.10119802390270904,
+      "retention_classification": "Material degradation (\u0394BPB > 0.10)",
+      "paired_statistics": {
+        "n_seeds": 5,
+        "mean_paired_delta_bpb": 0.011919340442029247,
+        "median_paired_delta_bpb": 0.011952492054615238,
+        "min_delta_bpb": 0.0008573022049924717,
+        "max_delta_bpb": 0.022373690400512736,
+        "geo_win_count": 0,
+        "low_rank_win_count": 5,
+        "tie_count": 0,
+        "bootstrap_95_ci_lower": 0.0008573022049924717,
+        "bootstrap_95_ci_upper": 0.022373690400512736,
+        "exact_paired_sign_test_p_value": 0.0625
+      }
+    }
+  }
+}
