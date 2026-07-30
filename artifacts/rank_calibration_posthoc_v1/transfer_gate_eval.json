@@ -1,0 +1,17 @@
+{
+  "transfer_set_documents": 350,
+  "primary_rank8_gate": {
+    "passed": true,
+    "median_geo_r8_bpb": 1.4077830753578529,
+    "median_lowrank_r8_bpb": 1.407519660766604,
+    "median_delta_bpb": 0.0002634145912487895,
+    "status": "PASS: Primary candidate GeoCompactDecoder_r8 confirmed at parity within 0.05 BPB."
+  },
+  "secondary_rank4_advantage_signal": {
+    "persists": true,
+    "mean_delta_bpb": -0.011886176493030342,
+    "median_delta_bpb": -0.014444373275483091,
+    "paired_wins": "5/5",
+    "status": "CONFIRMED: GEO Rank 4 advantage holds under source shift (5/5 paired wins)."
+  }
+}

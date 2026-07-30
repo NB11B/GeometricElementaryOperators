@@ -1,0 +1,20 @@
+{
+  "GeoCompactDecoder_r8": {
+    "tokens_to_bpb_2_0": 145000,
+    "tokens_to_bpb_1_75": 380000,
+    "final_bpb": 1.4073,
+    "wall_clock_seconds": 4120
+  },
+  "StandardLowRankDecoder_r8": {
+    "tokens_to_bpb_2_0": 148000,
+    "tokens_to_bpb_1_75": 385000,
+    "final_bpb": 1.4071,
+    "wall_clock_seconds": 4090
+  },
+  "GeoCompactDecoder_r4": {
+    "tokens_to_bpb_2_0": 162000,
+    "tokens_to_bpb_1_75": 420000,
+    "final_bpb": 1.425,
+    "wall_clock_seconds": 3950
+  }
+}

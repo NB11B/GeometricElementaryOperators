@@ -1,0 +1,212 @@
+{
+  "GeoDenseDecoder_seed42.pt": {
+    "sha256": "7d5c9463c4e7be7feeb62e69162b44b0ae064cbda7befc9d5df09a623a3e6a53",
+    "model": "GeoDenseDecoder",
+    "seed": 42,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoDenseDecoder_seed43.pt": {
+    "sha256": "c154b112d91fa55e414e5bce12c0eb3d35d8ea07dc1b42679e64f47bd8a5c919",
+    "model": "GeoDenseDecoder",
+    "seed": 43,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoDenseDecoder_seed44.pt": {
+    "sha256": "3dc4a1df64f7afab6ff735e321115e4175723db28729a4e3d74a377969dca9fb",
+    "model": "GeoDenseDecoder",
+    "seed": 44,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoDenseDecoder_seed45.pt": {
+    "sha256": "8de251d9274e4e243e9050b44dcc1eec501ef4b9ae01809ab9fdaae56bf3a167",
+    "model": "GeoDenseDecoder",
+    "seed": 45,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoDenseDecoder_seed46.pt": {
+    "sha256": "9e1a41494ff0a473dd045319a2d8a32cf46364d834de0a547ce8fd20a31f1bc5",
+    "model": "GeoDenseDecoder",
+    "seed": 46,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r4_seed42.pt": {
+    "sha256": "6a7e1413c965fcb6cbb762d1586cff1aa16972014e1f324ed90960f47453bec4",
+    "model": "StandardLowRankDecoder_r4",
+    "seed": 42,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r4_seed43.pt": {
+    "sha256": "86d6d86377b4b0d7b4e617fe7c5e199f89d35a16f3c984f6318edf133c71b794",
+    "model": "StandardLowRankDecoder_r4",
+    "seed": 43,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r4_seed44.pt": {
+    "sha256": "01ffb21af050acb63c5846465aca8f236ae084376c3bc9b32e02553322a0ad4f",
+    "model": "StandardLowRankDecoder_r4",
+    "seed": 44,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r4_seed45.pt": {
+    "sha256": "4dcf95c3435298185f776a50d88604d529ca5ffef18fcd167248d2b8a984cabc",
+    "model": "StandardLowRankDecoder_r4",
+    "seed": 45,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r4_seed46.pt": {
+    "sha256": "fc9116d152859b162de4d1589ed84f4d3bde03d0cb773a4d7122c0b4df8e79cf",
+    "model": "StandardLowRankDecoder_r4",
+    "seed": 46,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r4_seed42.pt": {
+    "sha256": "90fbc87ff76f3c970cd8ebd71f3c885da06a41d28cfa202b4c8b9d85489bc9b3",
+    "model": "GeoCompactDecoder_r4",
+    "seed": 42,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r4_seed43.pt": {
+    "sha256": "ada69796e991e619f1eff4078b4b5cd7cca39fd283f38c0c6eea75faae8b56e9",
+    "model": "GeoCompactDecoder_r4",
+    "seed": 43,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r4_seed44.pt": {
+    "sha256": "189798ac78862ae00dc36eb5c2c11b71a0d531a76b98601ffb41f6dde6cb44b4",
+    "model": "GeoCompactDecoder_r4",
+    "seed": 44,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r4_seed45.pt": {
+    "sha256": "95490847a12ca698e12553b0c12177b8826dd43c71b16e93bb590ca37a67c700",
+    "model": "GeoCompactDecoder_r4",
+    "seed": 45,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r4_seed46.pt": {
+    "sha256": "21e17e459e67e848ecec7d5c1435e376bf9eef870565c85379dc3e7719ef2e4f",
+    "model": "GeoCompactDecoder_r4",
+    "seed": 46,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r8_seed42.pt": {
+    "sha256": "86dcee1e7af391f37f7c95f4f51fa65898e3776015be5ccaf6363b44714df5f6",
+    "model": "StandardLowRankDecoder_r8",
+    "seed": 42,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r8_seed43.pt": {
+    "sha256": "4f7560db0dca10c304462439151bc5a4b10598fceb2efa31d1eba0759b74868d",
+    "model": "StandardLowRankDecoder_r8",
+    "seed": 43,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r8_seed44.pt": {
+    "sha256": "44b2f12bc50cfe46dcba9c466445e2e14ba63a1bd095b8bfc8fe77d805d9b845",
+    "model": "StandardLowRankDecoder_r8",
+    "seed": 44,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r8_seed45.pt": {
+    "sha256": "bda6d076909bc8da9de90d99dd2ee391b2e4a2b86b46c23972dfa95f87f0a23f",
+    "model": "StandardLowRankDecoder_r8",
+    "seed": 45,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r8_seed46.pt": {
+    "sha256": "b8aad98e1ea893ecc8ca3a7bb551fcccd7a9810960f6e5373b300ee52d94e509",
+    "model": "StandardLowRankDecoder_r8",
+    "seed": 46,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r8_seed42.pt": {
+    "sha256": "fddce1b28a77a891b78cc42f24c65ce74847baa4ac97a989b50571cf4d0ff4e9",
+    "model": "GeoCompactDecoder_r8",
+    "seed": 42,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r8_seed43.pt": {
+    "sha256": "bf28296d8728be8078c39b71947746693b43ec571ef1fb1e65e2a6ebd4271408",
+    "model": "GeoCompactDecoder_r8",
+    "seed": 43,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r8_seed44.pt": {
+    "sha256": "3b4ddfd5ecc525df93c6d0df34381211b650903641fae1b60f53900d4811a661",
+    "model": "GeoCompactDecoder_r8",
+    "seed": 44,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r8_seed45.pt": {
+    "sha256": "673aaf015a9996e5bb3fa488ac27c05e0dffdd5ce484ca7e244c78f9c03c5ddb",
+    "model": "GeoCompactDecoder_r8",
+    "seed": 45,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r8_seed46.pt": {
+    "sha256": "19ecc6ecbadbd52950f3f9d9408b0226119da33c0c8a563099994473d98a05f9",
+    "model": "GeoCompactDecoder_r8",
+    "seed": 46,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r16_seed42.pt": {
+    "sha256": "ab57b1cad7a0118e8e72e3c71d6264d48ccdc177c541805a48e86beba9b72b8a",
+    "model": "StandardLowRankDecoder_r16",
+    "seed": 42,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r16_seed43.pt": {
+    "sha256": "09d7486b3529747ada64c94c186b2ecd19968bbfe4af3b8f47b3684ded4bc08c",
+    "model": "StandardLowRankDecoder_r16",
+    "seed": 43,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r16_seed44.pt": {
+    "sha256": "04b9c9f77f871b6a8a34df761d76aa07229c6ce182e476241de2c06483856e3d",
+    "model": "StandardLowRankDecoder_r16",
+    "seed": 44,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r16_seed45.pt": {
+    "sha256": "8d34ba85a36d98018cb3e8a6d179c9e848c8ebb7ce30153493a8f55bec283792",
+    "model": "StandardLowRankDecoder_r16",
+    "seed": 45,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "StandardLowRankDecoder_r16_seed46.pt": {
+    "sha256": "155d648a3f72b75a6a3f3f883a93a39613dc70c67b3974e6d2570706eaffd5d3",
+    "model": "StandardLowRankDecoder_r16",
+    "seed": 46,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r16_seed42.pt": {
+    "sha256": "c69206274a2c159fef3760ea09bd7296bd55e5ad3c344fe114f9077f2f2e8329",
+    "model": "GeoCompactDecoder_r16",
+    "seed": 42,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r16_seed43.pt": {
+    "sha256": "622fd1fc4af6bfd539dbcea15ddfee13cb669b693ad4eb89f803f3cb3b5b9b49",
+    "model": "GeoCompactDecoder_r16",
+    "seed": 43,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r16_seed44.pt": {
+    "sha256": "925b5c1defd7a03f5fb26a3b6ef09e424dfa76e4cf07965e6dad21a4ebd18c18",
+    "model": "GeoCompactDecoder_r16",
+    "seed": 44,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r16_seed45.pt": {
+    "sha256": "886f3daa8c4bbf51f794f1bb00aac8e8cefe3d6a2172d08606ffb0f056d41c74",
+    "model": "GeoCompactDecoder_r16",
+    "seed": 45,
+    "status": "FROZEN_READ_ONLY"
+  },
+  "GeoCompactDecoder_r16_seed46.pt": {
+    "sha256": "9da7ecdbef017fffb2cce4607cc01e69a944bb01cebbf3f87b2ae112c3037448",
+    "model": "GeoCompactDecoder_r16",
+    "seed": 46,
+    "status": "FROZEN_READ_ONLY"
+  }
+}

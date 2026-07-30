@@ -1,0 +1,8 @@
+{
+  "seed_to_seed_bpb_variance": 0.0,
+  "checkpoint_selection_variance": 0.0,
+  "gradient_clipping_frequency": 0.0,
+  "maximum_gradient_norm": 0.85,
+  "update_to_parameter_ratio": 0.0012,
+  "nonfinite_counts": 0
+}
