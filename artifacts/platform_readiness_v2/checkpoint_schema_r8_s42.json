@@ -1,0 +1,909 @@
+{
+  "checkpoint_file": "C:\\GEO-Workspace\\GEOSDP\\artifacts\\checkpoints\\GeoCompactDecoder_seed42_best.pt",
+  "total_keys": 118,
+  "total_elements": 21024864,
+  "schema": {
+    "tok_emb.weight": {
+      "shape": [
+        1286,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 658432
+    },
+    "ple_table.weight": {
+      "shape": [
+        1286,
+        256
+      ],
+      "dtype": "torch.float32",
+      "numel": 329216
+    },
+    "ple_model_proj.weight": {
+      "shape": [
+        256,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 131072
+    },
+    "ple_norm.weight": {
+      "shape": [
+        32
+      ],
+      "dtype": "torch.float32",
+      "numel": 32
+    },
+    "blocks.0.attn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.0.attn.qkv.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.0.attn.proj.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.0.attn.proj.v": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.0.attn.proj.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.0.ffn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.0.ffn.gate.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.0.ffn.up.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.0.ffn.down.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.0.ffn.down.v": {
+      "shape": [
+        4,
+        1536
+      ],
+      "dtype": "torch.float32",
+      "numel": 6144
+    },
+    "blocks.0.ffn.down.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.0.ple_gate.weight": {
+      "shape": [
+        32,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.0.ple_proj.weight": {
+      "shape": [
+        512,
+        32
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.0.ple_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.1.attn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.1.attn.qkv.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.1.attn.proj.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.1.attn.proj.v": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.1.attn.proj.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.1.ffn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.1.ffn.gate.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.1.ffn.up.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.1.ffn.down.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.1.ffn.down.v": {
+      "shape": [
+        4,
+        1536
+      ],
+      "dtype": "torch.float32",
+      "numel": 6144
+    },
+    "blocks.1.ffn.down.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.1.ple_gate.weight": {
+      "shape": [
+        32,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.1.ple_proj.weight": {
+      "shape": [
+        512,
+        32
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.1.ple_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.2.attn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.2.attn.qkv.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.2.attn.proj.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.2.attn.proj.v": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.2.attn.proj.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.2.ffn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.2.ffn.gate.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.2.ffn.up.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.2.ffn.down.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.2.ffn.down.v": {
+      "shape": [
+        4,
+        1536
+      ],
+      "dtype": "torch.float32",
+      "numel": 6144
+    },
+    "blocks.2.ffn.down.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.2.ple_gate.weight": {
+      "shape": [
+        32,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.2.ple_proj.weight": {
+      "shape": [
+        512,
+        32
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.2.ple_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.3.attn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.3.attn.qkv.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.3.attn.proj.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.3.attn.proj.v": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.3.attn.proj.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.3.ffn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.3.ffn.gate.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.3.ffn.up.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.3.ffn.down.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.3.ffn.down.v": {
+      "shape": [
+        4,
+        1536
+      ],
+      "dtype": "torch.float32",
+      "numel": 6144
+    },
+    "blocks.3.ffn.down.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.3.ple_gate.weight": {
+      "shape": [
+        32,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.3.ple_proj.weight": {
+      "shape": [
+        512,
+        32
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.3.ple_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.4.attn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.4.attn.qkv.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.4.attn.proj.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.4.attn.proj.v": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.4.attn.proj.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.4.ffn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.4.ffn.gate.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.4.ffn.up.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.4.ffn.down.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.4.ffn.down.v": {
+      "shape": [
+        4,
+        1536
+      ],
+      "dtype": "torch.float32",
+      "numel": 6144
+    },
+    "blocks.4.ffn.down.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.4.ple_gate.weight": {
+      "shape": [
+        32,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.4.ple_proj.weight": {
+      "shape": [
+        512,
+        32
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.4.ple_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.5.attn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.5.attn.qkv.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.5.attn.proj.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.5.attn.proj.v": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.5.attn.proj.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.5.ffn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.5.ffn.gate.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.5.ffn.up.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.5.ffn.down.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.5.ffn.down.v": {
+      "shape": [
+        4,
+        1536
+      ],
+      "dtype": "torch.float32",
+      "numel": 6144
+    },
+    "blocks.5.ffn.down.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.5.ple_gate.weight": {
+      "shape": [
+        32,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.5.ple_proj.weight": {
+      "shape": [
+        512,
+        32
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.5.ple_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.6.attn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.6.attn.qkv.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.6.attn.proj.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.6.attn.proj.v": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.6.attn.proj.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.6.ffn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.6.ffn.gate.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.6.ffn.up.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.6.ffn.down.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.6.ffn.down.v": {
+      "shape": [
+        4,
+        1536
+      ],
+      "dtype": "torch.float32",
+      "numel": 6144
+    },
+    "blocks.6.ffn.down.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.6.ple_gate.weight": {
+      "shape": [
+        32,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.6.ple_proj.weight": {
+      "shape": [
+        512,
+        32
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.6.ple_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.7.attn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.7.attn.qkv.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.7.attn.proj.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.7.attn.proj.v": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.7.attn.proj.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.7.ffn_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "blocks.7.ffn.gate.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.7.ffn.up.weight": {
+      "shape": [
+        1536,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 786432
+    },
+    "blocks.7.ffn.down.u": {
+      "shape": [
+        4,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 2048
+    },
+    "blocks.7.ffn.down.v": {
+      "shape": [
+        4,
+        1536
+      ],
+      "dtype": "torch.float32",
+      "numel": 6144
+    },
+    "blocks.7.ffn.down.alpha": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "numel": 4
+    },
+    "blocks.7.ple_gate.weight": {
+      "shape": [
+        32,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.7.ple_proj.weight": {
+      "shape": [
+        512,
+        32
+      ],
+      "dtype": "torch.float32",
+      "numel": 16384
+    },
+    "blocks.7.ple_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "out_norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 512
+    },
+    "head.weight": {
+      "shape": [
+        1286,
+        512
+      ],
+      "dtype": "torch.float32",
+      "numel": 658432
+    }
+  }
+}

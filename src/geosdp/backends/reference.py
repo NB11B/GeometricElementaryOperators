@@ -50,3 +50,18 @@ class ReferenceGeoBackend(GeoBackend):
     def gelu(self, x): return F.gelu(x)
     def cross_entropy(self, logits, targets, ignore_index=-1):
         return F.cross_entropy(logits, targets, ignore_index=ignore_index)
+
+    def implicit_linear(
+        self,
+        x: torch.Tensor,
+        u: torch.Tensor,
+        v: torch.Tensor,
+        alpha: torch.Tensor,
+        perm_indices: torch.Tensor,
+        inv_perm_indices: torch.Tensor,
+        sign_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        h = torch.matmul(x, v.T.to(x.dtype))
+        h_scaled = h * alpha.to(x.dtype)
+        out = torch.matmul(h_scaled, u.to(x.dtype))
+        return out

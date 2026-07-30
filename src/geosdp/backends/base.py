@@ -36,3 +36,14 @@ class GeoBackend(ABC):
     def gelu(self, x: torch.Tensor) -> torch.Tensor: ...
     @abstractmethod
     def cross_entropy(self, logits: torch.Tensor, targets: torch.Tensor, ignore_index: int = -1) -> torch.Tensor: ...
+    @abstractmethod
+    def implicit_linear(
+        self,
+        x: torch.Tensor,
+        u: torch.Tensor,
+        v: torch.Tensor,
+        alpha: torch.Tensor,
+        perm_indices: torch.Tensor,
+        inv_perm_indices: torch.Tensor,
+        sign_mask: torch.Tensor,
+    ) -> torch.Tensor: ...

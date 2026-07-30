@@ -9,9 +9,8 @@ from geosdp.backends.base import GeoBackend
 class GeoImplicitStructuredLinear(nn.Module):
     """Native Low-Rank Implicit Linear Projection Layer.
     
-    Computes direct low-rank implicit transformation y = (x @ V^T @ U) * alpha
-    without constructing dense W matrix. Supports native C/CUDA runtime dispatch
-    with fallback to PyTorch tensor operations.
+    Computes direct low-rank implicit transformation y = ((x @ V^T) * alpha) @ U
+    without constructing dense W matrix. Routes strictly through GeoBackend.implicit_linear.
     """
 
     def __init__(
@@ -31,7 +30,7 @@ class GeoImplicitStructuredLinear(nn.Module):
 
         self.u = nn.Parameter(torch.randn(rank, out_features, device=device, dtype=dtype) / math.sqrt(out_features))
         self.v = nn.Parameter(torch.randn(rank, in_features, device=device, dtype=dtype) / math.sqrt(in_features))
-        self.alpha = nn.Parameter(torch.ones(1, device=device, dtype=dtype))
+        self.alpha = nn.Parameter(torch.ones(rank, device=device, dtype=dtype))
 
         # Structured permutation buffers
         perm_indices = torch.randperm(in_features, device=device, dtype=torch.int32)
@@ -55,14 +54,16 @@ class GeoImplicitStructuredLinear(nn.Module):
         return param_bytes + buffer_bytes
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Direct implicit geometric forward pass via native runtime without constructing weight matrix W."""
-        try:
-            import geo_dl_runtime
-            return geo_dl_runtime.implicit_linear(x, self.u, self.v, self.alpha, self.perm_indices, self.inv_perm_indices, self.sign_mask)
-        except ImportError:
-            # Reference PyTorch evaluation path when C/CUDA runtime module is not compiled
-            out = torch.matmul(torch.matmul(x, self.v.T.to(x.dtype)), self.u.to(x.dtype))
-            return (out * self.alpha).to(x.dtype)
+        """Direct implicit geometric forward pass routing through backend interface."""
+        return self.backend.implicit_linear(
+            x,
+            self.u,
+            self.v,
+            self.alpha,
+            self.perm_indices,
+            self.inv_perm_indices,
+            self.sign_mask
+        )
 
 
 class GeoImplicitSparseResidualLinear(nn.Module):
@@ -84,7 +85,6 @@ class GeoImplicitSparseResidualLinear(nn.Module):
         super().__init__()
         self.implicit = GeoImplicitStructuredLinear(backend, in_features, out_features, rank=rank, device=device, dtype=dtype)
         
-        # Build initial sparse mask
         total_elements = out_features * in_features
         num_nonzeros = int(total_elements * sparsity)
         indices = torch.randint(0, total_elements, (num_nonzeros,), device=device)
