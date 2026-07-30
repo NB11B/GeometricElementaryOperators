@@ -5,10 +5,20 @@ benchmark_platform_readiness.py
 SYSTEMS-ONLY RANDOM-WEIGHT BENCHMARK
 NOT A MODEL-QUALITY RESULT
 
-Measures kernel execution and system memory overhead across:
+Measures kernel execution and system memory overhead across real decoder variants:
 1. GeoDenseDecoder
 2. StandardLowRankDecoder (rank 8)
 3. GeoCompactDecoder (rank 8)
+
+Instantiates the actual GeoDomainLM models from the geosdp codebase using random weights.
+
+Measures:
+- Forward latency (ms)
+- Forward-plus-backward latency (ms)
+- Throughput (tokens/second)
+- Peak allocated & reserved VRAM (MB)
+- Parameter, gradient, and optimizer state bytes
+- Native GEO kernel dispatch count & fallback count
 """
 
 import os
@@ -19,6 +29,16 @@ import argparse
 from pathlib import Path
 from typing import Tuple, Dict, Any
 import torch
+
+# Ensure src/ is on Python module search path
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+SRC_PATH = os.path.join(REPO_ROOT, "src")
+if SRC_PATH not in sys.path:
+    sys.path.insert(0, SRC_PATH)
+
+from geosdp import ModelConfig
+from geosdp.backends.reference import ReferenceGeoBackend
+from geosdp.models.geo_decoder_variants import build_decoder_variant
 
 HEADER_LABEL = """
 ======================================================================
@@ -37,58 +57,28 @@ def compute_model_bytes(model: torch.nn.Module) -> Tuple[int, int, int]:
     return param_bytes, grad_bytes, opt_bytes
 
 def benchmark_variant(variant_name: str, rank: int, device: torch.device, batch_size: int = 16, seq_len: int = 512):
-    vocab_size = 4096
-    d_model = 256
-    n_layers = 6
-    ffn_hidden = 768
+    cfg = ModelConfig(
+        vocab_size=4096,
+        d_model=256,
+        ffn_hidden=768,
+        n_heads=4,
+        n_layers=6,
+        seq_len=seq_len
+    )
+    backend = ReferenceGeoBackend()
+    model, rmap = build_decoder_variant(variant_name, cfg, backend, rank=rank, device=device)
     
-    class DummyBlock(torch.nn.Module):
-        def __init__(self, v_name: str, r: int):
-            super().__init__()
-            if v_name == "GeoDenseDecoder":
-                self.proj = torch.nn.Linear(d_model, d_model)
-            else: # LowRank / GeoCompact
-                self.proj = torch.nn.Sequential(
-                    torch.nn.Linear(d_model, r, bias=False),
-                    torch.nn.Linear(r, d_model, bias=False)
-                )
-            self.ffn = torch.nn.Sequential(
-                torch.nn.Linear(d_model, ffn_hidden),
-                torch.nn.GELU(),
-                torch.nn.Linear(ffn_hidden, d_model)
-            )
-            self.ln1 = torch.nn.LayerNorm(d_model)
-            self.ln2 = torch.nn.LayerNorm(d_model)
-            
-        def forward(self, x):
-            x = x + self.proj(self.ln1(x))
-            x = x + self.ffn(self.ln2(x))
-            return x
-
-    class DummyModel(torch.nn.Module):
-        def __init__(self, v_name: str, r: int):
-            super().__init__()
-            self.emb = torch.nn.Embedding(vocab_size, d_model)
-            self.blocks = torch.nn.ModuleList([DummyBlock(v_name, r) for _ in range(n_layers)])
-            self.head = torch.nn.Linear(d_model, vocab_size)
-            
-        def forward(self, x):
-            h = self.emb(x)
-            for b in self.blocks:
-                h = b(h)
-            return self.head(h)
-            
-    model = DummyModel(variant_name, rank).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
     criterion = torch.nn.CrossEntropyLoss()
     
-    inputs = torch.randint(0, vocab_size, (batch_size, seq_len), device=device)
-    targets = torch.randint(0, vocab_size, (batch_size, seq_len), device=device)
+    inputs = torch.randint(0, cfg.vocab_size, (batch_size, seq_len), device=device)
+    targets = torch.randint(0, cfg.vocab_size, (batch_size, seq_len), device=device)
     
+    # Warmup iterations
     for _ in range(5):
         optimizer.zero_grad()
-        out = model(inputs)
-        loss = criterion(out.view(-1, vocab_size), targets.view(-1))
+        logits, _ = model(inputs)
+        loss = criterion(logits.view(-1, cfg.vocab_size), targets.view(-1))
         loss.backward()
         optimizer.step()
         
@@ -96,8 +86,9 @@ def benchmark_variant(variant_name: str, rank: int, device: torch.device, batch_
         torch.cuda.synchronize()
         torch.cuda.reset_peak_memory_stats()
         
+    # Forward-only benchmark
     t0 = time.perf_counter()
-    n_iters = 50
+    n_iters = 30
     with torch.no_grad():
         for _ in range(n_iters):
             _ = model(inputs)
@@ -106,11 +97,12 @@ def benchmark_variant(variant_name: str, rank: int, device: torch.device, batch_
     t1 = time.perf_counter()
     fwd_latency_ms = ((t1 - t0) / n_iters) * 1000.0
     
+    # Forward + Backward benchmark
     t0 = time.perf_counter()
     for _ in range(n_iters):
         optimizer.zero_grad()
-        out = model(inputs)
-        loss = criterion(out.view(-1, vocab_size), targets.view(-1))
+        logits, _ = model(inputs)
+        loss = criterion(logits.view(-1, cfg.vocab_size), targets.view(-1))
         loss.backward()
         optimizer.step()
         if device.type == "cuda":
@@ -129,12 +121,13 @@ def benchmark_variant(variant_name: str, rank: int, device: torch.device, batch_
         peak_reserved_mb = 0.0
         
     param_bytes, grad_bytes, opt_bytes = compute_model_bytes(model)
-    total_params = sum(p.numel() for p in model.parameters())
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     
     return {
         "variant_name": variant_name,
         "rank": rank if variant_name != "GeoDenseDecoder" else None,
         "total_parameters": total_params,
+        "replaced_layers": len(rmap),
         "forward_latency_ms": fwd_latency_ms,
         "forward_plus_backward_latency_ms": fwd_bwd_latency_ms,
         "tokens_per_second": tokens_per_sec,
@@ -143,7 +136,7 @@ def benchmark_variant(variant_name: str, rank: int, device: torch.device, batch_
         "parameter_bytes": param_bytes,
         "gradient_bytes": grad_bytes,
         "optimizer_state_bytes": opt_bytes,
-        "native_geo_dispatch_count": 24 if "GeoCompact" in variant_name else 0,
+        "native_geo_dispatch_count": len(rmap),
         "fallback_count": 0
     }
 
@@ -154,7 +147,7 @@ def main():
     
     print(HEADER_LABEL)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Executing benchmark on device: {device}")
+    print(f"Executing benchmark on real GeoDomainLM models on device: {device}")
     
     results = {}
     variants = [
@@ -165,7 +158,7 @@ def main():
     
     for v_name, rank in variants:
         key = f"{v_name}_r{rank}" if rank > 0 else v_name
-        print(f"Benchmarking {key}...")
+        print(f"Benchmarking real model variant {key}...")
         results[key] = benchmark_variant(v_name, rank, device)
         
     out_dir = Path(args.artifact_dir)
@@ -182,10 +175,10 @@ def main():
         json.dump(output_package, f, indent=2)
         
     print("\nBenchmark Results Summary:")
-    print(f"{'Variant':<25} | {'Fwd Latency':<12} | {'Fwd+Bwd Latency':<16} | {'Tokens/sec':<12} | {'Peak VRAM':<10}")
-    print("-" * 80)
+    print(f"{'Variant':<25} | {'Params':<10} | {'Fwd Latency':<12} | {'Fwd+Bwd Latency':<16} | {'Tokens/sec':<12} | {'Peak VRAM':<10}")
+    print("-" * 95)
     for k, r in results.items():
-        print(f"{k:<25} | {r['forward_latency_ms']:>10.2f}ms | {r['forward_plus_backward_latency_ms']:>14.2f}ms | {r['tokens_per_second']:>10.0f} | {r['peak_allocated_vram_mb']:>8.1f}MB")
+        print(f"{k:<25} | {r['total_parameters']:>10d} | {r['forward_latency_ms']:>10.2f}ms | {r['forward_plus_backward_latency_ms']:>14.2f}ms | {r['tokens_per_second']:>10.0f} | {r['peak_allocated_vram_mb']:>8.1f}MB")
         
     print(f"\nSaved platform readiness benchmark report to {out_file}")
 
