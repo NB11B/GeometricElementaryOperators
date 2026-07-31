@@ -2,10 +2,11 @@
 """
 verify_checkpoint_compatibility.py
 
-Repair Step 5: Strict Checkpoint Compatibility Verifier.
-Strictly loads all 35 REAL recovered physical checkpoints from artifacts/recovered_rank_calibration_v1/checkpoints/.
-No synthetic state dicts. Missing checkpoints produce FileNotFoundError.
-Outputs artifacts/platform_readiness_v3/checkpoint_compatibility.json.
+Fix 1: Canonical Architecture Fixture Compatibility Verifier.
+Strictly loads all 35 generated architecture compatibility fixtures from
+artifacts/canonical_checkpoint_fixtures_v1/checkpoints/.
+
+Outputs artifacts/platform_readiness_v4/canonical_checkpoint_compatibility.json.
 """
 
 import os
@@ -45,9 +46,9 @@ def compute_file_sha256(filepath: Path) -> str:
     return sha256.hexdigest()
 
 def main():
-    parser = argparse.ArgumentParser(description="Verify Real Checkpoint Strict Loading Compatibility")
-    parser.add_argument("--bundle", type=str, default="artifacts/recovered_rank_calibration_v1", help="Bundle path")
-    parser.add_argument("--output", type=str, default="artifacts/platform_readiness_v3/checkpoint_compatibility.json", help="Output path")
+    parser = argparse.ArgumentParser(description="Verify Canonical Architecture Checkpoint Fixture Compatibility")
+    parser.add_argument("--bundle", type=str, default="artifacts/canonical_checkpoint_fixtures_v1", help="Fixture bundle path")
+    parser.add_argument("--output", type=str, default="artifacts/platform_readiness_v4/canonical_checkpoint_compatibility.json", help="Output path")
     args = parser.parse_args()
     
     bundle_path = Path(args.bundle)
@@ -80,9 +81,8 @@ def main():
             ckpt_name = f"{v_key}_s{seed}.pt"
             ckpt_path = ckpt_dir / ckpt_name
             
-            # Strict file existence assertion: No synthetic fallbacks allowed!
             if not ckpt_path.exists():
-                raise FileNotFoundError(f"Expected recovered checkpoint not found: {ckpt_path}")
+                raise FileNotFoundError(f"Expected architecture fixture not found: {ckpt_path}")
                 
             model, rmap = build_decoder_variant(v_base, cfg, backend, rank=rank)
             total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -94,13 +94,12 @@ def main():
             sd_obj = torch.load(ckpt_path, map_location="cpu")
             state_dict = sd_obj.get("state_dict", sd_obj.get("model", sd_obj))
             
-            # Strict load assertion into reconstructed variant
             model.load_state_dict(state_dict, strict=True)
             strict_pass_count += 1
             
             results.append({
-                "checkpoint_path": str(ckpt_path),
-                "checkpoint_sha256": ckpt_hash,
+                "fixture_path": str(ckpt_path),
+                "fixture_sha256": ckpt_hash,
                 "variant_name": v_key,
                 "architecture": v_base,
                 "rank": rank,
@@ -110,6 +109,11 @@ def main():
             })
             
     summary_package = {
+        "artifact_type": "generated_checkpoint_compatibility_fixture",
+        "trained_weights": False,
+        "scientific_evidence": False,
+        "engineering_evidence": True,
+        "strict_loads": f"{strict_pass_count}/{total_checkpoints}",
         "verified_checkpoints": f"{strict_pass_count}/{total_checkpoints}",
         "all_checkpoints_strict_loaded": (strict_pass_count == total_checkpoints),
         "geo_compact_r8_parameters": r8_geo_param_count,
@@ -122,8 +126,8 @@ def main():
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(summary_package, f, indent=2)
         
-    print(f"\nReal Checkpoint Strict Load Compatibility Verification:")
-    print(f"Passed: {strict_pass_count}/{total_checkpoints} real physical checkpoint strict loads")
+    print(f"\nCanonical Architecture Checkpoint Fixture Strict Load Verification:")
+    print(f"Passed: {strict_pass_count}/{total_checkpoints} canonical architecture fixtures strict-loaded")
     print(f"GeoCompactDecoder r8 parameters: {r8_geo_param_count}")
     print(f"Report saved to {out_path}")
 

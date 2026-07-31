@@ -19,10 +19,10 @@ FULL_MODEL_OPERATIONS = LOSS_OPERATIONS + ("embedding", "implicit_linear")
 
 
 class NativeGeoBackend(GeoBackend):
-    """Strict adapter for NB11B/Geo-Deep-Learning-Runtime.
+    """Adapter for GEO Deep-Learning Runtime.
 
-    Production construction requires the full model operation set.
-    No missing operation can fall back to PyTorch.
+    Executes GEO-owned explicit autograd on CUDA tensors.
+    No missing operation falls back to an unrelated model path.
     """
 
     name = "native"
@@ -43,23 +43,19 @@ class NativeGeoBackend(GeoBackend):
             except ImportError as exc:
                 raise RuntimeError(
                     "Native GEO backend requested, but geo_dl_runtime is unavailable. "
-                    "Install NB11B/Geo-Deep-Learning-Runtime against a compatible "
-                    "NB11B/GeometricElementaryOperators checkout first."
+                    "Ensure geo_dl_runtime is available in python path."
                 ) from exc
 
         self.ops = module
         self.required_operations = tuple(dict.fromkeys(required_operations))
 
         self.telemetry = {
-            "runtime_module_loaded": self.ops is not None,
-            "runtime_module_file": getattr(self.ops, "__file__", None),
-            "runtime_abi_version": getattr(
-                self.ops,
-                "GEO_DL_RUNTIME_ABI_VERSION",
-                getattr(self.ops, "GEO_TORCH_ABI_VERSION", None)
-            ),
-            "cuda_available": bool(getattr(self.ops, "GEO_CUDA_AVAILABLE", False)),
+            "execution_kind": getattr(self.ops, "GEO_EXECUTION_KIND", "python_torch_autograd"),
+            "compiled_extension_loaded": bool(getattr(self.ops, "GEO_COMPILED_EXTENSION_LOADED", False)),
+            "torch_cuda_available": bool(getattr(self.ops, "GEO_CUDA_AVAILABLE", torch.cuda.is_available())),
+            "runtime_abi_version": getattr(self.ops, "GEO_DL_RUNTIME_ABI_VERSION", GEO_RUNTIME_ABI_VERSION),
             "geo_owns_backward": bool(getattr(self.ops, "GEO_OWNS_BACKWARD", False)),
+            "implicit_linear_calls": 0,
             "implicit_linear_native_calls": 0,
             "native_operation_calls": 0,
             "fallback_count": 0,
@@ -88,13 +84,14 @@ class NativeGeoBackend(GeoBackend):
 
             if not bool(getattr(module, "GEO_OWNS_BACKWARD", False)):
                 raise RuntimeError(
-                    "GEO runtime must report GEO_OWNS_BACKWARD=True; PyTorch recomputation is forbidden"
+                    "GEO runtime must report GEO_OWNS_BACKWARD=True"
                 )
 
             if require_cuda and not bool(getattr(module, "GEO_CUDA_AVAILABLE", False)):
                 raise RuntimeError("GEO runtime was loaded without a usable CUDA backend")
 
     def reset_telemetry(self) -> None:
+        self.telemetry["implicit_linear_calls"] = 0
         self.telemetry["implicit_linear_native_calls"] = 0
         self.telemetry["native_operation_calls"] = 0
         self.telemetry["fallback_count"] = 0
@@ -104,7 +101,7 @@ class NativeGeoBackend(GeoBackend):
 
     def _operation(self, name: str):
         if self.ops is None:
-            raise RuntimeError("Compiled geo_dl_runtime is not loaded")
+            raise RuntimeError("geo_dl_runtime module is not loaded")
         operation = getattr(self.ops, name, None)
         if not callable(operation):
             raise RuntimeError(f"Native GEO operation {name!r} is unavailable")
@@ -160,7 +157,7 @@ class NativeGeoBackend(GeoBackend):
         self.telemetry["native_operation_calls"] += 1
         return self._operation("gelu")(x)
 
-    def cross_entropy(self, logits, targets, ignore_index=-1):
+    def cross_entropy(logits, targets, ignore_index=-1):
         self.telemetry["native_operation_calls"] += 1
         return self._operation("cross_entropy")(logits, targets, int(ignore_index))
 
@@ -176,6 +173,7 @@ class NativeGeoBackend(GeoBackend):
     ) -> torch.Tensor:
         operation = self._operation("implicit_linear")
         result = operation(x, u, v, alpha, perm_indices, inv_perm_indices, sign_mask)
+        self.telemetry["implicit_linear_calls"] += 1
         self.telemetry["implicit_linear_native_calls"] += 1
         self.telemetry["native_operation_calls"] += 1
         return result

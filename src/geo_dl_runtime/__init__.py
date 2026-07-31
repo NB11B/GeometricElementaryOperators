@@ -56,6 +56,9 @@ except ImportError:
 
 
 GEO_EXECUTION_DISPATCHER = getattr(_C, "GEO_EXECUTION_DISPATCHER", {}) if _C is not None else {}
+GEO_EXECUTION_KIND = "python_torch_autograd"
+GEO_COMPILED_EXTENSION_LOADED = _C is not None
+GEO_TORCH_CUDA_AVAILABLE = bool(torch is not None and torch.cuda.is_available())
 
 
 def get_attention_backend_counters() -> dict:
@@ -231,9 +234,12 @@ __all__ = [
     "EMBEDDING_CAPABILITIES",
     "GEO_BACKEND",
     "GEO_CAPABILITIES",
+    "GEO_COMPILED_EXTENSION_LOADED",
     "GEO_CUDA_AVAILABLE",
     "GEO_DL_RUNTIME_ABI_VERSION",
+    "GEO_EXECUTION_KIND",
     "GEO_OWNS_BACKWARD",
+    "GEO_TORCH_CUDA_AVAILABLE",
     "LINEAR_CAPABILITIES",
     "LOSS_CAPABILITIES",
     "LOSS_STAGE_CAPABILITIES",
