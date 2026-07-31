@@ -9,7 +9,8 @@ Assertions:
 1. Python GEO autograd forward/backward: PASS
 2. CUDA tensor execution: PASS
 3. Reference/runtime numerical parity: PASS
-4. Fallback count: 0
+4. Native backend cross_entropy method execution & backward: PASS
+5. Fallback count: 0
 """
 
 import os
@@ -47,6 +48,23 @@ def test_runtime_backend_contract_and_telemetry():
     assert telemetry["runtime_abi_version"] == GEO_RUNTIME_ABI_VERSION
     assert telemetry["geo_owns_backward"] is True
     assert telemetry["fallback_count"] == 0
+
+def test_runtime_cross_entropy():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    backend = NativeGeoBackend(require_cuda=(device.type == "cuda"))
+
+    logits = torch.randn(2, 8, 64, device=device, requires_grad=True)
+    targets = torch.randint(0, 64, (2, 8), device=device)
+
+    loss = backend.cross_entropy(
+        logits.reshape(-1, 64),
+        targets.reshape(-1),
+    )
+
+    assert torch.isfinite(loss)
+    loss.backward()
+    assert logits.grad is not None
+    assert torch.isfinite(logits.grad).all()
 
 def test_runtime_model_forward_dispatches_and_gradients():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

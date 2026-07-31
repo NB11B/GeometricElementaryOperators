@@ -157,9 +157,18 @@ class NativeGeoBackend(GeoBackend):
         self.telemetry["native_operation_calls"] += 1
         return self._operation("gelu")(x)
 
-    def cross_entropy(logits, targets, ignore_index=-1):
+    def cross_entropy(
+        self,
+        logits: torch.Tensor,
+        targets: torch.Tensor,
+        ignore_index: int = -1,
+    ) -> torch.Tensor:
         self.telemetry["native_operation_calls"] += 1
-        return self._operation("cross_entropy")(logits, targets, int(ignore_index))
+        return self._operation("cross_entropy")(
+            logits,
+            targets,
+            int(ignore_index),
+        )
 
     def implicit_linear(
         self,
