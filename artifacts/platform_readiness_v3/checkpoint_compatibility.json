@@ -1,0 +1,360 @@
+{
+  "verified_checkpoints": "35/35",
+  "all_checkpoints_strict_loaded": true,
+  "geo_compact_r8_parameters": 8401888,
+  "total_missing_keys": 0,
+  "total_unexpected_keys": 0,
+  "total_shape_mismatches": 0,
+  "runs": [
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoDenseDecoder_s42.pt",
+      "checkpoint_sha256": "d970d5cbf8e55192dd7bf5a65dc415c1048ce15623d7d4197ac30fd9c0e31bea",
+      "variant_name": "GeoDenseDecoder",
+      "architecture": "GeoDenseDecoder",
+      "rank": 0,
+      "seed": 42,
+      "parameters": 9900928,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoDenseDecoder_s43.pt",
+      "checkpoint_sha256": "9aed013cc398fac0a790b300ea6a7b97a40fd7d84b73c773022bd9fa7b473a84",
+      "variant_name": "GeoDenseDecoder",
+      "architecture": "GeoDenseDecoder",
+      "rank": 0,
+      "seed": 43,
+      "parameters": 9900928,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoDenseDecoder_s44.pt",
+      "checkpoint_sha256": "50e46be2e364ad52c0ab411975eb7e233e34eca719470f9bfba136b15abc392d",
+      "variant_name": "GeoDenseDecoder",
+      "architecture": "GeoDenseDecoder",
+      "rank": 0,
+      "seed": 44,
+      "parameters": 9900928,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoDenseDecoder_s45.pt",
+      "checkpoint_sha256": "287505d44009cd998da5f488406754df67b67d822e367f9604bbcfabbf846b07",
+      "variant_name": "GeoDenseDecoder",
+      "architecture": "GeoDenseDecoder",
+      "rank": 0,
+      "seed": 45,
+      "parameters": 9900928,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoDenseDecoder_s46.pt",
+      "checkpoint_sha256": "821536d16b1484ed9537c100ee5bb40509ca89e61daca5e130087e46f6657dff",
+      "variant_name": "GeoDenseDecoder",
+      "architecture": "GeoDenseDecoder",
+      "rank": 0,
+      "seed": 46,
+      "parameters": 9900928,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r4_s42.pt",
+      "checkpoint_sha256": "0c1f57ef512670420f9d6fb756fc7530543ef308512c0f68605ab84e888ded4b",
+      "variant_name": "StandardLowRankDecoder_r4",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 4,
+      "seed": 42,
+      "parameters": 8364928,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r4_s43.pt",
+      "checkpoint_sha256": "50f41d70c105cb708a640fbeb3bd7910085aed3f36e09a4592db6fbfc37b0670",
+      "variant_name": "StandardLowRankDecoder_r4",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 4,
+      "seed": 43,
+      "parameters": 8364928,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r4_s44.pt",
+      "checkpoint_sha256": "e757e942e9e4eb64b41b70b3c30466c322b181c4acf7902c851e04555c1b5ce8",
+      "variant_name": "StandardLowRankDecoder_r4",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 4,
+      "seed": 44,
+      "parameters": 8364928,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r4_s45.pt",
+      "checkpoint_sha256": "f18ab4605520a95dd091065c1db4d46a2227eaa8bb7ad16b6d412e0e70f8f519",
+      "variant_name": "StandardLowRankDecoder_r4",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 4,
+      "seed": 45,
+      "parameters": 8364928,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r4_s46.pt",
+      "checkpoint_sha256": "23c2bbddeea6d81bad04cbc9fd62cd7e389e3d767ea3a0237fe555740a4c6269",
+      "variant_name": "StandardLowRankDecoder_r4",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 4,
+      "seed": 46,
+      "parameters": 8364928,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r8_s42.pt",
+      "checkpoint_sha256": "7edda0a4485fe4229cb3e7be3303d80b4a677730e89189e9e5f0c78788b6fc7f",
+      "variant_name": "StandardLowRankDecoder_r8",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 8,
+      "seed": 42,
+      "parameters": 8401792,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r8_s43.pt",
+      "checkpoint_sha256": "1cca6a3ccba6380c55639074398e4dfe9d1e45fe5f3de6d632e327f70ba58761",
+      "variant_name": "StandardLowRankDecoder_r8",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 8,
+      "seed": 43,
+      "parameters": 8401792,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r8_s44.pt",
+      "checkpoint_sha256": "cc20fe64ee897e75f8bef6d58cb668173ca05cd7bdb56e13565c3b5f0bd37905",
+      "variant_name": "StandardLowRankDecoder_r8",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 8,
+      "seed": 44,
+      "parameters": 8401792,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r8_s45.pt",
+      "checkpoint_sha256": "dc97d1a0ff285d787fca3e2dff7fc1c3a364759ea25b5774e5751469bdb246a0",
+      "variant_name": "StandardLowRankDecoder_r8",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 8,
+      "seed": 45,
+      "parameters": 8401792,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r8_s46.pt",
+      "checkpoint_sha256": "59afb65ea58837702b7b8e85edf2f18a618b856a5aa675d6ba9a460fd8381117",
+      "variant_name": "StandardLowRankDecoder_r8",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 8,
+      "seed": 46,
+      "parameters": 8401792,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r16_s42.pt",
+      "checkpoint_sha256": "7df255e19b79bb56ce1efc29fd85f4b0378a2344b048882774b2aa36ea906fde",
+      "variant_name": "StandardLowRankDecoder_r16",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 16,
+      "seed": 42,
+      "parameters": 8475520,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r16_s43.pt",
+      "checkpoint_sha256": "d4d1dea19d55f51f328ec64eb89600be1a0f599436228e85d9273213436ae178",
+      "variant_name": "StandardLowRankDecoder_r16",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 16,
+      "seed": 43,
+      "parameters": 8475520,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r16_s44.pt",
+      "checkpoint_sha256": "173a5eeadb80e9f6d98034a864856752d1ead67660fb97710fb0a256a4ee4997",
+      "variant_name": "StandardLowRankDecoder_r16",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 16,
+      "seed": 44,
+      "parameters": 8475520,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r16_s45.pt",
+      "checkpoint_sha256": "a873d632751d6894d459ac42d4d6c54af1338015266f77d47bdd0c3e89335753",
+      "variant_name": "StandardLowRankDecoder_r16",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 16,
+      "seed": 45,
+      "parameters": 8475520,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\StandardLowRankDecoder_r16_s46.pt",
+      "checkpoint_sha256": "db6a0806862a9419f1ebcfaea6a1d49940db48be6c8ad837c2e0366d7d6c06e1",
+      "variant_name": "StandardLowRankDecoder_r16",
+      "architecture": "StandardLowRankDecoder",
+      "rank": 16,
+      "seed": 46,
+      "parameters": 8475520,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r4_s42.pt",
+      "checkpoint_sha256": "62b617eb207b1d55337350a6cc5f37923742dba3758ea580a71e796518cc72e5",
+      "variant_name": "GeoCompactDecoder_r4",
+      "architecture": "GeoCompactDecoder",
+      "rank": 4,
+      "seed": 42,
+      "parameters": 8364976,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r4_s43.pt",
+      "checkpoint_sha256": "51456e5df0f8f9292f6465724a6f13c8684d6f4f2391cfc0c78d9dd05d4f60b3",
+      "variant_name": "GeoCompactDecoder_r4",
+      "architecture": "GeoCompactDecoder",
+      "rank": 4,
+      "seed": 43,
+      "parameters": 8364976,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r4_s44.pt",
+      "checkpoint_sha256": "e13129f156964e17404712582c241cb12249f66b4c3f64e3fcc9c43216dafcbb",
+      "variant_name": "GeoCompactDecoder_r4",
+      "architecture": "GeoCompactDecoder",
+      "rank": 4,
+      "seed": 44,
+      "parameters": 8364976,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r4_s45.pt",
+      "checkpoint_sha256": "c2a5220006c57e242c96ba8ce68346b67285e89d19fbcef90386ad36dd7b35f4",
+      "variant_name": "GeoCompactDecoder_r4",
+      "architecture": "GeoCompactDecoder",
+      "rank": 4,
+      "seed": 45,
+      "parameters": 8364976,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r4_s46.pt",
+      "checkpoint_sha256": "e8b0df905131a3cfab056de6bb65a3ec31e2de5be6bb5008184451e157d5026d",
+      "variant_name": "GeoCompactDecoder_r4",
+      "architecture": "GeoCompactDecoder",
+      "rank": 4,
+      "seed": 46,
+      "parameters": 8364976,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r8_s42.pt",
+      "checkpoint_sha256": "04ebe49edcdd8b9f36419e8070ead19dc96ab058e7b00b2459a786ff2a2c4f6f",
+      "variant_name": "GeoCompactDecoder_r8",
+      "architecture": "GeoCompactDecoder",
+      "rank": 8,
+      "seed": 42,
+      "parameters": 8401888,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r8_s43.pt",
+      "checkpoint_sha256": "3b80cb6b4fd19d0cdd7591cc8555d5609e5970b5571d155f3408d70edb777bbf",
+      "variant_name": "GeoCompactDecoder_r8",
+      "architecture": "GeoCompactDecoder",
+      "rank": 8,
+      "seed": 43,
+      "parameters": 8401888,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r8_s44.pt",
+      "checkpoint_sha256": "417179bead202e75276b25bc5a71218130094b074bbdc9bcd377906f84a0760d",
+      "variant_name": "GeoCompactDecoder_r8",
+      "architecture": "GeoCompactDecoder",
+      "rank": 8,
+      "seed": 44,
+      "parameters": 8401888,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r8_s45.pt",
+      "checkpoint_sha256": "4b54e9a899d310efe26efb8d9c50ae12a350c666209748fd2461b7d6df0e7978",
+      "variant_name": "GeoCompactDecoder_r8",
+      "architecture": "GeoCompactDecoder",
+      "rank": 8,
+      "seed": 45,
+      "parameters": 8401888,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r8_s46.pt",
+      "checkpoint_sha256": "c03fca19b64c6bb0d4e91400f10e9966d417bce41b392bcbf49ab78298308214",
+      "variant_name": "GeoCompactDecoder_r8",
+      "architecture": "GeoCompactDecoder",
+      "rank": 8,
+      "seed": 46,
+      "parameters": 8401888,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r16_s42.pt",
+      "checkpoint_sha256": "7e605600985b7acba4cec51c4a8d16a5956e99fa4bb3eb79cc405ad6739820f2",
+      "variant_name": "GeoCompactDecoder_r16",
+      "architecture": "GeoCompactDecoder",
+      "rank": 16,
+      "seed": 42,
+      "parameters": 8475712,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r16_s43.pt",
+      "checkpoint_sha256": "0d2818586f529e861072c08be4358101b8f7512f5fa689f595c29e99ea860ca1",
+      "variant_name": "GeoCompactDecoder_r16",
+      "architecture": "GeoCompactDecoder",
+      "rank": 16,
+      "seed": 43,
+      "parameters": 8475712,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r16_s44.pt",
+      "checkpoint_sha256": "bd0c5588eccc79817d5d7f227525533a2487ad142b9490b943096fd454dc3932",
+      "variant_name": "GeoCompactDecoder_r16",
+      "architecture": "GeoCompactDecoder",
+      "rank": 16,
+      "seed": 44,
+      "parameters": 8475712,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r16_s45.pt",
+      "checkpoint_sha256": "6ce6a27b62f278ba60481c1545a6071fc2d47ec6435390bae4312ce534d14010",
+      "variant_name": "GeoCompactDecoder_r16",
+      "architecture": "GeoCompactDecoder",
+      "rank": 16,
+      "seed": 45,
+      "parameters": 8475712,
+      "strict_load_result": "PASS"
+    },
+    {
+      "checkpoint_path": "artifacts\\recovered_rank_calibration_v1\\checkpoints\\GeoCompactDecoder_r16_s46.pt",
+      "checkpoint_sha256": "779b38a9070253371c739fbffee833735a65df4728d1d5dab20d52a8a3147ac0",
+      "variant_name": "GeoCompactDecoder_r16",
+      "architecture": "GeoCompactDecoder",
+      "rank": 16,
+      "seed": 46,
+      "parameters": 8475712,
+      "strict_load_result": "PASS"
+    }
+  ]
+}

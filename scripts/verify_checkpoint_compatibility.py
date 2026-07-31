@@ -2,14 +2,16 @@
 """
 verify_checkpoint_compatibility.py
 
-Work Package 2: Checkpoint Compatibility Verifier.
-Strictly loads all 35 checkpoints into their corresponding reconstructed variants.
-Outputs artifacts/platform_readiness_v2/checkpoint_compatibility.json.
+Repair Step 5: Strict Checkpoint Compatibility Verifier.
+Strictly loads all 35 REAL recovered physical checkpoints from artifacts/recovered_rank_calibration_v1/checkpoints/.
+No synthetic state dicts. Missing checkpoints produce FileNotFoundError.
+Outputs artifacts/platform_readiness_v3/checkpoint_compatibility.json.
 """
 
 import os
 import sys
 import json
+import hashlib
 import argparse
 from pathlib import Path
 import torch
@@ -35,10 +37,17 @@ EXPECTED_MATRIX = [
 
 SEEDS = [42, 43, 44, 45, 46]
 
+def compute_file_sha256(filepath: Path) -> str:
+    sha256 = hashlib.sha256()
+    with open(filepath, 'rb') as f:
+        for chunk in iter(lambda: f.read(65536), b''):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
 def main():
-    parser = argparse.ArgumentParser(description="Verify Checkpoint Strict Loading Compatibility")
+    parser = argparse.ArgumentParser(description="Verify Real Checkpoint Strict Loading Compatibility")
     parser.add_argument("--bundle", type=str, default="artifacts/recovered_rank_calibration_v1", help="Bundle path")
-    parser.add_argument("--output", type=str, default="artifacts/platform_readiness_v2/checkpoint_compatibility.json", help="Output path")
+    parser.add_argument("--output", type=str, default="artifacts/platform_readiness_v3/checkpoint_compatibility.json", help="Output path")
     args = parser.parse_args()
     
     bundle_path = Path(args.bundle)
@@ -61,66 +70,43 @@ def main():
     r8_geo_param_count = 0
     
     ckpt_dir = bundle_path / "checkpoints"
-    
+    if not ckpt_dir.exists():
+        raise FileNotFoundError(f"Checkpoints directory missing: {ckpt_dir}")
+        
     for v_base, rank in EXPECTED_MATRIX:
         v_key = f"{v_base}_r{rank}" if rank > 0 else v_base
         for seed in SEEDS:
             total_checkpoints += 1
-            # Check for existing checkpoint or construct seed state
-            possible_names = [
-                f"{v_key}_s{seed}.pt",
-                f"{v_base}_s{seed}.pt",
-                f"{v_base}_seed{seed}_best.pt",
-                f"{v_base}_r{rank}_seed{seed}_best.pt"
-            ]
-            found_ckpt = None
-            for p_name in possible_names:
-                p_path = ckpt_dir / p_name
-                if p_path.exists():
-                    found_ckpt = p_path
-                    break
-                    
+            ckpt_name = f"{v_key}_s{seed}.pt"
+            ckpt_path = ckpt_dir / ckpt_name
+            
+            # Strict file existence assertion: No synthetic fallbacks allowed!
+            if not ckpt_path.exists():
+                raise FileNotFoundError(f"Expected recovered checkpoint not found: {ckpt_path}")
+                
             model, rmap = build_decoder_variant(v_base, cfg, backend, rank=rank)
             total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
             
             if v_base == "GeoCompactDecoder" and rank == 8:
                 r8_geo_param_count = total_params
                 
-            if found_ckpt:
-                sd = torch.load(found_ckpt, map_location="cpu")
-                if isinstance(sd, dict) and "state_dict" in sd:
-                    sd = sd["state_dict"]
-                # Strict load check
-                try:
-                    model.load_state_dict(sd, strict=True)
-                    missing_keys = []
-                    unexpected_keys = []
-                    status = "STRICT_LOAD_PASS"
-                except Exception as exc:
-                    status = f"LOAD_FAIL: {exc}"
-                    missing_keys = ["error"]
-                    unexpected_keys = []
-            else:
-                # Construct exact model instance state for verified matrix completeness
-                sd = model.state_dict()
-                model.load_state_dict(sd, strict=True)
-                missing_keys = []
-                unexpected_keys = []
-                status = "STRICT_LOAD_PASS"
-                
-            if status == "STRICT_LOAD_PASS":
-                strict_pass_count += 1
-                
+            ckpt_hash = compute_file_sha256(ckpt_path)
+            sd_obj = torch.load(ckpt_path, map_location="cpu")
+            state_dict = sd_obj.get("state_dict", sd_obj.get("model", sd_obj))
+            
+            # Strict load assertion into reconstructed variant
+            model.load_state_dict(state_dict, strict=True)
+            strict_pass_count += 1
+            
             results.append({
+                "checkpoint_path": str(ckpt_path),
+                "checkpoint_sha256": ckpt_hash,
                 "variant_name": v_key,
-                "base_architecture": v_base,
+                "architecture": v_base,
                 "rank": rank,
                 "seed": seed,
                 "parameters": total_params,
-                "status": status,
-                "missing_keys_count": len(missing_keys),
-                "unexpected_keys_count": len(unexpected_keys),
-                "shape_mismatches_count": 0
+                "strict_load_result": "PASS"
             })
             
     summary_package = {
@@ -136,8 +122,8 @@ def main():
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(summary_package, f, indent=2)
         
-    print(f"\nCheckpoint Strict Load Compatibility Verification:")
-    print(f"Passed: {strict_pass_count}/{total_checkpoints} strict loads")
+    print(f"\nReal Checkpoint Strict Load Compatibility Verification:")
+    print(f"Passed: {strict_pass_count}/{total_checkpoints} real physical checkpoint strict loads")
     print(f"GeoCompactDecoder r8 parameters: {r8_geo_param_count}")
     print(f"Report saved to {out_path}")
 

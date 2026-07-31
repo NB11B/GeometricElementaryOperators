@@ -4,8 +4,8 @@ from importlib import import_module
 from typing import Any, Iterable, Tuple, Dict
 
 import torch
+
 from .base import GeoBackend
-from .reference import ReferenceGeoBackend
 
 
 GEO_RUNTIME_ABI_VERSION = 1
@@ -36,30 +36,34 @@ class NativeGeoBackend(GeoBackend):
         required_operations: Iterable[str] = FULL_MODEL_OPERATIONS,
     ) -> None:
         self.require_cuda = require_cuda
-        self.ref_backend = ReferenceGeoBackend()
-        self.telemetry = {
-            "implicit_linear_forward_calls": 0,
-            "native_operation_calls": 0,
-            "fallback_count": 0,
-            "runtime_abi_version": GEO_RUNTIME_ABI_VERSION,
-            "cuda_available": torch.cuda.is_available(),
-            "geo_owns_backward": True
-        }
 
         if module is None:
             try:
                 module = import_module("geo_dl_runtime")
             except ImportError as exc:
-                if require_cuda:
-                    raise RuntimeError(
-                        "Native GEO backend requested, but geo_dl_runtime is unavailable. "
-                        "Install NB11B/Geo-Deep-Learning-Runtime against a compatible "
-                        "NB11B/GeometricElementaryOperators checkout first."
-                    ) from exc
-                module = None
+                raise RuntimeError(
+                    "Native GEO backend requested, but geo_dl_runtime is unavailable. "
+                    "Install NB11B/Geo-Deep-Learning-Runtime against a compatible "
+                    "NB11B/GeometricElementaryOperators checkout first."
+                ) from exc
 
         self.ops = module
         self.required_operations = tuple(dict.fromkeys(required_operations))
+
+        self.telemetry = {
+            "runtime_module_loaded": self.ops is not None,
+            "runtime_module_file": getattr(self.ops, "__file__", None),
+            "runtime_abi_version": getattr(
+                self.ops,
+                "GEO_DL_RUNTIME_ABI_VERSION",
+                getattr(self.ops, "GEO_TORCH_ABI_VERSION", None)
+            ),
+            "cuda_available": bool(getattr(self.ops, "GEO_CUDA_AVAILABLE", False)),
+            "geo_owns_backward": bool(getattr(self.ops, "GEO_OWNS_BACKWARD", False)),
+            "implicit_linear_native_calls": 0,
+            "native_operation_calls": 0,
+            "fallback_count": 0,
+        }
 
         if module is not None:
             capabilities = frozenset(getattr(module, "GEO_CAPABILITIES", ()))
@@ -91,7 +95,7 @@ class NativeGeoBackend(GeoBackend):
                 raise RuntimeError("GEO runtime was loaded without a usable CUDA backend")
 
     def reset_telemetry(self) -> None:
-        self.telemetry["implicit_linear_forward_calls"] = 0
+        self.telemetry["implicit_linear_native_calls"] = 0
         self.telemetry["native_operation_calls"] = 0
         self.telemetry["fallback_count"] = 0
 
@@ -99,13 +103,12 @@ class NativeGeoBackend(GeoBackend):
         return dict(self.telemetry)
 
     def _operation(self, name: str):
-        if self.ops is not None:
-            op = getattr(self.ops, name, None)
-            if callable(op):
-                return op
-        if self.require_cuda:
-            raise RuntimeError(f"Native GEO operation {name!r} requires compiled geo_dl_runtime with CUDA")
-        return getattr(self.ref_backend, name)
+        if self.ops is None:
+            raise RuntimeError("Compiled geo_dl_runtime is not loaded")
+        operation = getattr(self.ops, name, None)
+        if not callable(operation):
+            raise RuntimeError(f"Native GEO operation {name!r} is unavailable")
+        return operation
 
     def embedding(self, indices, weight):
         self.telemetry["native_operation_calls"] += 1
@@ -139,7 +142,7 @@ class NativeGeoBackend(GeoBackend):
         device: torch.device,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         self.telemetry["native_operation_calls"] += 1
-        return self._operation("build_rope")(seq_len, head_dim, float(theta), device)
+        return self._operation("build_rope")(seq_len, head_dim, float(theta), str(device))
 
     def apply_rope(self, x, cos, sin):
         self.telemetry["native_operation_calls"] += 1
@@ -171,12 +174,8 @@ class NativeGeoBackend(GeoBackend):
         inv_perm_indices: torch.Tensor,
         sign_mask: torch.Tensor,
     ) -> torch.Tensor:
-        self.telemetry["implicit_linear_forward_calls"] += 1
+        operation = self._operation("implicit_linear")
+        result = operation(x, u, v, alpha, perm_indices, inv_perm_indices, sign_mask)
+        self.telemetry["implicit_linear_native_calls"] += 1
         self.telemetry["native_operation_calls"] += 1
-        if self.ops is not None and hasattr(self.ops, "implicit_linear"):
-            return self.ops.implicit_linear(x, u, v, alpha, perm_indices, inv_perm_indices, sign_mask)
-        elif not self.require_cuda:
-            self.telemetry["fallback_count"] += 0 # Fallback strictly 0 by design
-            return self.ref_backend.implicit_linear(x, u, v, alpha, perm_indices, inv_perm_indices, sign_mask)
-        else:
-            raise RuntimeError("Native implicit_linear execution failed: geo_dl_runtime is missing or unavailable.")
+        return result
