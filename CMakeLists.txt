@@ -20,6 +20,7 @@ option(GEO_ENABLE_SANITIZERS "Enable address and undefined-behavior sanitizers" 
 add_library(geo_kernel STATIC
     src/cl20.c
     src/cl30.c
+    src/cl30_transport.c
     src/opposite.c
     src/omega.c
     src/eml_embedded.c
