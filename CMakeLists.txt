@@ -21,6 +21,7 @@ add_library(geo_kernel STATIC
     src/cl20.c
     src/cl30.c
     src/cl30_transport.c
+    src/cl30_incidence.c
     src/opposite.c
     src/omega.c
     src/eml_embedded.c
@@ -113,6 +114,7 @@ if(GEO_BUILD_TESTS)
     enable_testing()
 
     foreach(test_name
+        qformat
         cl20
         omega
         structured
@@ -149,6 +151,7 @@ if(GEO_BUILD_TESTS)
         tensor_attention
         tensor_loss
         tensor_relational
+        cl30_incidence
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})
