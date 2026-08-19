@@ -36,7 +36,7 @@ static int run_test(void) {
 
     geo_cl30_morphism_status st = geo_cl30_morphism_forward_f32(
         &shape, bivectors, node_states, goal_queries, app_params, comp_params,
-        edge_batch, edge_source, edge_relation, edge_destination,
+        edge_batch, edge_source, edge_relation, edge_destination, 0,
         node_aggregates, NULL, NULL, NULL, ws, ws_bytes, &tel
     );
 
@@ -76,10 +76,10 @@ static int run_test(void) {
 
     float agg_p[48], agg_m[48];
     geo_cl30_morphism_forward_f32(&shape, bivectors, node_states, goal_queries, app_p, comp_params,
-                                  edge_batch, edge_source, edge_relation, edge_destination,
+                                  edge_batch, edge_source, edge_relation, edge_destination, 0,
                                   agg_p, NULL, NULL, NULL, ws, ws_bytes, NULL);
     geo_cl30_morphism_forward_f32(&shape, bivectors, node_states, goal_queries, app_m, comp_params,
-                                  edge_batch, edge_source, edge_relation, edge_destination,
+                                  edge_batch, edge_source, edge_relation, edge_destination, 0,
                                   agg_m, NULL, NULL, NULL, ws, ws_bytes, NULL);
 
     float num_grad_app0 = 0.0f;
@@ -98,10 +98,10 @@ static int run_test(void) {
     comp_m[0] -= eps;
 
     geo_cl30_morphism_forward_f32(&shape, bivectors, node_states, goal_queries, app_params, comp_p,
-                                  edge_batch, edge_source, edge_relation, edge_destination,
+                                  edge_batch, edge_source, edge_relation, edge_destination, 0,
                                   agg_p, NULL, NULL, NULL, ws, ws_bytes, NULL);
     geo_cl30_morphism_forward_f32(&shape, bivectors, node_states, goal_queries, app_params, comp_m,
-                                  edge_batch, edge_source, edge_relation, edge_destination,
+                                  edge_batch, edge_source, edge_relation, edge_destination, 0,
                                   agg_m, NULL, NULL, NULL, ws, ws_bytes, NULL);
 
     float num_grad_comp0 = 0.0f;

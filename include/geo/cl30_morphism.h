@@ -58,6 +58,7 @@ geo_cl30_morphism_status geo_cl30_morphism_forward_f32(
     const int32_t* edge_source,         /* [E] */
     const int32_t* edge_relation,       /* [E] */
     const int32_t* edge_destination,    /* [E] */
+    int32_t lesion_mode,                /* 0=none, 1=app, 2=comp, 3=comm, 4=ident, 5=zero */
     float* node_aggregates,             /* [B, N, C, 3] */
     float* edge_alphas,                 /* [E, C] (optional, may be null) */
     float* edge_betas,                  /* [E, C] (optional, may be null) */

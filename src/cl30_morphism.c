@@ -113,6 +113,7 @@ geo_cl30_morphism_status geo_cl30_morphism_forward_f32(
     const int32_t* edge_source,
     const int32_t* edge_relation,
     const int32_t* edge_destination,
+    int32_t lesion_mode,
     float* node_aggregates,
     float* edge_alphas,
     float* edge_betas,
@@ -158,8 +159,19 @@ geo_cl30_morphism_status geo_cl30_morphism_forward_f32(
     for (int32_t r = 0; r < R; ++r) {
         for (int32_t c = 0; c < C; ++c) {
             const float* b_ptr = relation_bivectors + (r * C + c) * 3;
+            float b_eff[3] = { b_ptr[0], b_ptr[1], b_ptr[2] };
+            if (lesion_mode == 3) {
+                /* Commutative lesion: project onto e12 plane */
+                b_eff[1] = 0.0f;
+                b_eff[2] = 0.0f;
+            } else if (lesion_mode == 4) {
+                /* Identity lesion */
+                b_eff[0] = 0.0f;
+                b_eff[1] = 0.0f;
+                b_eff[2] = 0.0f;
+            }
             float* m_ptr = so3_matrices + (r * C + c) * 9;
-            geo_bivector_to_so3(b_ptr, m_ptr, &max_res);
+            geo_bivector_to_so3(b_eff, m_ptr, &max_res);
         }
     }
 
@@ -200,29 +212,35 @@ geo_cl30_morphism_status geo_cl30_morphism_forward_f32(
             geo_vec3_normalize(q_vec, q_hat);
 
             /* 3. Applicability */
-            float dot_hu_q = geo_vec3_dot(h_u_hat, q_hat);
-            float dot_t_q = geo_vec3_dot(t_hat, q_hat);
-            float raw_alpha = w_a * dot_hu_q + w_ar * dot_t_q + b_a;
-            float alpha = geo_sigmoid(raw_alpha);
+            float alpha = 1.0f;
+            if (lesion_mode != 1) {
+                float dot_hu_q = geo_vec3_dot(h_u_hat, q_hat);
+                float dot_t_q = geo_vec3_dot(t_hat, q_hat);
+                float raw_alpha = w_a * dot_hu_q + w_ar * dot_t_q + b_a;
+                alpha = geo_sigmoid(raw_alpha);
+            }
 
             /* 4. Compatibility */
-            float dot_hv_t = geo_vec3_dot(h_v_hat, t_hat);
-            float cross_hv_t[3];
-            geo_vec3_cross(h_v_hat, t_hat, cross_hv_t);
-            float cross_sq = geo_vec3_dot(cross_hv_t, cross_hv_t);
-            float bivector_norm = (float)sqrt((double)(cross_sq + 1e-12f));
-            float dot_q_t = geo_vec3_dot(q_hat, t_hat);
-            float pseudoscalar_dual = geo_vec3_dot(cross_hv_t, q_hat);
+            float beta = 1.0f;
+            if (lesion_mode != 2) {
+                float dot_hv_t = geo_vec3_dot(h_v_hat, t_hat);
+                float cross_hv_t[3];
+                geo_vec3_cross(h_v_hat, t_hat, cross_hv_t);
+                float cross_sq = geo_vec3_dot(cross_hv_t, cross_hv_t);
+                float bivector_norm = (float)sqrt((double)(cross_sq + 1e-12f));
+                float dot_q_t = geo_vec3_dot(q_hat, t_hat);
+                float pseudoscalar_dual = geo_vec3_dot(cross_hv_t, q_hat);
 
-            float raw_beta = w_s * dot_hv_t - w_b * bivector_norm + w_q * dot_q_t + w_tau * pseudoscalar_dual + b_beta;
-            float beta = geo_sigmoid(raw_beta);
+                float raw_beta = w_s * dot_hv_t - w_b * bivector_norm + w_q * dot_q_t + w_tau * pseudoscalar_dual + b_beta;
+                beta = geo_sigmoid(raw_beta);
+            }
 
             local_alphas[e * C + c] = alpha;
             local_betas[e * C + c] = beta;
             if (edge_alphas) edge_alphas[e * C + c] = alpha;
             if (edge_betas) edge_betas[e * C + c] = beta;
 
-            float weight = alpha * beta;
+            float weight = (lesion_mode == 5) ? 0.0f : (alpha * beta);
             sum_weights[(b_idx * N + v_idx) * C + c] += weight;
 
             float* dst_msg = sum_msgs + ((b_idx * N + v_idx) * C + c) * 3;
