@@ -22,6 +22,7 @@ add_library(geo_kernel STATIC
     src/cl30.c
     src/cl30_transport.c
     src/cl30_incidence.c
+    src/cl30_morphism.c
     src/opposite.c
     src/omega.c
     src/eml_embedded.c
@@ -152,6 +153,7 @@ if(GEO_BUILD_TESTS)
         tensor_loss
         tensor_relational
         cl30_incidence
+        cl30_morphism
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})
