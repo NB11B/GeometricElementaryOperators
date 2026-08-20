@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(GeometricElementaryOperators
-    VERSION 0.18.2
+    VERSION 0.19.0
     LANGUAGES C
 )
 
@@ -20,6 +20,9 @@ option(GEO_ENABLE_SANITIZERS "Enable address and undefined-behavior sanitizers" 
 add_library(geo_kernel STATIC
     src/cl20.c
     src/cl30.c
+    src/cl30_transport.c
+    src/cl30_incidence.c
+    src/cl30_morphism.c
     src/opposite.c
     src/omega.c
     src/eml_embedded.c
@@ -44,6 +47,13 @@ add_library(geo_kernel STATIC
     src/autodiff_v7.c
     src/full_cycle_v8.c
     src/batch_gp.c
+    src/tensor_linear.c
+    src/tensor_core.c
+    src/tensor_activation.c
+    src/tensor_rope.c
+    src/tensor_attention.c
+    src/tensor_loss.c
+    src/tensor_relational.c
 )
 
 target_include_directories(geo_kernel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -105,6 +115,7 @@ if(GEO_BUILD_TESTS)
     enable_testing()
 
     foreach(test_name
+        qformat
         cl20
         omega
         structured
@@ -134,6 +145,15 @@ if(GEO_BUILD_TESTS)
         geo_grad_validation_v7_2
         full_cycle_v8
         batch_gp
+        tensor_linear
+        tensor_core
+        tensor_activation
+        tensor_rope
+        tensor_attention
+        tensor_loss
+        tensor_relational
+        cl30_incidence
+        cl30_morphism
     )
         add_executable(test_${test_name} tests/test_${test_name}.c)
         geo_link_target(test_${test_name})

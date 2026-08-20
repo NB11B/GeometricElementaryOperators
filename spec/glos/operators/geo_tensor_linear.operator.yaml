@@ -1,0 +1,140 @@
+spec_version: 0.1.0
+operator_id: org.nb11b.geo.tensor_linear
+operator_version: 0.1.0
+name: GEO Tensor Linear
+family: dense_linear
+summary: Executes y = x W^T through the GEO tensor linear ABI with native CPU/CUDA
+  forward kernels and native exact VJPs for input and weight.
+tags:
+- geo
+- tensor
+- linear
+- native-vjp
+- cuda
+algebra:
+  algebra_id: real.f32
+  kind: field
+  carrier: IEEE-754 binary32
+  addition: add
+  multiplication: multiply
+  zero: 0.0
+  one: 1.0
+  addition_commutative: true
+  multiplication_commutative: true
+  addition_idempotent: false
+  ordered: true
+  closure_notes: Finite values are closed subject to IEEE-754 overflow behavior.
+inputs:
+- name: x
+  type:
+    kind: tensor
+    subtype: activation
+    dtype: f32
+    shape: [B, N]
+    layout: row_major
+    nullable: false
+  semantics: Flattenable batch of input activations.
+- name: weight
+  type:
+    kind: matrix
+    subtype: linear_weight
+    dtype: f32
+    shape: [M, N]
+    layout: row_major
+    nullable: false
+  semantics: Output-by-input weight matrix.
+outputs:
+- name: y
+  type:
+    kind: tensor
+    subtype: activation
+    dtype: f32
+    shape: [B, M]
+    layout: row_major
+    nullable: false
+  semantics: Linear projection output.
+parameters: []
+persistent_state: []
+execution:
+  purity: true
+  determinism: numerically_deterministic
+  side_effects: []
+  batching: native
+  streaming: stateless
+  saved_state_policy: save
+  saved_values: [input_x, weight]
+  failure_modes: [invalid_shape, dtype_mismatch, backend_unavailable]
+autodiff:
+  mode: exact_vjp
+  with_respect_to: [x, weight]
+  nondifferentiable_policy: not_applicable
+  gradient_status: native
+  forward_backend: geo_tensor_linear
+  backward_backend: geo_tensor_linear_vjp
+  validation:
+    method: finite_difference_and_pytorch_parity
+    tolerance: 0.0001
+symmetry:
+  mode: none
+numerics:
+  input_precision: f32
+  parameter_precision: f32
+  accumulation_precision: f32
+  output_precision: f32
+  rounding: round_to_nearest_even
+  overflow: ieee754
+  nan_policy: fail
+  absolute_error_bound: 1.0e-05
+  relative_error_bound: 0.0001
+  domain_constraints: [x_and_weight_finite, inner_dimensions_match]
+  repair_policy: none
+certificates:
+- class: shape_certificate
+  required: true
+- class: forward_reference_certificate
+  required: true
+  tolerance: 1.0e-05
+- class: gradient_certificate
+  required: true
+  tolerance: 0.0001
+- class: backend_parity_certificate
+  required: true
+  tolerance: 0.0001
+tests:
+- test_id: tensor_linear_schema
+  kind: schema
+  required: true
+- test_id: tensor_linear_shapes
+  kind: shape
+  required: true
+- test_id: tensor_linear_forward_reference
+  kind: forward_reference
+  required: true
+  tolerance: 1.0e-05
+- test_id: tensor_linear_gradient
+  kind: gradient
+  required: true
+  tolerance: 0.0001
+- test_id: tensor_linear_backend_parity
+  kind: backend_parity
+  required: true
+  tolerance: 0.0001
+lowering:
+- backend: reference_cpu
+  implementation_id: geo_tensor_linear_cpu_v1
+  supported_dtypes: [f32]
+  fallback: forbidden
+  determinism: numerically_deterministic
+  fused_patterns: []
+- backend: cuda
+  implementation_id: geo_tensor_linear_cuda_v1
+  supported_dtypes: [f32]
+  fallback: forbidden
+  determinism: numerically_deterministic
+  fused_patterns: []
+provenance:
+  repository: https://github.com/NB11B/GeometricElementaryOperators
+  commit: agent/geo-dl-runtime-v1
+  license: Apache-2.0
+  authors: [NB11B]
+  source_hash: UNSET_UNTIL_CERTIFICATION
